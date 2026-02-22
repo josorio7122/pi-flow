@@ -5,7 +5,13 @@
  * Detects phase transitions by watching for skill announcement patterns
  * in assistant messages.
  *
- * Phases: research → understand → brainstorm → spec → plan → execute → review
+ * Only the phases relevant to the active workflow are shown:
+ *   Greenfield:  research → brainstorm → spec → plan → execute → review → ship
+ *   Existing:    understand → brainstorm → spec → plan → execute → review → ship
+ *
+ * Once a phase is detected the bar locks to that workflow path.
+ * Active phase is shown in brackets: [brainstorm]
+ * Past and future phases shown without decoration.
  */
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
@@ -17,7 +23,8 @@ type Phase =
 	| "spec"
 	| "plan"
 	| "execute"
-	| "review";
+	| "review"
+	| "ship";
 
 const PHASE_PATTERNS: Array<{ pattern: RegExp; phase: Phase }> = [
 	{ pattern: /using the research skill/i, phase: "research" },
@@ -28,28 +35,20 @@ const PHASE_PATTERNS: Array<{ pattern: RegExp; phase: Phase }> = [
 	{ pattern: /using the subagent-driven-development skill/i, phase: "execute" },
 	{ pattern: /using the pr-review skill/i, phase: "review" },
 	{ pattern: /final review.*implementation/i, phase: "review" },
+	{ pattern: /using the finishing-a-development-branch skill/i, phase: "ship" },
 ];
 
-const PHASE_ORDER: Phase[] = ["research", "understand", "brainstorm", "spec", "plan", "execute", "review"];
-const PHASE_LABELS: Record<Phase, string> = {
-	idle: "",
-	research: "research",
-	understand: "understand",
-	brainstorm: "brainstorm",
-	spec: "spec",
-	plan: "plan",
-	execute: "execute",
-	review: "review",
-};
+// Greenfield starts with research, existing starts with understand.
+// The bar is set once the first phase is detected and stays on that path.
+const GREENFIELD: Phase[] = ["research", "brainstorm", "spec", "plan", "execute", "review", "ship"];
+const EXISTING:   Phase[] = ["understand", "brainstorm", "spec", "plan", "execute", "review", "ship"];
 
-function buildBar(current: Phase): string {
-	if (current === "idle") return "";
-	const curIdx = PHASE_ORDER.indexOf(current);
-	return PHASE_ORDER.map((phase, idx) => {
-		const label = PHASE_LABELS[phase];
-		if (idx < curIdx) return `✓${label}`;
-		if (idx === curIdx) return `[${label}]`;
-		return label;
+function buildBar(current: Phase, path: Phase[]): string {
+	const curIdx = path.indexOf(current);
+	if (curIdx === -1) return `[${current}]`;
+	return path.map((phase, idx) => {
+		if (idx === curIdx) return `[${phase}]`;
+		return phase;
 	}).join(" → ");
 }
 
@@ -72,7 +71,18 @@ function detectPhase(text: string): Phase | null {
 	return null;
 }
 
+function resolvePath(phase: Phase, lockedPath: Phase[] | null): Phase[] {
+	if (lockedPath) return lockedPath;
+	// Lock to greenfield if research is first, existing if understand is first
+	if (phase === "research") return GREENFIELD;
+	if (phase === "understand") return EXISTING;
+	// For any other first-detected phase, default to existing path
+	return EXISTING;
+}
+
 export default function workflowStatus(pi: ExtensionAPI) {
+	let lockedPath: Phase[] | null = null;
+
 	// Watch assistant messages for skill announcements
 	pi.on("message_end", async (event, ctx) => {
 		if (!ctx.hasUI) return;
@@ -80,12 +90,15 @@ export default function workflowStatus(pi: ExtensionAPI) {
 		if (msg.role !== "assistant") return;
 		const text = extractText(msg.content);
 		const detected = detectPhase(text);
-		if (detected) ctx.ui.setStatus("workflow", buildBar(detected));
+		if (!detected) return;
+		lockedPath = resolvePath(detected, lockedPath);
+		ctx.ui.setStatus("workflow", buildBar(detected, lockedPath));
 	});
 
 	// Clear on new session
 	pi.on("session_switch", async (_event, ctx) => {
 		if (!ctx.hasUI) return;
+		lockedPath = null;
 		ctx.ui.setStatus("workflow", undefined);
 	});
 
@@ -98,10 +111,13 @@ export default function workflowStatus(pi: ExtensionAPI) {
 			if (entry.type !== "message" || entry.message.role !== "assistant") continue;
 			const text = extractText(entry.message.content);
 			const detected = detectPhase(text);
-			if (detected) lastPhase = detected;
+			if (detected) {
+				if (!lockedPath) lockedPath = resolvePath(detected, null);
+				lastPhase = detected;
+			}
 		}
-		if (lastPhase !== "idle") {
-			ctx.ui.setStatus("workflow", buildBar(lastPhase));
+		if (lastPhase !== "idle" && lockedPath) {
+			ctx.ui.setStatus("workflow", buildBar(lastPhase, lockedPath));
 		}
 	});
 }
