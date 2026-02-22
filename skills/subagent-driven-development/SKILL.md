@@ -30,7 +30,6 @@ Have implementation plan?
     Tasks mostly independent?
     ├── no (tightly coupled) → execute manually
     └── yes → subagent-driven-development  ← you are here
-               (open a new pi session if you want a clean context window)
 ```
 
 ## The Process
