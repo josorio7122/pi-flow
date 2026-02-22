@@ -2,8 +2,7 @@
  * Workflow Status Extension
  *
  * Shows the current workflow phase in the footer status bar.
- * Detects phase transitions by watching for skill announcement patterns
- * in assistant messages.
+ * Detects phase transitions by watching `read` tool calls on skill SKILL.md files.
  *
  * Only the phases relevant to the active workflow are shown:
  *   Greenfield:  research → brainstorm → spec → plan → execute → review → ship
@@ -26,20 +25,21 @@ type Phase =
 	| "review"
 	| "ship";
 
-const PHASE_PATTERNS: Array<{ pattern: RegExp; phase: Phase }> = [
-	{ pattern: /using the research skill/i, phase: "research" },
-	{ pattern: /using the understand-codebase skill/i, phase: "understand" },
-	{ pattern: /using the brainstorming skill/i, phase: "brainstorm" },
-	{ pattern: /using the spec-writer skill/i, phase: "spec" },
-	{ pattern: /using the writing-plans skill/i, phase: "plan" },
-	{ pattern: /using the subagent-driven-development skill/i, phase: "execute" },
-	{ pattern: /using the pr-review skill/i, phase: "review" },
-	{ pattern: /final review.*implementation/i, phase: "review" },
-	{ pattern: /using the finishing-a-development-branch skill/i, phase: "ship" },
+// Map skill directory names (and key path segments) to phases.
+// Matched against the path of any `read` tool call.
+const SKILL_PHASE_MAP: Array<{ pattern: RegExp; phase: Phase }> = [
+	{ pattern: /\/skills\/research\//i, phase: "research" },
+	{ pattern: /\/skills\/understand-codebase\//i, phase: "understand" },
+	{ pattern: /\/skills\/brainstorming\//i, phase: "brainstorm" },
+	{ pattern: /\/skills\/spec-writer\//i, phase: "spec" },
+	{ pattern: /\/skills\/writing-plans\//i, phase: "plan" },
+	{ pattern: /\/skills\/subagent-driven-development\//i, phase: "execute" },
+	{ pattern: /\/skills\/finishing-a-development-branch\//i, phase: "ship" },
+	{ pattern: /\/skills\/pr-review\//i, phase: "review" },
 ];
 
 // Greenfield starts with research, existing starts with understand.
-// The bar is set once the first phase is detected and stays on that path.
+// The bar is locked to a path once the first phase is detected.
 const GREENFIELD: Phase[] = ["research", "brainstorm", "spec", "plan", "execute", "review", "ship"];
 const EXISTING:   Phase[] = ["understand", "brainstorm", "spec", "plan", "execute", "review", "ship"];
 
@@ -52,44 +52,30 @@ function buildBar(current: Phase, path: Phase[]): string {
 	}).join(" → ");
 }
 
-function extractText(content: unknown): string {
-	if (!content) return "";
-	if (typeof content === "string") return content;
-	if (Array.isArray(content)) {
-		return content
-			.filter((b): b is { type: "text"; text: string } => typeof b === "object" && b !== null && (b as { type: string }).type === "text")
-			.map((b) => b.text)
-			.join(" ");
-	}
-	return "";
-}
-
-function detectPhase(text: string): Phase | null {
-	for (const { pattern, phase } of PHASE_PATTERNS) {
-		if (pattern.test(text)) return phase;
+function detectPhaseFromPath(path: string): Phase | null {
+	for (const { pattern, phase } of SKILL_PHASE_MAP) {
+		if (pattern.test(path)) return phase;
 	}
 	return null;
 }
 
 function resolvePath(phase: Phase, lockedPath: Phase[] | null): Phase[] {
 	if (lockedPath) return lockedPath;
-	// Lock to greenfield if research is first, existing if understand is first
 	if (phase === "research") return GREENFIELD;
 	if (phase === "understand") return EXISTING;
-	// For any other first-detected phase, default to existing path
+	// Any other first-detected phase defaults to the existing codebase path
 	return EXISTING;
 }
 
 export default function workflowStatus(pi: ExtensionAPI) {
 	let lockedPath: Phase[] | null = null;
 
-	// Watch assistant messages for skill announcements
-	pi.on("message_end", async (event, ctx) => {
+	// Watch read tool calls — detect when a skill file is being read
+	pi.on("tool_call", async (event, ctx) => {
 		if (!ctx.hasUI) return;
-		const msg = event.message;
-		if (msg.role !== "assistant") return;
-		const text = extractText(msg.content);
-		const detected = detectPhase(text);
+		if (event.toolName !== "read") return;
+		const path = (event.input as { path?: string }).path ?? "";
+		const detected = detectPhaseFromPath(path);
 		if (!detected) return;
 		lockedPath = resolvePath(detected, lockedPath);
 		ctx.ui.setStatus("workflow", buildBar(detected, lockedPath));
@@ -102,20 +88,37 @@ export default function workflowStatus(pi: ExtensionAPI) {
 		ctx.ui.setStatus("workflow", undefined);
 	});
 
-	// Restore on session load — scan all messages for last known phase
+	// Restore on session load — scan assistant messages for read tool calls on skill files
 	pi.on("session_start", async (_event, ctx) => {
 		if (!ctx.hasUI) return;
 		const entries = ctx.sessionManager.getEntries();
 		let lastPhase: Phase = "idle";
+
 		for (const entry of entries) {
-			if (entry.type !== "message" || entry.message.role !== "assistant") continue;
-			const text = extractText(entry.message.content);
-			const detected = detectPhase(text);
-			if (detected) {
-				if (!lockedPath) lockedPath = resolvePath(detected, null);
-				lastPhase = detected;
+			if (entry.type !== "message") continue;
+			const msg = entry.message;
+
+			// AssistantMessages contain ToolCall content blocks with the arguments
+			if (msg.role !== "assistant") continue;
+			const content = Array.isArray(msg.content) ? msg.content : [];
+			for (const block of content) {
+				if (
+					typeof block === "object" &&
+					block !== null &&
+					(block as { type: string }).type === "toolCall" &&
+					(block as { name?: string }).name === "read"
+				) {
+					const args = (block as { arguments?: { path?: string } }).arguments ?? {};
+					const path = args.path ?? "";
+					const detected = detectPhaseFromPath(path);
+					if (detected) {
+						if (!lockedPath) lockedPath = resolvePath(detected, null);
+						lastPhase = detected;
+					}
+				}
 			}
 		}
+
 		if (lastPhase !== "idle" && lockedPath) {
 			ctx.ui.setStatus("workflow", buildBar(lastPhase, lockedPath));
 		}
