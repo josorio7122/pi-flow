@@ -1,7 +1,7 @@
-#!/usr/bin/env node
+#!/usr/bin/env npx tsx
 
 /**
- * fetch-pr.js <github-pr-url>
+ * fetch-pr.ts <github-pr-url>
  *
  * Fetches all PR data via the GitHub CLI (gh) and outputs structured markdown:
  *   - Metadata (title, author, branches, stats)
@@ -23,38 +23,92 @@ import { tmpdir } from "node:os";
 
 const MAX_DIFF_BYTES = 50 * 1024; // 50KB
 
-function die(msg) {
+interface PrMeta {
+	title: string;
+	body: string | null;
+	author: { login: string; name?: string } | null;
+	baseRefName: string;
+	headRefName: string;
+	additions: number;
+	deletions: number;
+	changedFiles: number;
+	state: string;
+	isDraft: boolean;
+	reviewRequests: Array<{ login?: string; name?: string }> | null;
+	labels: Array<{ name: string }> | null;
+	milestone: { title: string } | null;
+	url: string;
+}
+
+interface PrFile {
+	filename: string;
+	status: string;
+	additions: number;
+	deletions: number;
+}
+
+interface IssueComment {
+	user: { login: string };
+	created_at: string;
+	body: string;
+}
+
+interface ReviewComment {
+	user: { login: string };
+	path: string;
+	line: number | null;
+	original_line: number | null;
+	created_at: string;
+	diff_hunk: string | null;
+	body: string;
+	in_reply_to_id: number | null;
+}
+
+interface Review {
+	user: { login: string };
+	state: string;
+	submitted_at: string;
+	body: string | null;
+}
+
+interface Commit {
+	oid: string;
+	messageHeadline: string | null;
+	authors: Array<{ login?: string; name?: string }> | null;
+}
+
+interface CommitsResponse {
+	commits: Commit[];
+}
+
+function die(msg: string): never {
 	console.error(`Error: ${msg}`);
 	process.exit(1);
 }
 
-function gh(args) {
+function gh(args: string): string {
 	try {
 		return execSync(`gh ${args}`, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
 	} catch (e) {
-		die(`gh command failed: gh ${args}\n${e.stderr || e.message}`);
+		die(`gh command failed: gh ${args}\n${(e as Error & { stderr?: string }).stderr ?? (e as Error).message}`);
 	}
 }
 
-function ghJson(args) {
-	return JSON.parse(gh(args));
+function ghJson<T>(args: string): T {
+	return JSON.parse(gh(args)) as T;
 }
 
-// Parse PR URL into { owner, repo, number }
-function parsePrUrl(input) {
-	// https://github.com/owner/repo/pull/123
+function parsePrUrl(input: string): { owner: string; repo: string; number: string } {
 	const longMatch = input.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
 	if (longMatch) return { owner: longMatch[1], repo: longMatch[2], number: longMatch[3] };
 
-	// owner/repo#123
 	const shortMatch = input.match(/^([^/]+)\/([^#]+)#(\d+)$/);
 	if (shortMatch) return { owner: shortMatch[1], repo: shortMatch[2], number: shortMatch[3] };
 
 	die(`Cannot parse PR URL: ${input}\nSupported formats:\n  https://github.com/owner/repo/pull/123\n  owner/repo#123`);
 }
 
-// Check gh is installed and authenticated
-function checkGh() {
+function checkGh(): void {
 	try {
 		execSync("gh auth status", { stdio: "pipe" });
 	} catch {
@@ -62,17 +116,17 @@ function checkGh() {
 	}
 }
 
-function section(title) {
+function section(title: string): string {
 	return `\n${"=".repeat(60)}\n## ${title}\n${"=".repeat(60)}\n`;
 }
 
-async function main() {
+async function main(): Promise<void> {
 	const input = process.argv[2];
 	if (!input) {
-		console.log("Usage: fetch-pr.js <github-pr-url>");
+		console.log("Usage: fetch-pr.ts <github-pr-url>");
 		console.log("\nExamples:");
-		console.log("  fetch-pr.js https://github.com/owner/repo/pull/123");
-		console.log("  fetch-pr.js owner/repo#123");
+		console.log("  fetch-pr.ts https://github.com/owner/repo/pull/123");
+		console.log("  fetch-pr.ts owner/repo#123");
 		process.exit(1);
 	}
 
@@ -84,9 +138,10 @@ async function main() {
 
 	let out = "";
 
-	// ── Metadata ─────────────────────────────────────────────────────────────
 	out += section("PR METADATA");
-	const meta = ghJson(`pr view ${number} --repo ${fullRepo} --json title,body,author,baseRefName,headRefName,additions,deletions,changedFiles,state,isDraft,reviewRequests,labels,milestone,url`);
+	const meta = ghJson<PrMeta>(
+		`pr view ${number} --repo ${fullRepo} --json title,body,author,baseRefName,headRefName,additions,deletions,changedFiles,state,isDraft,reviewRequests,labels,milestone,url`,
+	);
 	out += `URL:           ${prUrl}\n`;
 	out += `Title:         ${meta.title}\n`;
 	out += `Author:        ${meta.author?.name ? `${meta.author.name} (@${meta.author.login})` : `@${meta.author?.login}`}\n`;
@@ -95,10 +150,9 @@ async function main() {
 	out += `Changes:       +${meta.additions} -${meta.deletions} across ${meta.changedFiles} file(s)\n`;
 	if (meta.labels?.length) out += `Labels:        ${meta.labels.map((l) => l.name).join(", ")}\n`;
 	if (meta.milestone) out += `Milestone:     ${meta.milestone.title}\n`;
-	if (meta.reviewRequests?.length) out += `Review requests: ${meta.reviewRequests.map((r) => r.login || r.name).join(", ")}\n`;
-	out += `\n### Description\n\n${meta.body || "(no description)"}\n`;
+	if (meta.reviewRequests?.length) out += `Review requests: ${meta.reviewRequests.map((r) => r.login ?? r.name).join(", ")}\n`;
+	out += `\n### Description\n\n${meta.body ?? "(no description)"}\n`;
 
-	// ── CI Checks ─────────────────────────────────────────────────────────────
 	out += section("CI CHECKS");
 	try {
 		const checks = gh(`pr checks ${number} --repo ${fullRepo}`);
@@ -107,14 +161,12 @@ async function main() {
 		out += "(could not fetch CI checks)\n";
 	}
 
-	// ── Changed Files ─────────────────────────────────────────────────────────
 	out += section("CHANGED FILES");
-	const files = ghJson(`api repos/${fullRepo}/pulls/${number}/files`);
+	const files = ghJson<PrFile[]>(`api repos/${fullRepo}/pulls/${number}/files`);
 	for (const f of files) {
 		out += `  ${f.status.padEnd(10)} +${f.additions}/-${f.deletions}  ${f.filename}\n`;
 	}
 
-	// ── Full Diff ─────────────────────────────────────────────────────────────
 	out += section("FULL DIFF");
 	const diff = gh(`pr diff ${number} --repo ${fullRepo}`);
 	if (diff.length > MAX_DIFF_BYTES) {
@@ -129,9 +181,8 @@ async function main() {
 		out += diff;
 	}
 
-	// ── Issue Comments (timeline comments) ───────────────────────────────────
 	out += section("PR COMMENTS (TIMELINE)");
-	const issueComments = ghJson(`api repos/${fullRepo}/issues/${number}/comments`);
+	const issueComments = ghJson<IssueComment[]>(`api repos/${fullRepo}/issues/${number}/comments`);
 	if (issueComments.length === 0) {
 		out += "(no comments)\n";
 	} else {
@@ -141,9 +192,8 @@ async function main() {
 		}
 	}
 
-	// ── Review Comments (inline, with code context) ───────────────────────────
 	out += section("REVIEW COMMENTS (INLINE)");
-	const reviewComments = ghJson(`api repos/${fullRepo}/pulls/${number}/comments`);
+	const reviewComments = ghJson<ReviewComment[]>(`api repos/${fullRepo}/pulls/${number}/comments`);
 	if (reviewComments.length === 0) {
 		out += "(no inline review comments)\n";
 	} else {
@@ -160,26 +210,24 @@ async function main() {
 		}
 	}
 
-	// ── Reviews ───────────────────────────────────────────────────────────────
 	out += section("REVIEWS");
-	const reviews = ghJson(`api repos/${fullRepo}/pulls/${number}/reviews`);
+	const reviews = ghJson<Review[]>(`api repos/${fullRepo}/pulls/${number}/reviews`);
 	if (reviews.length === 0) {
 		out += "(no reviews)\n";
 	} else {
 		for (const r of reviews) {
-			if (!r.body && r.state === "COMMENTED") continue; // skip empty comment placeholders
+			if (!r.body && r.state === "COMMENTED") continue;
 			out += `\n--- @${r.user.login} — ${r.state} (${new Date(r.submitted_at).toISOString().slice(0, 10)}) ---\n`;
 			if (r.body) out += `${r.body}\n`;
 		}
 	}
 
-	// ── Commits ───────────────────────────────────────────────────────────────
 	out += section("COMMITS");
-	const commits = ghJson(`pr view ${number} --repo ${fullRepo} --json commits`);
-	for (const c of commits.commits || []) {
-		const msg = c.messageHeadline || c.oid;
+	const commits = ghJson<CommitsResponse>(`pr view ${number} --repo ${fullRepo} --json commits`);
+	for (const c of commits.commits ?? []) {
+		const msg = c.messageHeadline ?? c.oid;
 		const short = c.oid.slice(0, 8);
-		const authors = (c.authors || []).map((a) => `@${a.login || a.name}`).join(", ");
+		const authors = (c.authors ?? []).map((a) => `@${a.login ?? a.name}`).join(", ");
 		out += `  ${short}  ${msg}${authors ? `  (${authors})` : ""}\n`;
 	}
 
@@ -187,6 +235,6 @@ async function main() {
 }
 
 main().catch((e) => {
-	console.error(e.message);
+	console.error((e as Error).message);
 	process.exit(1);
 });

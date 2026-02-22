@@ -18,7 +18,7 @@ gh auth status
 
 Run this first for any PR URL:
 ```bash
-{baseDir}/fetch-pr.js <pr-url>
+{baseDir}/fetch-pr.ts <pr-url>
 ```
 
 Supports:
@@ -39,7 +39,7 @@ This outputs:
 
 Follow these steps in order:
 
-1. **Run fetch-pr.js** to get all PR data.
+1. **Run fetch-pr.ts** to get all PR data.
 
 2. **Read linked issues** — check the PR body, comments, and commit messages for issue references (`#123`, `fixes #123`, etc.). For each:
    ```bash
