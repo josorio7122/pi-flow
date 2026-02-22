@@ -1,9 +1,31 @@
-#!/usr/bin/env node
+#!/usr/bin/env npx tsx
 
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
 import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
+
+interface SearchResult {
+	title: string;
+	link: string;
+	snippet: string;
+	age: string;
+	content?: string;
+}
+
+interface BraveWebResult {
+	title?: string;
+	url?: string;
+	description?: string;
+	age?: string;
+	page_age?: string;
+}
+
+interface BraveApiResponse {
+	web?: {
+		results?: BraveWebResult[];
+	};
+}
 
 const args = process.argv.slice(2);
 
@@ -27,7 +49,7 @@ if (countryIndex !== -1 && args[countryIndex + 1]) {
 }
 
 // Parse freshness option
-let freshness = null;
+let freshness: string | null = null;
 const freshnessIndex = args.indexOf("--freshness");
 if (freshnessIndex !== -1 && args[freshnessIndex + 1]) {
 	freshness = args[freshnessIndex + 1];
@@ -37,7 +59,7 @@ if (freshnessIndex !== -1 && args[freshnessIndex + 1]) {
 const query = args.join(" ");
 
 if (!query) {
-	console.log("Usage: search.js <query> [-n <num>] [--content] [--country <code>] [--freshness <period>]");
+	console.log("Usage: search.ts <query> [-n <num>] [--content] [--country <code>] [--freshness <period>]");
 	console.log("\nOptions:");
 	console.log("  -n <num>              Number of results (default: 5, max: 20)");
 	console.log("  --content             Fetch readable content as markdown");
@@ -46,10 +68,10 @@ if (!query) {
 	console.log("\nEnvironment:");
 	console.log("  BRAVE_API_KEY         Required. Your Brave Search API key.");
 	console.log("\nExamples:");
-	console.log('  search.js "javascript async await"');
-	console.log('  search.js "rust programming" -n 10');
-	console.log('  search.js "climate change" --content');
-	console.log('  search.js "news today" --freshness pd');
+	console.log('  search.ts "javascript async await"');
+	console.log('  search.ts "rust programming" -n 10');
+	console.log('  search.ts "climate change" --content');
+	console.log('  search.ts "news today" --freshness pd');
 	process.exit(1);
 }
 
@@ -60,7 +82,12 @@ if (!apiKey) {
 	process.exit(1);
 }
 
-async function fetchBraveResults(query, numResults, country, freshness) {
+async function fetchBraveResults(
+	query: string,
+	numResults: number,
+	country: string,
+	freshness: string | null,
+): Promise<SearchResult[]> {
 	const params = new URLSearchParams({
 		q: query,
 		count: Math.min(numResults, 20).toString(),
@@ -75,10 +102,10 @@ async function fetchBraveResults(query, numResults, country, freshness) {
 
 	const response = await fetch(url, {
 		headers: {
-			"Accept": "application/json",
+			Accept: "application/json",
 			"Accept-Encoding": "gzip",
 			"X-Subscription-Token": apiKey,
-		}
+		},
 	});
 
 	if (!response.ok) {
@@ -86,9 +113,9 @@ async function fetchBraveResults(query, numResults, country, freshness) {
 		throw new Error(`HTTP ${response.status}: ${response.statusText}\n${errorText}`);
 	}
 
-	const data = await response.json();
+	const data = (await response.json()) as BraveApiResponse;
 
-	const results = [];
+	const results: SearchResult[] = [];
 
 	// Extract web results
 	if (data.web && data.web.results) {
@@ -96,10 +123,10 @@ async function fetchBraveResults(query, numResults, country, freshness) {
 			if (results.length >= numResults) break;
 
 			results.push({
-				title: result.title || "",
-				link: result.url || "",
-				snippet: result.description || "",
-				age: result.age || result.page_age || "",
+				title: result.title ?? "",
+				link: result.url ?? "",
+				snippet: result.description ?? "",
+				age: result.age ?? result.page_age ?? "",
 			});
 		}
 	}
@@ -107,7 +134,7 @@ async function fetchBraveResults(query, numResults, country, freshness) {
 	return results;
 }
 
-function htmlToMarkdown(html) {
+function htmlToMarkdown(html: string): string {
 	const turndown = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced" });
 	turndown.use(gfm);
 	turndown.addRule("removeEmptyLinks", {
@@ -124,12 +151,12 @@ function htmlToMarkdown(html) {
 		.trim();
 }
 
-async function fetchPageContent(url) {
+async function fetchPageContent(url: string): Promise<string> {
 	try {
 		const response = await fetch(url, {
 			headers: {
 				"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-				"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+				Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 			},
 			signal: AbortSignal.timeout(10000),
 		});
@@ -150,9 +177,9 @@ async function fetchPageContent(url) {
 		// Fallback: try to get main content
 		const fallbackDoc = new JSDOM(html, { url });
 		const body = fallbackDoc.window.document;
-		body.querySelectorAll("script, style, noscript, nav, header, footer, aside").forEach(el => el.remove());
-		const main = body.querySelector("main, article, [role='main'], .content, #content") || body.body;
-		const text = main?.textContent || "";
+		body.querySelectorAll("script, style, noscript, nav, header, footer, aside").forEach((el) => el.remove());
+		const main = body.querySelector("main, article, [role='main'], .content, #content") ?? body.body;
+		const text = main?.textContent ?? "";
 
 		if (text.trim().length > 100) {
 			return text.trim().substring(0, 5000);
@@ -160,7 +187,7 @@ async function fetchPageContent(url) {
 
 		return "(Could not extract content)";
 	} catch (e) {
-		return `(Error: ${e.message})`;
+		return `(Error: ${(e as Error).message})`;
 	}
 }
 
@@ -194,6 +221,6 @@ try {
 		console.log("");
 	}
 } catch (e) {
-	console.error(`Error: ${e.message}`);
+	console.error(`Error: ${(e as Error).message}`);
 	process.exit(1);
 }
