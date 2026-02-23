@@ -242,22 +242,19 @@ The implementer writes status to `docs/plans/PROGRESS.md` after every commit. Wh
 
 ## Setup
 
-**Requirements:**
-
-- [pi](https://github.com/badlogic/pi) installed
-- `gh` CLI installed and authenticated *(for pr-review)*
-- `EXA_API_KEY` in your shell profile *(for exa-search)*
-- `BRAVE_API_KEY` in your shell profile *(for brave-search)*
-
-**After install, run once:**
-
 ```bash
-cd ~/.pi/agent/git/github.com/josorio7122/pi-flow
-
-npm install --prefix skills/exa-search
-npm install --prefix skills/brave-search
-npm install --prefix skills/pr-review
+pi install git:github.com/josorio7122/pi-flow
 ```
+
+That's it. The install runs `npm install` for all skill dependencies automatically.
+
+**Optional — for full skill coverage:**
+
+| Skill | Requirement |
+|---|---|
+| `exa-search` | `EXA_API_KEY` in your shell profile |
+| `brave-search` | `BRAVE_API_KEY` in your shell profile |
+| `pr-review`, `ship` | `gh` CLI authenticated (`gh auth login`) |
 
 ---
 

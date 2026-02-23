@@ -5,6 +5,9 @@
   "keywords": ["pi-package"],
   "license": "MIT",
   "type": "module",
+  "scripts": {
+    "postinstall": "npm install --prefix skills/exa-search && npm install --prefix skills/brave-search && npm install --prefix skills/pr-review"
+  },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
     "@mariozechner/pi-agent-core": "*",
