@@ -1,193 +1,205 @@
-# Agentic Dev Workflow
+# pi-flow
 
-A state-of-the-art agentic development workflow for [pi](https://github.com/badlogic/pi). Multi-agent execution with parallel scouts, three-gate review per task, and full lifecycle from research to ship.
+**A deliberate agentic development workflow for [pi](https://github.com/badlogic/pi).**
 
-## Install
+Research → brainstorm → spec → plan → execute → review → ship. Every step orchestrated through specialist subagents, with parallel execution, isolated context windows, and three-gate review per task.
 
 ```bash
 pi install git:github.com/josorio7122/pi-flow
 ```
 
-## What's Included
+---
 
-- **13 skills** — full workflow from research through shipping
-- **11 agents** — specialist subagents for every phase
-- **1 extension** — PR review widget
-- **1 prompt template** — `/pr-review` for deep GitHub PR analysis
+## What's included
+
+| | Count | What |
+|---|---|---|
+| **Skills** | 13 | Full workflow from research through shipping |
+| **Agents** | 11 | Specialist subagents for every phase |
+| **Extensions** | 1 | PR review widget |
+| **Prompt templates** | 1 | `/pr-review` for deep GitHub PR analysis |
 
 ---
 
-## How It All Fits Together
+## The mental model
 
-You have two entry points depending on whether you're starting something new or working on an existing codebase. Everything else is the same from brainstorming onward.
+Two roles. One session.
+
+**You (main session)** — the orchestrator. You answer questions during brainstorming, approve designs and plans, and watch execution. You don't write code directly.
+
+**Agents (subprocesses)** — everything else. Reading files, writing code, running tests, committing, reviewing, searching docs. Each runs in an isolated context window that doesn't touch your token budget.
+
+Skills guide *you* through a phase. Agents do the actual work. Skills orchestrate agents. You orchestrate skills.
 
 ```
-New project:      research → brainstorm → [spec] → plan → worktree → execute → review → ship
-Existing project: understand → brainstorm → [spec] → plan → worktree → execute → review → ship
+You → Skills → Agents → Code
 ```
 
-The main pi session is your **orchestrator**. It never implements anything directly — it designs, plans, and dispatches subagents to do the actual work. Each subagent runs in an isolated context window so it can't pollute your session's token budget.
+---
+
+## The two workflows
+
+### Existing codebase
+
+```
+understand-codebase → brainstorm → [spec] → plan → worktree → execute → review → ship
+```
+
+### Greenfield
+
+```
+research → brainstorm → [spec] → plan → worktree → execute → review → ship
+```
+
+The `[spec]` step is optional — use it for features with significant behavioral complexity. Skip it for straightforward changes.
 
 ---
 
-## The Two Layers
+## Walkthrough: adding OAuth to an existing app
 
-**Skills** = instructions loaded into the main session. They guide *you* (the orchestrator) through a phase. Interactive, conversational, ask you questions.
+### Step 1 — Understand
 
-**Agents** = subprocesses. Headless. Get a task string, do work, return output. Never interact with you directly.
+Load `understand-codebase`. Pi dispatches 4 scouts in parallel:
 
-Skills orchestrate agents. You orchestrate skills.
+- What is this product? Who uses it?
+- How is the code structured? What are the layers?
+- What's the tech stack? *(returns `package.json` too)*
+- Find everything related to auth, sessions, user management
 
----
+While those run, you see them in the subagent panel — tool calls streaming live. When they finish, pi feeds the dependency manifest to a `researcher` agent for a health check.
 
-## Walking Through a Real Feature
+Result: a **Codebase Brief** — product summary, architecture map, tech stack, relevant files, dependency health. Pi presents it and asks if it matches your understanding.
 
-### Starting on an existing codebase
+### Step 2 — Brainstorm
 
-You open pi and say: *"I want to add OAuth login to this app."*
+Load `brainstorming`. Pi is now in the main session with the full brief as context. It asks one question at a time:
 
-**Step 1 — Understand the codebase**
+> *"Are you integrating with a specific OAuth provider, or multiple?"*
+> *"Should existing password-based accounts be mergeable with OAuth?"*
 
-Pi loads `understand-codebase`. It asks: *"What are you trying to do?"* You explain. Then it dispatches 4 scouts in parallel:
+After a few rounds, it proposes 2–3 approaches with trade-offs and a recommendation. You pick one. It walks through the design section by section, getting approval on each. When you're satisfied, it saves a design doc to `docs/plans/` and commits it.
 
-- Scout 1: What is this product? Who uses it?
-- Scout 2: How is the code structured? What are the layers?
-- Scout 3: What's the tech stack? (returns package.json too)
-- Scout 4: Find everything related to auth, sessions, user management
+### Step 3 — Spec *(if needed)*
 
-While those run, you see them in the subagent panel — tool calls streaming live, each one working independently. When they finish, pi feeds the package.json from Scout 3 to a `researcher` agent that checks dependency health.
+Load `spec-writer` for features with cross-cutting effects — auth touches sessions, user model, API middleware, and frontend. It interviews you systematically and produces a complete behavioral spec: data model, API contract, UI behavior, edge cases. This becomes the source of truth the `spec-reviewer` agent checks against later.
 
-Pi synthesizes everything into a **Codebase Brief** — product summary, architecture map, tech stack, relevant files, dependency health. Presents it to you. *"Does this match your understanding?"* You confirm.
+Skip this for simpler features.
 
-**Step 2 — Brainstorm**
+### Step 4 — Plan
 
-Pi loads `brainstorming`. It's now in the main session with the full codebase brief as context. It asks you questions one at a time:
-
-- *"Are you integrating with a specific OAuth provider, or multiple?"*
-- *"Do you want social login (Google/GitHub) or enterprise SSO (SAML/OIDC)?"*
-- *"Should existing password-based accounts be mergeable with OAuth?"*
-
-After a few questions, it proposes 2-3 approaches with trade-offs and a recommendation. You pick one. It presents the design section by section, getting your approval on each. When you're happy, it saves a design doc to `docs/plans/YYYY-MM-DD-oauth-design.md` and commits it.
-
-**Step 3 — Spec (optional)**
-
-If this is complex with cross-cutting effects (auth touches sessions, user model, API middleware, frontend), pi loads `spec-writer`. It interviews you systematically — one question at a time — and produces a complete behavioral spec: data model changes, API contract, UI behavior, edge cases. This becomes the source of truth the `spec-reviewer` agent checks against later.
-
-For simpler features, skip this — the design doc is enough.
-
-**Step 4 — Plan**
-
-Pi loads `writing-plans`. With the design doc and spec in context, it writes a detailed implementation plan to `docs/plans/YYYY-MM-DD-oauth-plan.md`. Not vague bullet points — actual code, exact file paths, TDD steps with expected test output, exact git commands. Something like:
+Load `writing-plans`. With the design doc in context, pi writes a detailed implementation plan. Not vague bullets — actual code, exact file paths, TDD steps with expected test output:
 
 ```
 Task 1: Add OAuth provider config
-Files: Create src/auth/oauth.ts, modify src/config/index.ts
+Files: src/auth/oauth.ts (new), src/config/index.ts (modify)
 
-Step 1: Write failing test
-  test('loads OAuth config from env', () => { ... })
-  Run: npm test src/auth/oauth.test.ts
-  Expected: FAIL — "Cannot find module"
+1. Write failing test
+   test('loads OAuth config from env', () => { ... })
+   Run: npm test src/auth/oauth.test.ts → FAIL
 
-Step 2: Implement
-  export const oauthConfig = { ... }
+2. Implement
+   export const oauthConfig = { ... }
 
-Step 3: Run test
-  Expected: PASS
+3. Run tests → PASS
 
-Step 4: Commit
-  git commit -m "feat: add OAuth provider config"
+4. Commit: "feat: add OAuth provider config"
 ```
 
-Every task is self-contained enough that a subagent with zero prior context can execute it blindly.
+Every task is self-contained enough that a subagent with no prior context can execute it from the text alone.
 
-**Step 5 — Worktree**
+### Step 5 — Worktree
 
-Pi loads `using-git-worktrees`. It checks if `.worktrees/` exists, verifies it's gitignored, creates `.worktrees/feature/oauth-login`, runs `npm install`, runs the full test suite to confirm a clean baseline. Reports: *"47 tests passing. Ready."*
+Load `using-git-worktrees`. Pi checks for `.worktrees/`, verifies it's gitignored, creates `.worktrees/feature/oauth-login`, runs `npm install`, runs the full test suite.
 
-**Step 6 — Execute**
+> *"47 tests passing. Ready."*
 
-Pi loads `subagent-driven-development`. This is where the real work happens.
+### Step 6 — Execute
 
-For each task in the plan, pi dispatches a fresh `implementer` subagent with the full task text (not a file path — the actual content). The implementer:
-- Writes the failing test
-- Watches it fail
-- Writes minimal code to pass
-- Commits
-- Self-reviews
-- Reports back
+Load `subagent-driven-development`. For each task, pi dispatches a fresh `implementer` subagent with the full task text. The implementer:
 
-Then pi immediately dispatches a `spec-reviewer` with the task requirements and the implementer's commit SHA. The spec-reviewer reads the actual code (doesn't trust the implementer's report) and either:
-- ✅ passes → pi dispatches `code-quality-reviewer`
-- ❌ fails → pi dispatches implementer again with the specific issue list, then re-runs spec-reviewer
+1. **Checks it's on a feature branch** — hard stops if on `main`/`master`
+2. Writes the failing test
+3. Watches it fail
+4. Writes minimal code to pass
+5. Commits
+6. Self-reviews
+7. **Writes status to `docs/plans/PROGRESS.md`** — so the next session can resume exactly where you left off
 
-After quality review passes, pi dispatches `security-reviewer` on the diff. Security issues found here are cheap to fix. Security issues found in production are not.
+Then pi runs the three gates:
 
-When all three gates pass, the task is marked complete. Pi moves to the next task. You watch it all happen in the subagent panel — each agent's tool calls, what it read, what it found.
+```
+Gate 1: spec-reviewer   — did it match the spec?        ✅ pass → Gate 2
+Gate 2: code-quality-reviewer — is it well-written?     ✅ pass → Gate 3
+Gate 3: security-reviewer — any security issues?        ✅ pass → next task
+                                                        ❌ fail → re-dispatch implementer with exact issue list → re-check
+```
 
-After each task completes, the implementer appends its status to `docs/plans/PROGRESS.md` — so if you close the session and come back later, the next session reads that file first and resumes exactly where you left off.
+When all tasks complete, pi dispatches the `reviewer` agent for a final holistic pass over the entire branch diff.
 
-When all tasks complete, pi dispatches the `reviewer` agent for a final holistic pass over the entire branch diff — checking consistency across tasks, integration quality, anything the per-task reviewers might have missed.
+### Step 7 — Ship
 
-**Step 7 — Ship**
+Load `finishing-a-development-branch`. Pi:
 
-Pi loads `finishing-a-development-branch`. It:
-- Checks the commit history — clean or messy?
-- If messy: `git rebase -i main` to squash into logical commits
-- `git push -u origin HEAD`
-- `gh pr create` with a properly formatted PR description
-- `git worktree remove .worktrees/feature/oauth-login`
+1. Checks commit history — squashes if messy
+2. `git push -u origin HEAD`
+3. `gh pr create` with a formatted PR description
+4. `git worktree remove .worktrees/feature/oauth-login`
 
-You get a PR URL. Done.
+You get a PR URL.
 
 ---
 
-## The Agents
+## Agents
 
 | Agent | Model | Role |
 |---|---|---|
 | `scout` | haiku | Fast codebase recon — parallel sweeps |
-| `researcher` | haiku | Docs, best practices, version lookups |
+| `researcher` | haiku | Docs, best practices, version lookups. Saves findings to `docs/research/` |
 | `architect` | sonnet | Design decisions, ADRs |
-| `implementer` | sonnet | TDD implementation, commits, self-review |
-| `spec-reviewer` | sonnet | Gate 1 — did it match the spec? |
-| `code-quality-reviewer` | sonnet | Gate 2 — is it well-written? |
-| `security-reviewer` | sonnet | Gate 3 — any security issues? |
+| `implementer` | sonnet | TDD implementation, commits, self-review. Writes `PROGRESS.md` after each task |
+| `spec-reviewer` | sonnet | Gate 1 — spec compliance check |
+| `code-quality-reviewer` | sonnet | Gate 2 — code quality check |
+| `security-reviewer` | sonnet | Gate 3 — security audit |
 | `debugger` | sonnet | Root cause analysis, surgical fix |
 | `reviewer` | sonnet | Final holistic review of entire branch |
 | `documenter` | haiku | README, CHANGELOG, inline docs |
 | `worker` | sonnet | Last-resort fallback |
 
-Haiku agents run fast and cheap — they're in parallel sweeps and do straightforward work. Sonnet agents make decisions, write code, and review — quality matters more than cost there.
+**Haiku** — fast and cheap, used for parallel sweeps and straightforward tasks.
+**Sonnet** — used where decisions, code quality, and judgment matter.
 
 ---
 
-## The Skills
+## Skills
 
-### Workflow skills (use in order)
+### Workflow order
 
 ```
-brainstorming → writing-plans → subagent-driven-development → finishing-a-development-branch
+research / understand-codebase → brainstorming → [spec-writer] → writing-plans
+→ using-git-worktrees → subagent-driven-development → finishing-a-development-branch
 ```
 
-| Skill | When to load |
+### Full reference
+
+| Skill | When to use |
 |---|---|
-| `research` | Before any new project or when adopting unfamiliar tech |
-| `understand-codebase` | At the start of any session on an existing codebase |
+| `research` | Starting a new project or adopting unfamiliar tech |
+| `understand-codebase` | Start of any session on an existing codebase |
 | `brainstorming` | Before any feature work — explores intent, proposes approaches |
-| `spec-writer` | For non-trivial features with behavioral complexity |
-| `writing-plans` | After design is approved — creates implementation plan |
-| `subagent-driven-development` | Execute a plan with three-gate review per task |
-| `using-git-worktrees` | Before any implementation — isolated workspace |
-| `finishing-a-development-branch` | After all tasks complete — squash, push, PR, cleanup |
+| `spec-writer` | Non-trivial features with behavioral complexity |
+| `writing-plans` | After design approval — creates the implementation plan |
+| `using-git-worktrees` | Before implementation — sets up isolated workspace |
+| `subagent-driven-development` | Executes the plan with three-gate review per task |
+| `finishing-a-development-branch` | After all tasks pass — squash, push, PR, cleanup |
 | `pr-review` | Given a GitHub PR URL to review |
 | `exa-search` | Semantic search, AI answers, doc page fetching |
-| `brave-search` | Keyword web search, news, reference pages |
+| `brave-search` | Keyword web search, news, official reference pages |
 | `frontend-design` | Web pages, landing pages, marketing sites |
 | `interface-design` | Dashboards, admin panels, application UI |
 
-### Invoking skills
+### Force-loading a skill
 
-Skills load automatically when the task matches their description. Force-load with:
+Skills activate automatically when the task matches. To force-load:
 
 ```
 /skill:brainstorming
@@ -200,63 +212,56 @@ Skills load automatically when the task matches their description. Force-load wi
 
 ---
 
-## The Greenfield Path
+## PR review
 
-Same flow, different start. Instead of `understand-codebase`, begin with `research`:
+Paste a GitHub PR URL. The `/pr-review` prompt activates, showing a widget with title and author. It:
 
-Pi dispatches 3-5 researcher agents in parallel — each gets one focused question:
-- What's the best framework for this in 2025?
-- What's the current CLI scaffolding command?
-- What are the standard packages in this ecosystem?
-- Are there any known footguns or migration issues?
-
-They run simultaneously and return findings. Pi synthesizes a **Research Brief** with a recommended stack, exact CLI commands, and key docs to reference. You confirm, then move into brainstorming with current information rather than stale training data.
-
----
-
-## What You Do vs What Agents Do
-
-**You (main session):**
-- Answer questions during brainstorming
-- Approve the design
-- Approve the plan
-- Watch execution and intervene if something goes wrong
-
-**Agents (subprocesses):**
-- Everything else: reading files, writing code, running tests, committing, reviewing, searching docs
-
-The main session stays light. It orchestrates. The heavy lifting happens in isolated context windows that don't cost you budget.
-
----
-
-## When Things Go Wrong
-
-**Implementer fails (✗ in the panel):** Error reporting shows exit code, stderr, and last output before the crash. Dispatch `debugger` with the error output — it traces the root cause surgically.
-
-**Spec-reviewer keeps failing:** The implementer is missing something from the spec. Pi re-dispatches the implementer with the reviewer's specific findings — not a vague "fix it" but exact issues.
-
-**Security-reviewer flags something:** This is the point — find it here, not in production. Pi dispatches the implementer with the security findings, re-runs security review after the fix.
-
-**Context getting large:** Stop reading files in the main session. Dispatch a scout to do the reading and return a summary.
-
----
-
-## PR Review
-
-Just paste a GitHub PR URL. The `/pr-review` prompt activates automatically, showing a widget with PR title and author. It:
-
-1. Fetches full diff, all comments, all reviews, CI status via `gh` CLI
+1. Fetches full diff, all comments, all reviews, and CI status via `gh` CLI
 2. Reads every changed file in full
-3. Reads callers, test files, related types
+3. Reads callers, test files, and related types
 4. Flags unresolved review comments
-5. Produces a structured review: Good / Bad / Ugly / Tests / Summary
+5. Produces a structured review: **Good / Bad / Ugly / Tests / Summary**
 
 ---
 
-## Setup Requirements
+## Resuming a mid-feature session
+
+The implementer writes status to `docs/plans/PROGRESS.md` after every commit. When you return to a feature in a new session, load `subagent-driven-development` — it reads that file first and boots from the last completed task.
+
+---
+
+## When things go wrong
+
+| Situation | Action |
+|---|---|
+| Implementer fails | Dispatch `debugger` with the error output — it traces root cause surgically |
+| Spec-reviewer keeps failing | Implementer is missing something — re-dispatch with reviewer's exact findings |
+| Security-reviewer flags something | Fix it now. Dispatch implementer with the findings, re-run security review |
+| Main session context is getting large | Stop reading files directly — dispatch a `scout` to summarize instead |
+
+---
+
+## Setup
+
+**Requirements:**
 
 - [pi](https://github.com/badlogic/pi) installed
-- `gh` CLI installed and authenticated (for pr-review)
-- `EXA_API_KEY` in your shell profile (for exa-search)
-- `BRAVE_API_KEY` in your shell profile (for brave-search)
-- Run `npm install` in `skills/brave-search/` and `skills/exa-search/` before first use
+- `gh` CLI installed and authenticated *(for pr-review)*
+- `EXA_API_KEY` in your shell profile *(for exa-search)*
+- `BRAVE_API_KEY` in your shell profile *(for brave-search)*
+
+**After install, run once:**
+
+```bash
+cd ~/.pi/agent/git/github.com/josorio7122/pi-flow
+
+npm install --prefix skills/exa-search
+npm install --prefix skills/brave-search
+npm install --prefix skills/pr-review
+```
+
+---
+
+## Full reference
+
+The complete workflow design — all phases, agent selection guide, dispatch rules, and system map — lives in [`WORKFLOW.md`](./WORKFLOW.md).
