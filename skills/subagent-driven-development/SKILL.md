@@ -37,6 +37,24 @@ Have implementation plan?
 ### Before Starting
 **Required:** Set up an isolated git worktree using the `using-git-worktrees` skill. Never implement on main/master.
 
+**Resuming mid-feature?** Run this boot sequence before dispatching anything:
+
+```bash
+# 1. Check progress state
+cat docs/plans/PROGRESS.md 2>/dev/null || echo "No progress file — starting fresh"
+
+# 2. Check recent commits
+git log --oneline -10
+
+# 3. Confirm working directory
+pwd
+
+# 4. Verify baseline is clean
+pnpm test   # or npm test / pytest — detect from project
+```
+
+Then read the plan file and pick up at the **first task not marked ✅ Complete** in PROGRESS.md. Tasks not in PROGRESS.md at all = not started.
+
 ### Step 1: Load the plan
 Read the plan file once. Extract all tasks with their full text. Note the working directory (worktree path). Create a TodoWrite list.
 
@@ -68,6 +86,18 @@ For each task:
 
 ### Step 3: Final review
 After all tasks complete, dispatch `reviewer` agent for a final pass over the entire implementation.
+
+## Resuming a Feature
+
+When opening a new session to continue an in-progress feature:
+
+1. **Read `docs/plans/PROGRESS.md`** — identifies completed tasks, last commit SHA, and any notes from previous implementers
+2. **Read `git log --oneline -10`** — confirms what was committed and when
+3. **Run baseline tests** — verify nothing is broken before dispatching
+4. **Identify resume point** — first task in the plan not marked ✅ Complete in PROGRESS.md
+5. **Dispatch implementer for that task** — include relevant notes from PROGRESS.md as context in the task string
+
+If PROGRESS.md doesn't exist but git log shows commits, the feature was started before progress tracking was added. Use git log + the plan file to reconstruct state manually, then create PROGRESS.md for the tasks that appear done.
 
 ## Prompt Templates
 
