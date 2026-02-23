@@ -572,10 +572,6 @@ Extensions add persistent behavior to every session without polluting the agent'
 
 ### Planned Extensions
 
-**`workflow-status.ts`** — Shows current workflow phase in footer
-- Detects which phase you're in based on recent tool calls and session state
-- Footer widget: `[research → brainstorm → spec → plan → execute → review]` with current highlighted
-
 **`context-budget.ts`** — Context usage indicator
 - Shows token usage in status bar
 - Warns at 40% and 60% thresholds with suggestion to offload
@@ -602,10 +598,10 @@ Place `.ts` files in `~/.pi/agent/extensions/`. They load automatically. No comp
 │                                                                      │
 │  SKILLS (loaded on-demand)          EXTENSIONS (always active)       │
 │  ┌─────────────────────────┐        ┌──────────────────────────┐     │
-│  │ exa-search              │        │ workflow-status           │     │
-│  │ brave-search            │        │ context-budget           │     │
-│  │ brainstorming           │        │ pr-review                │     │
-│  │ spec-writer             │        └──────────────────────────┘     │
+│  │ exa-search              │        │ context-budget           │     │
+│  │ brave-search            │        │ pr-review                │     │
+│  │ brainstorming           │        └──────────────────────────┘     │
+│  │ spec-writer             │                                         │
 │  │ writing-plans           │                                         │
 │  │ using-git-worktrees     │                                         │
 │  │ subagent-driven-dev     │                                         │
