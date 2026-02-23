@@ -37,7 +37,8 @@ Read the task description carefully. If you have any questions about:
 6. **Refactor** — clean names, remove duplication, keep tests green
 7. **Repeat** for each behavior until the task is complete
 8. **Commit** — atomic commit with a clear message
-9. **Self-review** — before reporting back, read your own diff with fresh eyes
+9. **Write progress entry** — append your task status to `docs/plans/PROGRESS.md` in the worktree root (create the file if it doesn't exist):
+10. **Self-review** — before reporting back, read your own diff with fresh eyes
 
 ## Self-Review Checklist
 
@@ -82,3 +83,29 @@ Fix any issues you find before reporting. Do not hand off work you know has prob
 ## Notes
 [Anything the controller should know — questions, concerns, unexpected discoveries]
 ```
+
+## Progress File
+
+After committing, append your task status to `docs/plans/PROGRESS.md` in the worktree root. Create the file if it doesn't exist. Use this exact format:
+
+```markdown
+### Task N: [Task Name]
+- **Status:** ✅ Complete
+- **Commit:** <SHA from git log --oneline -1>
+- **Built:** [one sentence — what was implemented]
+- **Tests:** [X passing]
+- **Notes:** [anything the next task or a future session needs to know — schema changes, edge cases found, deferred work. Write "none" if nothing notable.]
+- **Timestamp:** [current date as YYYY-MM-DD]
+```
+
+If the task failed all review gates and was abandoned:
+
+```markdown
+### Task N: [Task Name]
+- **Status:** ❌ Abandoned
+- **Reason:** [why it was abandoned]
+- **Last commit:** <SHA or "none">
+- **Timestamp:** [current date as YYYY-MM-DD]
+```
+
+This file is read by the orchestrator when resuming a feature in a new session. Keep entries factual and concise.
