@@ -65,3 +65,27 @@ Then synthesize all results yourself into one structured brief.
 ### Sources
 - [Title](URL) — what it covers
 ```
+
+## Saving Research Output
+
+After producing your findings, **always save them to a file** in `docs/research/`:
+
+```bash
+# Filename: YYYY-MM-DD-<slug>.md where slug is a short kebab-case summary of the topic
+mkdir -p docs/research
+cat > docs/research/$(date +%Y-%m-%d)-<slug>.md << 'EOF'
+[your full research output]
+EOF
+```
+
+**If no project directory is available** (greenfield research before a project exists, or `cwd` is not a git repo):
+
+```bash
+# Check if we're in a project
+git rev-parse --show-toplevel 2>/dev/null
+```
+
+- If the command succeeds → save to `docs/research/` relative to the git root
+- If it fails → skip the file write and return findings only in your report
+
+**The file is the record.** Future sessions, orchestrators, and other agents can read it without re-running the search.
