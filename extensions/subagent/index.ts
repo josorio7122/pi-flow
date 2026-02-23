@@ -36,6 +36,10 @@ const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
 const COLLAPSED_ITEM_COUNT = 10;
 
+// Controls whether subagent renderCall shows all tasks or just the summary line.
+// Toggled by ctrl+shift+s — persists for the session across all subagent calls.
+let subagentCallViewExpanded = true;
+
 function formatTokens(count: number): string {
 	if (count < 1000) return count.toString();
 	if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
@@ -780,36 +784,41 @@ export default function (pi: ExtensionAPI) {
 
 		renderCall(args, theme) {
 			const scope: AgentScope = args.agentScope ?? "user";
+			const toggleHint = theme.fg("dim", " ctrl+shift+s to " + (subagentCallViewExpanded ? "collapse" : "expand"));
 			if (args.chain && args.chain.length > 0) {
 				let text =
 					theme.fg("toolTitle", theme.bold("subagent ")) +
 					theme.fg("accent", `chain (${args.chain.length} steps)`) +
-					theme.fg("muted", ` [${scope}]`);
-				for (let i = 0; i < Math.min(args.chain.length, 3); i++) {
-					const step = args.chain[i];
-					// Clean up {previous} placeholder for display
-					const cleanTask = step.task.replace(/\{previous\}/g, "").trim();
-					const preview = cleanTask.length > 40 ? `${cleanTask.slice(0, 40)}...` : cleanTask;
-					text +=
-						"\n  " +
-						theme.fg("muted", `${i + 1}.`) +
-						" " +
-						theme.fg("accent", step.agent) +
-						theme.fg("dim", ` ${preview}`);
+					theme.fg("muted", ` [${scope}]`) +
+					toggleHint;
+				if (subagentCallViewExpanded) {
+					for (let i = 0; i < args.chain.length; i++) {
+						const step = args.chain[i];
+						// Clean up {previous} placeholder for display
+						const cleanTask = step.task.replace(/\{previous\}/g, "").trim();
+						const preview = cleanTask.length > 40 ? `${cleanTask.slice(0, 40)}...` : cleanTask;
+						text +=
+							"\n  " +
+							theme.fg("muted", `${i + 1}.`) +
+							" " +
+							theme.fg("accent", step.agent) +
+							theme.fg("dim", ` ${preview}`);
+					}
 				}
-				if (args.chain.length > 3) text += `\n  ${theme.fg("muted", `... +${args.chain.length - 3} more`)}`;
 				return new Text(text, 0, 0);
 			}
 			if (args.tasks && args.tasks.length > 0) {
 				let text =
 					theme.fg("toolTitle", theme.bold("subagent ")) +
 					theme.fg("accent", `parallel (${args.tasks.length} tasks)`) +
-					theme.fg("muted", ` [${scope}]`);
-				for (const t of args.tasks.slice(0, 3)) {
-					const preview = t.task.length > 40 ? `${t.task.slice(0, 40)}...` : t.task;
-					text += `\n  ${theme.fg("accent", t.agent)}${theme.fg("dim", ` ${preview}`)}`;
+					theme.fg("muted", ` [${scope}]`) +
+					toggleHint;
+				if (subagentCallViewExpanded) {
+					for (const t of args.tasks) {
+						const preview = t.task.length > 40 ? `${t.task.slice(0, 40)}...` : t.task;
+						text += `\n  ${theme.fg("accent", t.agent)}${theme.fg("dim", ` ${preview}`)}`;
+					}
 				}
-				if (args.tasks.length > 3) text += `\n  ${theme.fg("muted", `... +${args.tasks.length - 3} more`)}`;
 				return new Text(text, 0, 0);
 			}
 			const agentName = args.agent || "...";
@@ -1179,6 +1188,17 @@ export default function (pi: ExtensionAPI) {
 
 			const text = result.content[0];
 			return new Text(text?.type === "text" ? text.text : "(no output)", 0, 0);
+		},
+	});
+
+	// ctrl+shift+s — toggle the subagent call view between expanded (all tasks) and collapsed (summary only).
+	// setToolsExpanded always calls requestRender(), so passing the current value is enough to force a re-render
+	// without actually changing the result-view expansion state.
+	pi.registerShortcut("ctrl+shift+s", {
+		description: "Toggle subagent task list expand/collapse",
+		handler(ctx) {
+			subagentCallViewExpanded = !subagentCallViewExpanded;
+			ctx.ui.setToolsExpanded(ctx.ui.getToolsExpanded());
 		},
 	});
 }
