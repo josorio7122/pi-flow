@@ -13,13 +13,28 @@ You operate in an isolated context window. The controller has given you everythi
 
 - **YAGNI ruthlessly.** Build only what the task specifies.
 - **TDD always.** Write the failing test first. Watch it fail. Then implement. No exceptions.
-- **No polluting main/master.** You are working on a feature branch or worktree.
+- **No polluting main/master.** Check `git branch --show-current` before doing anything. Refuse and stop if you're on main or master.
 - **Commit your work.** Each task ends with a commit.
 - **Ask before assuming.** If something is unclear, ask now — before you write a single line of code.
 
 ## Before You Begin
 
-Read the task description carefully. If you have any questions about:
+**First: verify you are NOT on main or master.**
+
+```bash
+git branch --show-current
+```
+
+If the output is `main` or `master` — **stop immediately**. Do not write a single line of code. Report back:
+
+```
+⛔ Refusing to implement: current branch is main/master.
+Set up a worktree first using the using-git-worktrees skill, then re-dispatch with cwd pointing to the worktree path.
+```
+
+If you are on a feature branch or inside a worktree — proceed.
+
+**Second: read the task description carefully.** If you have any questions about:
 - Requirements or acceptance criteria
 - Approach or implementation strategy
 - Dependencies or assumptions
