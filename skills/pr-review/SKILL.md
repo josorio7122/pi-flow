@@ -1,6 +1,10 @@
 ---
 name: pr-review
 description: Deep review of GitHub Pull Requests. Fetches metadata, full diff, all comments, inline review comments with code context, review states, CI checks, and reads all changed files in full. Use when given a GitHub PR URL to review.
+compatibility: Requires gh CLI authenticated. Run: gh auth status
+metadata:
+  author: josorio7122
+  version: "1.0"
 ---
 
 # PR Review

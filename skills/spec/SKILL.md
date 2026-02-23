@@ -1,6 +1,9 @@
 ---
 name: spec
 description: "Write a complete Spec-Driven Development (SDD) spec for a software platform. Produces all required artifacts in dependency order through structured interviews, templates, and compliance checks. Use when a user asks to create, design, or write a spec for a platform, service, or product. Produces: GLOSSARY.md, CONSTITUTION.md, DATA-MODEL.md, specs/00-overview.md, per-subsystem specs, HTTP API contract, and UI behavioral spec."
+metadata:
+  author: josorio7122
+  version: "1.0"
 ---
 
 # Spec

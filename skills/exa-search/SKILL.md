@@ -1,6 +1,10 @@
 ---
 name: exa-search
 description: Neural web search, content extraction, similar-page discovery, and direct AI answers via Exa API. Prefer over brave-search when semantic/conceptual search is needed, when you need AI-generated answers with citations, or when finding pages similar to a known URL.
+compatibility: Requires EXA_API_KEY env var and npx tsx (Node.js)
+metadata:
+  author: josorio7122
+  version: "1.0"
 ---
 
 # Exa Search

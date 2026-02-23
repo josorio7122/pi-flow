@@ -1,6 +1,9 @@
 ---
 name: explore
 description: Multi-level parallel codebase analysis for existing projects. Dispatches scouts simultaneously for product, architecture, tech stack, dependencies, and relevant code. Use at the start of any session on an existing codebase before brainstorm or planning. Produces a structured brief covering all five levels.
+metadata:
+  author: josorio7122
+  version: "1.0"
 ---
 
 # Explore

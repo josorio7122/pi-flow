@@ -1,6 +1,9 @@
 ---
 name: research
 description: Structured research phase for greenfield projects or unfamiliar tech. Dispatches researcher agents in parallel to cover stack options, best practices, CLI scaffolding, and current documentation. Use before brainstorm for a new project or when adopting an unfamiliar technology. Produces a Research Brief.
+metadata:
+  author: josorio7122
+  version: "1.0"
 ---
 
 # Research

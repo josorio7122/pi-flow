@@ -1,6 +1,9 @@
 ---
 name: brainstorm
 description: "Explores user intent, proposes 2-3 approaches with trade-offs, gets design approved before any implementation. Use before creating features, building components, or modifying behavior."
+metadata:
+  author: josorio7122
+  version: "1.0"
 ---
 
 # Brainstorm

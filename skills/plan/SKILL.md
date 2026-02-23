@@ -1,6 +1,9 @@
 ---
 name: plan
 description: Breaks down a spec or set of requirements into a numbered, sequentially ordered implementation plan with clear task boundaries and file-level scope. Use before touching any code when you have a multi-step feature, fix, or refactor to implement.
+metadata:
+  author: josorio7122
+  version: "1.0"
 ---
 
 # Plan

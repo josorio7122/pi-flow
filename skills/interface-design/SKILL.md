@@ -1,6 +1,9 @@
 ---
 name: interface-design
 description: Interface design for dashboards, admin panels, apps, tools, and interactive products. Enforces craft, consistency, and memory across sessions via a per-project system.md. NOT for marketing sites or landing pages. Use when building or modifying any application UI.
+metadata:
+  author: josorio7122
+  version: "1.0"
 ---
 
 # Interface Design

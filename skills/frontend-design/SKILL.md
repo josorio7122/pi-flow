@@ -1,6 +1,9 @@
 ---
 name: frontend-design
 description: Create distinctive, production-grade frontend interfaces with high design quality. Use when building web components, pages, landing pages, or marketing sites. Generates creative, polished code that avoids generic AI aesthetics. NOT for dashboards, admin panels, or application UIs (use interface-design for those).
+metadata:
+  author: josorio7122
+  version: "1.0"
 license: MIT
 ---
 

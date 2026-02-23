@@ -1,6 +1,9 @@
 ---
 name: execute
 description: Use when executing implementation plans with independent tasks in the current session. Dispatches fresh subagents per task with two-stage review (spec compliance, then code quality).
+metadata:
+  author: josorio7122
+  version: "1.0"
 ---
 
 # Execute
