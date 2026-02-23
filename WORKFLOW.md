@@ -253,6 +253,8 @@ Applies to **every** generated migration without exception — including the fir
 
 **Always before implementation.** Never on main/master.
 
+**One worktree per feature.** All parallel implementers working on the same feature share the same worktree — pass the same `cwd` to every implementer subagent. Never create a separate worktree per task or per implementer. Separate worktrees branch off independently and produce merge conflicts when recombined.
+
 ---
 
 ### Phase 6: Execution
@@ -460,6 +462,18 @@ subagent(tasks: [
   { agent: "scout", task: "Find all auth code" },
   { agent: "scout", task: "Find all API endpoints" },
   { agent: "researcher", task: "Look up JWT best practices 2025" }
+])
+
+# Good parallel: independent implementers — SAME cwd (shared worktree)
+subagent(tasks: [
+  { agent: "implementer", task: "Task 1: ...", cwd: "/project/.worktrees/feature/my-feat" },
+  { agent: "implementer", task: "Task 2: ...", cwd: "/project/.worktrees/feature/my-feat" },
+])
+
+# ❌ Wrong: separate worktrees per implementer — causes merge conflicts
+subagent(tasks: [
+  { agent: "implementer", task: "Task 1: ...", cwd: "/project/.worktrees/feature/task-1" },
+  { agent: "implementer", task: "Task 2: ...", cwd: "/project/.worktrees/feature/task-2" },
 ])
 ```
 
