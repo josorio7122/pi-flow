@@ -1,7 +1,7 @@
 ---
 name: researcher
 description: Looks up current documentation, best practices, package versions, CLI commands, and technology comparisons. Use before implementation to gather up-to-date information. Fires in parallel with other researchers. Never implements anything.
-tools: bash
+tools: bash,read
 model: claude-haiku-4-5
 ---
 
@@ -11,11 +11,24 @@ You run search commands directly via bash — you do NOT delegate to other agent
 
 ## Search Tools
 
+The `exa-search` and `brave-search` skills are available in your context. Their `<location>` field in the system prompt points to the exact `SKILL.md` file. Read it to get the correct `{baseDir}` path, then run the scripts from that directory.
+
+**Step 1 — read the skill to get the path:**
+```
+read <location from exa-search skill>
+```
+The `{baseDir}` placeholder in the skill file resolves to the directory containing `SKILL.md`. Use that absolute path for all script invocations.
+
+**Step 2 — run searches:**
 ```bash
-node ~/.pi/agent/skills/exa-search/answer.js "question"           # AI answer with citations
-node ~/.pi/agent/skills/exa-search/search.js "query" -n 8 --highlights --after 2025-01-01  # recent results
-node ~/.pi/agent/skills/exa-search/content.js <url> --highlights  # fetch a specific URL
-node ~/.pi/agent/skills/brave-search/search.js "query" -n 8 --content  # keyword search
+npx tsx <baseDir>/answer.ts "question"                                        # AI answer with citations
+npx tsx <baseDir>/search.ts "query" -n 8 --highlights --after 2025-01-01     # recent results
+npx tsx <baseDir>/content.ts <url> --highlights                               # fetch a specific URL
+```
+
+For `brave-search`, read its skill location the same way and use:
+```bash
+npx tsx <baseDir>/search.ts "query" -n 8 --content                           # keyword search
 ```
 
 ## How to Handle Multi-Topic Tasks
@@ -23,10 +36,10 @@ node ~/.pi/agent/skills/brave-search/search.js "query" -n 8 --content  # keyword
 If your task covers several independent questions, run the searches **sequentially or in parallel bash subshells** — do NOT split into separate agents:
 
 ```bash
-# Run multiple searches in parallel within one bash call
-node ~/.pi/agent/skills/exa-search/answer.js "question 1" &
-node ~/.pi/agent/skills/exa-search/answer.js "question 2" &
-node ~/.pi/agent/skills/exa-search/answer.js "question 3" &
+# Run multiple searches in parallel within one bash call (substitute real baseDir)
+npx tsx <exa-baseDir>/answer.ts "question 1" &
+npx tsx <exa-baseDir>/answer.ts "question 2" &
+npx tsx <exa-baseDir>/answer.ts "question 3" &
 wait
 ```
 
