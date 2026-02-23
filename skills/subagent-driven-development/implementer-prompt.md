@@ -20,6 +20,11 @@ subagent(
      key architectural decisions, dependencies this task relies on, anything the implementer
      needs to understand where this fits in the larger picture]
 
+    ## Progress File
+
+    After committing, update `docs/plans/PROGRESS.md` with your task status, commit SHA,
+    what was built, and any notes for subsequent tasks or future sessions.
+
     ## Working Directory
 
     [Absolute path to the worktree or project root]
@@ -34,8 +39,9 @@ The `implementer` agent:
 1. Reads the task, asks clarifying questions if needed
 2. Follows TDD — writes failing test first, implements, confirms passing
 3. Commits the work
-4. Self-reviews and fixes any issues found
-5. Reports back with what was done, tests, files changed, commit SHA
+4. Writes task status to `docs/plans/PROGRESS.md`
+5. Self-reviews and fixes any issues found
+6. Reports back with what was done, tests, files changed, commit SHA
 
 ## If the implementer asks questions
 
