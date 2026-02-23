@@ -182,13 +182,9 @@ No new infrastructure. No new agents. Just durable state.
 
 ## Rename Recommendation
 
-The current name `agentic-dev-workflow` is descriptive but generic and long. Recommendations for a pi package name:
+The current name `agentic-dev-workflow` is descriptive but generic and long. Selected name: **`pi-flow`**.
 
-| Name | Rationale |
-|---|---|
-| **`forge`** | Short, memorable, evokes deliberate crafting (not just generating). Install: `pi install git:josorio7122/forge` |
-| `shipwright` | Ship + builder — captures full lifecycle |
-| `conductor` | Orchestration theme — you conduct the agents |
-| `meridian` | Navigation reference point — you always know where you are |
-
-**Recommended: `forge`** — fits the "engineer not code writer" philosophy, npm-friendly length, not already a prominent pi package.
+- Follows the `pi-<something>` convention for pi packages
+- Self-explanatory: pi + workflow
+- Clean install command: `pi install git:github.com/josorio7122/pi-flow`
+- Short enough for `package.json`, memorable enough to recall

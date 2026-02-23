@@ -2,9 +2,9 @@
 
 > **For Claude:** Implement this plan task-by-task using `subagent-driven-development` — fresh subagent per task with three-gate review (spec → quality → security). Load the skill and begin.
 
-**Goal:** Add durable progress tracking for long-running features and rename the package from `agentic-dev-workflow` to `forge`.
+**Goal:** Add durable progress tracking for long-running features and rename the package from `agentic-dev-workflow` to `pi-flow`.
 
-**Architecture:** Two independent concerns. Progress tracking adds a `PROGRESS.md` file written by the implementer after each commit — no new infrastructure, just a file and two prompt changes. The rename touches `package.json`, `README.md`, install instructions, and the GitHub repo itself.
+**Architecture:** Two independent concerns. Progress tracking adds a `PROGRESS.md` file written by the implementer after each commit — no new infrastructure, just a file and two prompt changes. The rename touches `package.json`, `README.md`, install instructions, the GitHub repo, the local directory, and the pi package registry.
 
 **Tech Stack:** Markdown, JSON (package.json), shell (git)
 
@@ -202,7 +202,7 @@ Change:
 To:
 ```json
 {
-  "name": "forge",
+  "name": "pi-flow",
   "description": "A deliberate agentic development workflow for pi — multi-agent execution, three-gate review, and full lifecycle from research to ship."
 }
 ```
@@ -216,20 +216,20 @@ pi install git:github.com/josorio7122/agentic-dev-workflow
 
 To:
 ```bash
-pi install git:github.com/josorio7122/forge
+pi install git:github.com/josorio7122/pi-flow
 ```
 
-Also update the title and any other references to the old name.
+Also update the README title and any other references to the old name.
 
 **Step 4: Update WORKFLOW.md**
 
-Search for any references to `agentic-dev-workflow` in WORKFLOW.md and update to `forge`.
+Search for any references to `agentic-dev-workflow` in WORKFLOW.md and update to `pi-flow`.
 
 **Step 5: Commit**
 
 ```bash
 git add package.json README.md WORKFLOW.md
-git commit -m "chore: rename package from agentic-dev-workflow to forge"
+git commit -m "chore: rename package from agentic-dev-workflow to pi-flow"
 ```
 
 ---
@@ -241,7 +241,7 @@ git commit -m "chore: rename package from agentic-dev-workflow to forge"
 
 **What to change:**
 
-AGENTS.md references the workflow package by its git path. After the GitHub repo is renamed, the path changes. But also, the install reference in AGENTS.md (if any) should reflect `forge`.
+AGENTS.md references the workflow package by its git path. After the GitHub repo is renamed, the path changes. The install reference in AGENTS.md should reflect `pi-flow`.
 
 **Step 1: Read current AGENTS.md**
 
@@ -253,14 +253,14 @@ Find any references to `agentic-dev-workflow` — in the git path (`~/.pi/agent/
 
 **Step 2: Update all references**
 
-Replace all occurrences of `josorio7122/agentic-dev-workflow` with `josorio7122/forge` and all occurrences of `agentic-dev-workflow/` path segments with `forge/`.
+Replace all occurrences of `josorio7122/agentic-dev-workflow` with `josorio7122/pi-flow` and all occurrences of the `agentic-dev-workflow/` path segment with `pi-flow/`.
 
 **Step 3: Commit**
 
 ```bash
 cd /Users/josorio/.pi/agent
 git add AGENTS.md
-git commit -m "chore: update AGENTS.md to reference forge (renamed from agentic-dev-workflow)"
+git commit -m "chore: update AGENTS.md to reference pi-flow (renamed from agentic-dev-workflow)"
 ```
 
 Note: `/Users/josorio/.pi/agent/AGENTS.md` may be in a different git repo from the package itself. Run this commit in the correct repo.
@@ -272,24 +272,21 @@ Note: `/Users/josorio/.pi/agent/AGENTS.md` may be in a different git repo from t
 **This is a manual step — cannot be done via git CLI.**
 
 1. Go to https://github.com/josorio7122/agentic-dev-workflow
-2. Settings → General → Repository name → change to `forge`
+2. Settings → General → Repository name → change to `pi-flow`
 3. GitHub will set up a redirect from the old name automatically (but update all local remotes)
 
 **After renaming, update local git remote:**
 
 ```bash
 cd /Users/josorio/.pi/agent/git/github.com/josorio7122/agentic-dev-workflow
-git remote set-url origin git@github.com:josorio7122/forge.git
+git remote set-url origin git@github.com:josorio7122/pi-flow.git
 ```
 
-**Move the local directory to match:**
+**Verify the remote is correct:**
 
 ```bash
-mv /Users/josorio/.pi/agent/git/github.com/josorio7122/agentic-dev-workflow \
-   /Users/josorio/.pi/agent/git/github.com/josorio7122/forge
-```
-
-**Update the symlink in pi's skill/agent paths if needed** — pi resolves skill paths at load time, so if the directory moves, check whether pi's config references the absolute path.
+git remote -v
+# Should show: origin git@github.com:josorio7122/pi-flow.git
 
 ---
 
@@ -329,14 +326,84 @@ git commit -m "docs: fix extension count, remove status bar section, document PR
 
 ---
 
-## Execution Notes
+## Task 8: Rename the local directory
 
-- Tasks 1, 2, 3 are independent — can be dispatched in parallel
-- Task 4 depends on nothing but should run after 1-3 (cleaner commit history)
-- Task 5 depends on Task 4 (needs new name confirmed)
-- Task 6 is manual (GitHub UI) — do it after all code changes are committed and pushed
-- Task 7 can run after Task 4
+**Depends on:** Task 6 (GitHub repo already renamed)
+
+**Step 1: Push all commits before moving anything**
+
+```bash
+cd /Users/josorio/.pi/agent/git/github.com/josorio7122/agentic-dev-workflow
+git push
+```
+
+**Step 2: Move the local directory**
+
+```bash
+mv /Users/josorio/.pi/agent/git/github.com/josorio7122/agentic-dev-workflow \
+   /Users/josorio/.pi/agent/git/github.com/josorio7122/pi-flow
+```
+
+**Step 3: Verify git still works from the new location**
+
+```bash
+cd /Users/josorio/.pi/agent/git/github.com/josorio7122/pi-flow
+git status
+git log --oneline -3
+```
+
+---
+
+## Task 9: Uninstall old package from pi and reinstall as pi-flow
+
+**Depends on:** Task 8 (local directory renamed)
+
+This is the final step. Pi tracks installed packages by their git path. After the directory move and GitHub rename, the old package reference is stale. Uninstall it and reinstall from the new location so pi resolves skills and agents from the correct path.
+
+**Step 1: Uninstall the old package**
+
+```bash
+pi uninstall git:github.com/josorio7122/agentic-dev-workflow
+```
+
+**Step 2: Verify it's gone**
+
+```bash
+pi list
+# agentic-dev-workflow should no longer appear
+```
+
+**Step 3: Reinstall from the new repo name**
+
+```bash
+pi install git:github.com/josorio7122/pi-flow
+```
+
+**Step 4: Verify skills and agents are loading correctly**
+
+```bash
+pi list
+# pi-flow should appear with all skills and agents listed
+```
+
+**Step 5: Smoke-test a skill loads**
+
+Open a new pi session and run `/skill:brainstorming` — confirm it loads without errors. This verifies the skill paths are resolving from the new location.
+
+---
+
+## Execution Order
+
+```
+[parallel] Tasks 1, 2, 3   — progress tracking changes (independent)
+           Task 4           — rename in package.json, README, WORKFLOW.md
+           Task 7           — README cleanup
+           Task 5           — update AGENTS.md
+[manual]   Task 6           — rename GitHub repo + update git remote
+           Task 8           — rename local directory
+           Task 9           — uninstall old, reinstall as pi-flow
+```
 
 **Worktree:** All code changes happen in the `agentic-dev-workflow` repo itself. No worktree needed — this IS the worktree.
 
-**Tests:** No automated tests in this package. Verification is manual: read the modified files and confirm the changes make sense in context.
+**Tests:** No automated tests in this package. Verification is manual: read the modified files and confirm changes are correct. Final smoke test in Task 9 (skill loads in a new pi session) is the acceptance check.
