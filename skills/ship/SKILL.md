@@ -1,17 +1,17 @@
 ---
-name: finishing-a-development-branch
+name: ship
 description: Cleans up a completed feature branch — reviews commits, squashes if needed, pushes, opens a PR, and removes the worktree. Use after all tasks in a feature are implemented and reviewed.
 ---
 
-# Finishing a Development Branch
+# Ship
 
 Wrap up a completed feature branch: clean commit history, push, open PR, remove worktree.
 
-**Announce at start:** "I'm using the finishing-a-development-branch skill to wrap up this branch."
+**Announce at start:** "I'm using the ship skill to wrap up this branch."
 
 ## When to Use
 
-After `subagent-driven-development` completes all tasks and the final `reviewer` agent has approved. The worktree exists, all commits are on the feature branch, and you're ready to ship.
+After `execute` completes all tasks and the final `branch-reviewer` agent has approved. The worktree exists, all commits are on the feature branch, and you're ready to ship.
 
 ## Process
 
@@ -142,7 +142,7 @@ Ready for review.
 ## Integration
 
 **Called after:**
-- `subagent-driven-development` — all tasks complete, final review passed
+- `execute` — all tasks complete, final review passed
 
 **Pairs with:**
-- `using-git-worktrees` — this skill is the cleanup counterpart to worktree setup
+- `worktree` — this skill is the cleanup counterpart to worktree setup

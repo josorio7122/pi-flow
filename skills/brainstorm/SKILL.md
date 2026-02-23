@@ -1,9 +1,9 @@
 ---
-name: brainstorming
+name: brainstorm
 description: "Explores user intent, proposes 2-3 approaches with trade-offs, gets design approved before any implementation. Use before creating features, building components, or modifying behavior."
 ---
 
-# Brainstorming Ideas Into Designs
+# Brainstorm
 
 ## Overview
 
@@ -24,7 +24,7 @@ You MUST create a task for each of these items and complete them in order:
 3. **Propose 2-3 approaches** — with trade-offs and your recommendation
 4. **Present design** — in sections scaled to their complexity, get user approval after each section
 5. **Write design doc** — save to `docs/plans/YYYY-MM-DD-<name>-design.md` and commit
-6. **Transition to implementation** — invoke writing-plans skill to create implementation plan
+6. **Transition to implementation** — invoke plan skill to create implementation plan
 
 ## Process Flow
 
@@ -43,10 +43,10 @@ User approves design?
         ↓
 Write design doc
         ↓
-Invoke writing-plans skill  ← terminal state
+Invoke plan skill  ← terminal state
 ```
 
-**The terminal state is invoking writing-plans.** Do NOT invoke any other implementation skill. The ONLY skill you invoke after brainstorming is writing-plans.
+**The terminal state is invoking plan.** Do NOT invoke any other implementation skill. The ONLY skill you invoke after brainstorm is plan.
 
 ## The Process
 
@@ -76,8 +76,8 @@ Invoke writing-plans skill  ← terminal state
 - Commit the design document to git
 
 **Implementation:**
-- Invoke the writing-plans skill to create a detailed implementation plan
-- Do NOT invoke any other skill — writing-plans is the next step
+- Invoke the plan skill to create a detailed implementation plan
+- Do NOT invoke any other skill — plan is the next step
 
 ## Key Principles
 

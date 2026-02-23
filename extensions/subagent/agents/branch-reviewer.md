@@ -1,5 +1,5 @@
 ---
-name: reviewer
+name: branch-reviewer
 description: |
   Use this agent when code needs to be reviewed — either after a major project step is completed, or when reviewing a pull request / diff against a plan or coding standards.
 

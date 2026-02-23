@@ -24,7 +24,7 @@ pi install git:github.com/josorio7122/pi-flow
 
 Two roles. One session.
 
-**You (main session)** — the orchestrator. You answer questions during brainstorming, approve designs and plans, and watch execution. You don't write code directly.
+**You (main session)** — the orchestrator. You answer questions during brainstorm, approve designs and plans, and watch execution. You don't write code directly.
 
 **Agents (subprocesses)** — everything else. Reading files, writing code, running tests, committing, reviewing, searching docs. Each runs in an isolated context window that doesn't touch your token budget.
 
@@ -41,7 +41,7 @@ You → Skills → Agents → Code
 ### Existing codebase
 
 ```
-understand-codebase → brainstorm → [spec] → plan → worktree → execute → review → ship
+explore → brainstorm → [spec] → plan → worktree → execute → review → ship
 ```
 
 ### Greenfield
@@ -58,7 +58,7 @@ The `[spec]` step is optional — use it for features with significant behaviora
 
 ### Step 1 — Understand
 
-Load `understand-codebase`. Pi dispatches 4 scouts in parallel:
+Load `explore`. Pi dispatches 4 scouts in parallel:
 
 - What is this product? Who uses it?
 - How is the code structured? What are the layers?
@@ -71,7 +71,7 @@ Result: a **Codebase Brief** — product summary, architecture map, tech stack, 
 
 ### Step 2 — Brainstorm
 
-Load `brainstorming`. Pi is now in the main session with the full brief as context. It asks one question at a time:
+Load `brainstorm`. Pi is now in the main session with the full brief as context. It asks one question at a time:
 
 > *"Are you integrating with a specific OAuth provider, or multiple?"*
 > *"Should existing password-based accounts be mergeable with OAuth?"*
@@ -80,13 +80,13 @@ After a few rounds, it proposes 2–3 approaches with trade-offs and a recommend
 
 ### Step 3 — Spec *(if needed)*
 
-Load `spec-writer` for features with cross-cutting effects — auth touches sessions, user model, API middleware, and frontend. It interviews you systematically and produces a complete behavioral spec: data model, API contract, UI behavior, edge cases. This becomes the source of truth the `spec-reviewer` agent checks against later.
+Load `spec` for features with cross-cutting effects — auth touches sessions, user model, API middleware, and frontend. It interviews you systematically and produces a complete behavioral spec: data model, API contract, UI behavior, edge cases. This becomes the source of truth the `spec-reviewer` agent checks against later.
 
 Skip this for simpler features.
 
 ### Step 4 — Plan
 
-Load `writing-plans`. With the design doc in context, pi writes a detailed implementation plan. Not vague bullets — actual code, exact file paths, TDD steps with expected test output:
+Load `plan`. With the design doc in context, pi writes a detailed implementation plan. Not vague bullets — actual code, exact file paths, TDD steps with expected test output:
 
 ```
 Task 1: Add OAuth provider config
@@ -108,13 +108,13 @@ Every task is self-contained enough that a subagent with no prior context can ex
 
 ### Step 5 — Worktree
 
-Load `using-git-worktrees`. Pi checks for `.worktrees/`, verifies it's gitignored, creates `.worktrees/feature/oauth-login`, runs `npm install`, runs the full test suite.
+Load `worktree`. Pi checks for `.worktrees/`, verifies it's gitignored, creates `.worktrees/feature/oauth-login`, runs `npm install`, runs the full test suite.
 
 > *"47 tests passing. Ready."*
 
 ### Step 6 — Execute
 
-Load `subagent-driven-development`. For each task, pi dispatches a fresh `implementer` subagent with the full task text. The implementer:
+Load `execute`. For each task, pi dispatches a fresh `implementer` subagent with the full task text. The implementer:
 
 1. **Checks it's on a feature branch** — hard stops if on `main`/`master`
 2. Writes the failing test
@@ -128,16 +128,16 @@ Then pi runs the three gates:
 
 ```
 Gate 1: spec-reviewer   — did it match the spec?        ✅ pass → Gate 2
-Gate 2: code-quality-reviewer — is it well-written?     ✅ pass → Gate 3
+Gate 2: code-reviewer — is it well-written?     ✅ pass → Gate 3
 Gate 3: security-reviewer — any security issues?        ✅ pass → next task
                                                         ❌ fail → re-dispatch implementer with exact issue list → re-check
 ```
 
-When all tasks complete, pi dispatches the `reviewer` agent for a final holistic pass over the entire branch diff.
+When all tasks complete, pi dispatches the `branch-reviewer` agent for a final holistic pass over the entire branch diff.
 
 ### Step 7 — Ship
 
-Load `finishing-a-development-branch`. Pi:
+Load `ship`. Pi:
 
 1. Checks commit history — squashes if messy
 2. `git push -u origin HEAD`
@@ -157,7 +157,7 @@ You get a PR URL.
 | `architect` | sonnet | Design decisions, ADRs |
 | `implementer` | sonnet | TDD implementation, commits, self-review. Writes `PROGRESS.md` after each task |
 | `spec-reviewer` | sonnet | Gate 1 — spec compliance check |
-| `code-quality-reviewer` | sonnet | Gate 2 — code quality check |
+| `code-reviewer` | sonnet | Gate 2 — code quality check |
 | `security-reviewer` | sonnet | Gate 3 — security audit |
 | `debugger` | sonnet | Root cause analysis, surgical fix |
 | `reviewer` | sonnet | Final holistic review of entire branch |
@@ -174,8 +174,8 @@ You get a PR URL.
 ### Workflow order
 
 ```
-research / understand-codebase → brainstorming → [spec-writer] → writing-plans
-→ using-git-worktrees → subagent-driven-development → finishing-a-development-branch
+research / explore → brainstorm → [spec] → plan
+→ worktree → execute → ship
 ```
 
 ### Full reference
@@ -183,13 +183,13 @@ research / understand-codebase → brainstorming → [spec-writer] → writing-p
 | Skill | When to use |
 |---|---|
 | `research` | Starting a new project or adopting unfamiliar tech |
-| `understand-codebase` | Start of any session on an existing codebase |
-| `brainstorming` | Before any feature work — explores intent, proposes approaches |
-| `spec-writer` | Non-trivial features with behavioral complexity |
-| `writing-plans` | After design approval — creates the implementation plan |
-| `using-git-worktrees` | Before implementation — sets up isolated workspace |
-| `subagent-driven-development` | Executes the plan with three-gate review per task |
-| `finishing-a-development-branch` | After all tasks pass — squash, push, PR, cleanup |
+| `explore` | Start of any session on an existing codebase |
+| `brainstorm` | Before any feature work — explores intent, proposes approaches |
+| `spec` | Non-trivial features with behavioral complexity |
+| `plan` | After design approval — creates the implementation plan |
+| `worktree` | Before implementation — sets up isolated workspace |
+| `execute` | Executes the plan with three-gate review per task |
+| `ship` | After all tasks pass — squash, push, PR, cleanup |
 | `pr-review` | Given a GitHub PR URL to review |
 | `exa-search` | Semantic search, AI answers, doc page fetching |
 | `brave-search` | Keyword web search, news, official reference pages |
@@ -201,11 +201,11 @@ research / understand-codebase → brainstorming → [spec-writer] → writing-p
 Skills activate automatically when the task matches. To force-load:
 
 ```
-/skill:brainstorming
-/skill:understand-codebase
-/skill:writing-plans
-/skill:subagent-driven-development
-/skill:finishing-a-development-branch
+/skill:brainstorm
+/skill:explore
+/skill:plan
+/skill:execute
+/skill:ship
 /skill:pr-review
 ```
 
@@ -225,7 +225,7 @@ Load the skill with `/skill:pr-review` or paste a GitHub PR URL. It:
 
 ## Resuming a mid-feature session
 
-The implementer writes status to `docs/plans/PROGRESS.md` after every commit. When you return to a feature in a new session, load `subagent-driven-development` — it reads that file first and boots from the last completed task.
+The implementer writes status to `docs/plans/PROGRESS.md` after every commit. When you return to a feature in a new session, load `execute` — it reads that file first and boots from the last completed task.
 
 ---
 

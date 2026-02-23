@@ -14,10 +14,10 @@
  * Based on the subagent extension example from badlogic/pi-mono:
  * https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent/examples/extensions/subagent
  *
- * The base example ships with 4 agents (planner, reviewer, scout, worker).
+ * The base example ships with 4 agents (planner, branch-reviewer, scout, worker).
  * This package extends it with a full agentic development workflow roster:
- * architect, code-quality-reviewer, debugger, documenter, implementer,
- * researcher, reviewer, scout, security-reviewer, spec-reviewer, worker.
+ * architect, code-reviewer, debugger, documenter, implementer,
+ * researcher, branch-reviewer, scout, security-reviewer, spec-reviewer, worker.
  */
 
 import { spawn } from "node:child_process";

@@ -1,9 +1,9 @@
 ---
-name: subagent-driven-development
+name: execute
 description: Use when executing implementation plans with independent tasks in the current session. Dispatches fresh subagents per task with two-stage review (spec compliance, then code quality).
 ---
 
-# Subagent-Driven Development
+# Execute
 
 Execute a plan by dispatching a fresh subagent per task, with three-gate review after each: spec compliance, then code quality, then security.
 
@@ -16,7 +16,7 @@ This skill orchestrates the `subagent` tool. Each dispatch is a single `subagent
 **Named agents used:**
 - `implementer` — implements, tests (TDD), commits, self-reviews
 - `spec-reviewer` — verifies implementation matches spec (nothing missing, nothing extra)
-- `code-quality-reviewer` — verifies implementation is well-built (after spec passes)
+- `code-reviewer` — verifies implementation is well-built (after spec passes)
 - `security-reviewer` — audits diff for secrets, injection, auth gaps, OWASP issues (after quality passes)
 
 All three agents live in `~/.pi/agent/extensions/subagent/agents/`. Their system prompts contain their standing instructions so `task:` only carries the variable content specific to this task.
@@ -25,17 +25,17 @@ All three agents live in `~/.pi/agent/extensions/subagent/agents/`. Their system
 
 ```
 Have implementation plan?
-├── no  → brainstorm first, then writing-plans
+├── no  → brainstorm first, then plan
 └── yes
     Tasks mostly independent?
     ├── no (tightly coupled) → execute manually
-    └── yes → subagent-driven-development  ← you are here
+    └── yes → execute  ← you are here
 ```
 
 ## The Process
 
 ### Before Starting
-**Required:** Set up an isolated git worktree using the `using-git-worktrees` skill. Never implement on main/master.
+**Required:** Set up an isolated git worktree using the `worktree` skill. Never implement on main/master.
 
 **Resuming mid-feature?** Run this boot sequence before dispatching anything:
 
@@ -71,7 +71,7 @@ For each task:
      → ❌ issues: dispatch implementer with fix list, re-run spec review
         Repeat until ✅
 
-  3. Dispatch code-quality-reviewer subagent (only after spec ✅)
+  3. Dispatch code-reviewer subagent (only after spec ✅)
      → ✅ approved: proceed to step 4
      → ❌ request changes: dispatch implementer with fix list, re-run quality review
         Repeat until ✅
@@ -85,7 +85,7 @@ For each task:
 ```
 
 ### Step 3: Final review
-After all tasks complete, dispatch `reviewer` agent for a final pass over the entire implementation.
+After all tasks complete, dispatch `branch-reviewer` agent for a final pass over the entire implementation.
 
 ## Resuming a Feature
 
@@ -105,7 +105,7 @@ See these files for the exact `subagent()` call syntax for each role:
 
 - `./implementer-prompt.md` — how to dispatch the implementer
 - `./spec-reviewer-prompt.md` — how to dispatch the spec reviewer (and handle ❌)
-- `./code-quality-reviewer-prompt.md` — how to dispatch the quality reviewer (and handle ❌)
+- `./references/code-reviewer-prompt.md` — how to dispatch the quality reviewer (and handle ❌)
 
 ## Example Workflow
 
@@ -131,7 +131,7 @@ subagent(agent: "spec-reviewer", task: "Review Task 1\n\n[requirements]\n\n[impl
 
 → Spec reviewer: ✅ Spec compliant
 
-subagent(agent: "code-quality-reviewer", task: "Review Task 1\n\n[report]\n\nBase: a0b1c2d  Head: a1b2c3d", cwd: ".worktrees/feature")
+subagent(agent: "code-reviewer", task: "Review Task 1\n\n[report]\n\nBase: a0b1c2d  Head: a1b2c3d", cwd: ".worktrees/feature")
 
 → Quality reviewer: ✅ Approved
 
@@ -160,7 +160,7 @@ subagent(agent: "spec-reviewer", task: "Re-review Task 2\n\n[requirements]\n\n[u
 
 → Spec reviewer: ✅ Spec compliant
 
-subagent(agent: "code-quality-reviewer", task: "Review Task 2\n\nBase: b1c2d3e  Head: c3d4e5f", cwd: ".worktrees/feature")
+subagent(agent: "code-reviewer", task: "Review Task 2\n\nBase: b1c2d3e  Head: c3d4e5f", cwd: ".worktrees/feature")
 
 → Quality reviewer:
     Important ⚠️: magic number 100 — extract to PROGRESS_INTERVAL constant
@@ -169,7 +169,7 @@ subagent(agent: "implementer", task: "Fix quality issue in Task 2\n\nExtract mag
 
 → Implementer: extracted constant. Commit: d4e5f6g
 
-subagent(agent: "code-quality-reviewer", task: "Re-review Task 2\n\nBase: b1c2d3e  Head: d4e5f6g", cwd: ".worktrees/feature")
+subagent(agent: "code-reviewer", task: "Re-review Task 2\n\nBase: b1c2d3e  Head: d4e5f6g", cwd: ".worktrees/feature")
 
 → Quality reviewer: ✅ Approved
 
@@ -178,7 +178,7 @@ subagent(agent: "code-quality-reviewer", task: "Re-review Task 2\n\nBase: b1c2d3
 ... [Task 3 same pattern] ...
 
 [All tasks complete]
-subagent(agent: "reviewer", task: "Final review of entire feature implementation\n\n[summary of all changes]", cwd: ".worktrees/feature")
+subagent(agent: "branch-reviewer", task: "Final review of entire feature implementation\n\n[summary of all changes]", cwd: ".worktrees/feature")
 ```
 
 ## Red Flags
@@ -212,10 +212,10 @@ subagent(agent: "reviewer", task: "Final review of entire feature implementation
 ## Integration
 
 **Required before starting:**
-- `using-git-worktrees` — set up isolated workspace first
+- `worktree` — set up isolated workspace first
 
 **Plan comes from:**
-- `writing-plans` — creates the plan this skill executes
+- `plan` — creates the plan this skill executes
 
 **Fresh context window:** Open a new pi session and load this skill. No separate skill needed.
 

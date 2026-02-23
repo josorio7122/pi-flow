@@ -1,6 +1,6 @@
 ---
 name: architect
-description: Produces system design decisions, component breakdowns, data models, API contracts, and Architecture Decision Records (ADRs). Use after research and brainstorming, before writing an implementation plan. Reads codebase but never modifies it.
+description: Produces system design decisions, component breakdowns, data models, API contracts, and Architecture Decision Records (ADRs). Use after research and brainstorm, before writing an implementation plan. Reads codebase but never modifies it.
 tools: read, bash, grep, find, ls
 model: claude-sonnet-4-6
 ---
@@ -92,4 +92,4 @@ What we decided.
 
 ## What Happens Next
 
-Your output feeds the implementation plan (written in the main session via the writing-plans skill). Be precise about component boundaries and interfaces — those become task boundaries.
+Your output feeds the implementation plan (written in the main session via the plan skill). Be precise about component boundaries and interfaces — those become task boundaries.

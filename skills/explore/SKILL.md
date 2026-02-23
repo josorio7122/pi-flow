@@ -1,19 +1,19 @@
 ---
-name: understand-codebase
-description: Multi-level parallel codebase analysis for existing projects. Dispatches scouts simultaneously for product, architecture, tech stack, dependencies, and relevant code. Use at the start of any session on an existing codebase before brainstorming or planning. Produces a structured brief covering all five levels.
+name: explore
+description: Multi-level parallel codebase analysis for existing projects. Dispatches scouts simultaneously for product, architecture, tech stack, dependencies, and relevant code. Use at the start of any session on an existing codebase before brainstorm or planning. Produces a structured brief covering all five levels.
 ---
 
-# Understand Codebase
+# Explore
 
 Get a complete multi-level understanding of an existing codebase by dispatching scouts in parallel, then synthesizing their findings into a structured brief.
 
-**Announce at start:** "I'm using the understand-codebase skill to map this codebase before we proceed."
+**Announce at start:** "I'm using the explore skill to map this codebase before we proceed."
 
 ## When to Use
 
 - Starting work on an unfamiliar codebase
 - Beginning a new session on a known project (quick refresh)
-- Before brainstorming any change to an existing system
+- Before brainstorm for any change to an existing system
 - When a user brings a request and you need to understand context before designing
 
 ## The Five Levels
@@ -107,10 +107,10 @@ After all scouts return, synthesize into a **Codebase Brief**:
 
 Present the brief to the user. Ask: "Does this match your understanding? Anything I'm missing before we design the change?"
 
-Once confirmed, invoke `brainstorming` skill with this brief as context.
+Once confirmed, invoke `brainstorm` skill with this brief as context.
 
 ## Integration
 
-**Called before:** `brainstorming` (always, for existing codebases)
+**Called before:** `brainstorm` (always, for existing codebases)
 **Uses:** `scout` (parallel), `researcher` (dependency check)
-**Produces:** Codebase Brief that feeds brainstorming and writing-plans
+**Produces:** Codebase Brief that feeds brainstorm and plan

@@ -1,6 +1,6 @@
 ---
 name: security-reviewer
-description: Automatically audits diffs for security issues on every PR and feature. Checks for hardcoded secrets, injection vectors, auth gaps, unsafe dependencies, and OWASP top 10 issues. Strictly read-only. Runs after code-quality-reviewer passes.
+description: Automatically audits diffs for security issues on every PR and feature. Checks for hardcoded secrets, injection vectors, auth gaps, unsafe dependencies, and OWASP top 10 issues. Strictly read-only. Runs after code-reviewer passes.
 tools: read, bash, grep, find, ls
 model: claude-sonnet-4-6
 ---

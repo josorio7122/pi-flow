@@ -8,7 +8,7 @@ Use this after spec compliance is `✅`. Dispatch via the `subagent` tool.
 
 ```
 subagent(
-  agent: "code-quality-reviewer",
+  agent: "code-reviewer",
   task: """
     Review code quality for Task N: [task name]
 
@@ -70,4 +70,4 @@ subagent(
 
 Then re-run code quality review. Repeat until `✅`.
 
-**Only mark the task complete after `✅` from both spec-reviewer AND code-quality-reviewer.**
+**Only mark the task complete after `✅` from both spec-reviewer AND code-reviewer.**

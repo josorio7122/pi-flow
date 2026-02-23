@@ -1,5 +1,5 @@
 ---
-name: code-quality-reviewer
+name: code-reviewer
 description: Reviews code quality after spec compliance is confirmed — checks for clean code, good tests, proper error handling, naming, and architecture. Use after spec-reviewer passes, before marking a task complete.
 tools: read, bash
 model: claude-sonnet-4-6

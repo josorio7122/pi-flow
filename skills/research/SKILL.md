@@ -1,6 +1,6 @@
 ---
 name: research
-description: Structured research phase for greenfield projects or unfamiliar tech. Dispatches researcher agents in parallel to cover stack options, best practices, CLI scaffolding, and current documentation. Use before brainstorming a new project or when adopting an unfamiliar technology. Produces a Research Brief.
+description: Structured research phase for greenfield projects or unfamiliar tech. Dispatches researcher agents in parallel to cover stack options, best practices, CLI scaffolding, and current documentation. Use before brainstorm for a new project or when adopting an unfamiliar technology. Produces a Research Brief.
 ---
 
 # Research
@@ -11,7 +11,7 @@ Gather current, accurate information before making any technology or design deci
 
 ## When to Use
 
-- Starting a new project from scratch (before brainstorming)
+- Starting a new project from scratch (before brainstorm)
 - Adopting a technology or framework you haven't used recently
 - Comparing stack options before committing
 - Checking whether best practices have changed for a known stack
@@ -94,11 +94,11 @@ pnpm dlx create-next-app@latest my-app --typescript --tailwind
 
 Present the Research Brief. Ask: "Does this match what you had in mind? Any concerns before we start designing?"
 
-Once confirmed, invoke `brainstorming` skill.
+Once confirmed, invoke `brainstorm` skill.
 
 ## Integration
 
-**Called before:** `brainstorming` (for new projects or unfamiliar tech)
+**Called before:** `brainstorm` (for new projects or unfamiliar tech)
 **Uses:** `researcher` agents in parallel
-**Produces:** Research Brief that feeds brainstorming
-**Does NOT replace:** `brainstorming` — research informs design, it doesn't replace it
+**Produces:** Research Brief that feeds brainstorm
+**Does NOT replace:** `brainstorm` — research informs design, it does not replace it

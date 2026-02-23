@@ -179,7 +179,7 @@ All five are designed, not just the prompt.
 
 ### Phase 2: Brainstorm & Design
 
-**Skill:** `brainstorming`
+**Skill:** `brainstorm`
 
 **What happens:**
 - One question at a time to clarify intent
@@ -194,7 +194,7 @@ All five are designed, not just the prompt.
 
 ### Phase 3: Spec Writing (Non-trivial features)
 
-**Skill:** `spec-writer`
+**Skill:** `spec`
 
 **When required:**
 - New subsystem or major feature
@@ -214,7 +214,7 @@ All five are designed, not just the prompt.
 
 ### Phase 4: Implementation Plan
 
-**Skill:** `writing-plans`
+**Skill:** `plan`
 
 **What it produces:**
 - Task-by-task breakdown with exact files
@@ -249,7 +249,7 @@ Applies to **every** generated migration without exception — including the fir
 
 ### Phase 5: Worktree Setup
 
-**Skill:** `using-git-worktrees`
+**Skill:** `worktree`
 
 **Always before implementation.** Never on main/master.
 
@@ -257,11 +257,11 @@ Applies to **every** generated migration without exception — including the fir
 
 ### Phase 6: Execution
 
-**Skill:** `subagent-driven-development`
+**Skill:** `execute`
 
 **Per-task loop:**
 ```
-implementer → spec-reviewer → [fix if needed] → code-quality-reviewer → [fix if needed] → ✅ done
+implementer → spec-reviewer → [fix if needed] → code-reviewer → [fix if needed] → ✅ done
 ```
 
 **Parallel dispatch rules** (see Section 6 for full decision matrix):
@@ -273,7 +273,7 @@ implementer → spec-reviewer → [fix if needed] → code-quality-reviewer → 
 
 ### Phase 7: Final Review
 
-**Agent:** `reviewer`
+**Agent:** `branch-reviewer`
 
 After all tasks complete, a final reviewer reads the entire diff and implementation summary.
 
@@ -339,7 +339,7 @@ All agents live in `~/.pi/agent/extensions/subagent/agents/`. Each has a single 
 
 ---
 
-### `code-quality-reviewer` — Quality Gate
+### `code-reviewer` — Quality Gate
 **Model:** `claude-sonnet-4-6`
 **Tools:** `read`, `bash` (read-only)
 **Purpose:** Reviews code quality after spec compliance is confirmed. Checks: clean code, good tests, proper error handling, naming, architecture fit. Second review gate — only runs after spec-reviewer passes.
@@ -366,7 +366,7 @@ All agents live in `~/.pi/agent/extensions/subagent/agents/`. Each has a single 
 
 ---
 
-### `reviewer` — Final Implementation Review
+### `branch-reviewer` — Final Implementation Review
 **Model:** `claude-sonnet-4-6`
 **Tools:** `read`, `bash` (read-only)
 **Purpose:** Final review of entire feature implementation. Reviews the full diff against the original plan — checks consistency, integration, edge cases. Used as the last step before PR.
@@ -394,10 +394,10 @@ All agents live in `~/.pi/agent/extensions/subagent/agents/`. Each has a single 
 | Implement a task | `implementer` |
 | Fix a failing test | `debugger` |
 | Check spec compliance | `spec-reviewer` |
-| Check code quality | `code-quality-reviewer` |
+| Check code quality | `code-reviewer` |
 | Check for security issues | `security-reviewer` |
 | Update docs/README | `documenter` |
-| Final feature review | `reviewer` |
+| Final feature review | `branch-reviewer` |
 | Anything else | `worker` (last resort) |
 
 ---
@@ -415,20 +415,20 @@ Skills are loaded on-demand. The description in the frontmatter determines when 
 ### Design Skills
 | Skill | When | What it does |
 |---|---|---|
-| `brainstorming` | Before ANY feature work | Explores intent → proposes approaches → gets design approved |
-| `spec-writer` | For non-trivial features with behavioral complexity | Produces full SDD spec: glossary, data model, API contract, UI spec |
+| `brainstorm` | Before ANY feature work | Explores intent → proposes approaches → gets design approved |
+| `spec` | For non-trivial features with behavioral complexity | Produces full SDD spec: glossary, data model, API contract, UI spec |
 
 ### Planning Skills
 | Skill | When | What it does |
 |---|---|---|
-| `writing-plans` | After design approved, before touching code | Creates task-by-task plan with TDD steps, exact files, exact commands |
+| `plan` | After design approved, before touching code | Creates task-by-task plan with TDD steps, exact files, exact commands |
 
 ### Execution Skills
 | Skill | When | What it does |
 |---|---|---|
-| `using-git-worktrees` | Before any implementation | Sets up isolated git workspace, verifies baseline |
-| `subagent-driven-development` | Executing plan in this session | Dispatches subagents per task, three-gate review loop |
-| `finishing-a-development-branch` | After all tasks complete | Squash commits, push, open PR, remove worktree |
+| `worktree` | Before any implementation | Sets up isolated git workspace, verifies baseline |
+| `execute` | Executing plan in this session | Dispatches subagents per task, three-gate review loop |
+| `ship` | After all tasks complete | Squash commits, push, open PR, remove worktree |
 
 ### Review Skills
 | Skill | When | What it does |
@@ -475,7 +475,7 @@ subagent(chain: [
   { agent: "scout", task: "Investigate auth module" },
   { agent: "architect", task: "Design solution based on: {previous}" }
 ])
-# Planning then happens in the main session via writing-plans skill
+# Planning then happens in the main session via plan skill
 ```
 
 ### Single Dispatch
@@ -596,10 +596,10 @@ Place `.ts` files in `~/.pi/agent/extensions/`. They load automatically. No comp
 │  ┌─────────────────────────┐        ┌──────────────────────────┐     │
 │  │ exa-search              │        │ pr-review                │     │
 │  │ brave-search            │        └──────────────────────────┘     │
-│  │ brainstorming           │                                         │
-│  │ spec-writer             │                                         │
-│  │ writing-plans           │                                         │
-│  │ using-git-worktrees     │                                         │
+│  │ brainstorm           │                                         │
+│  │ spec             │                                         │
+│  │ plan           │                                         │
+│  │ worktree     │                                         │
 │  │ subagent-driven-dev     │                                         │
 │  │ finishing-a-dev-branch  │                                         │
 │  │ pr-review               │                                         │
@@ -617,7 +617,7 @@ Place `.ts` files in `~/.pi/agent/extensions/`. They load automatically. No comp
 │  └─────────────┘  └────────────┘  └────────────┘  └─────────────┘  │
 │                                                                      │
 │  ┌──────────────────┐  ┌───────────────────────┐  ┌─────────────┐  │
-│  │  spec-reviewer   │  │ code-quality-reviewer │  │  security-  │  │
+│  │  spec-reviewer   │  │ code-reviewer │  │  security-  │  │
 │  │    (sonnet)      │  │       (sonnet)        │  │  reviewer   │  │
 │  └──────────────────┘  └───────────────────────┘  │  (sonnet)   │  │
 │                                                    └─────────────┘  │
@@ -635,7 +635,7 @@ EXISTING:    [understand] → brainstorm → [spec] → plan → worktree → ex
 
 EXECUTION LOOP (per task):
 ─────────────────────────────────────────────────────────────────────
-implementer → spec-reviewer → [fix] → code-quality-reviewer → [fix] → security-reviewer → [fix] → ✅
+implementer → spec-reviewer → [fix] → code-reviewer → [fix] → security-reviewer → [fix] → ✅
 
 UNDERSTAND PHASE (parallel):
 ─────────────────────────────────────────────────────────────────────
@@ -668,12 +668,12 @@ researcher(deps)─┘
 - Always check current docs rule
 
 ### Skills in workflow
-- `brainstorming`, `writing-plans`, `subagent-driven-development`
-- `using-git-worktrees`, `finishing-a-development-branch`, `pr-review`
-- `understand-codebase`, `research`, `spec-writer`
+- `brainstorm`, `plan`, `execute`
+- `worktree`, `ship`, `pr-review`
+- `explore`, `research`, `spec`
 - `exa-search`, `brave-search`, `frontend-design`, `interface-design`
 
 ### Skills removed (redundant)
-- `executing-plans` — `subagent-driven-development` in a fresh session is strictly better
-- `test-driven-development` — TDD enforced by `implementer` agent and `writing-plans` steps
+- `executing-plans` — `execute` in a fresh session is strictly better
+- `test-driven-development` — TDD enforced by `implementer` agent and `plan` steps
 - `cursor` — three bash commands; not a workflow skill

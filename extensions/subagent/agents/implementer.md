@@ -29,7 +29,7 @@ If the output is `main` or `master` — **stop immediately**. Do not write a sin
 
 ```
 ⛔ Refusing to implement: current branch is main/master.
-Set up a worktree first using the using-git-worktrees skill, then re-dispatch with cwd pointing to the worktree path.
+Set up a worktree first using the worktree skill, then re-dispatch with cwd pointing to the worktree path.
 ```
 
 If you are on a feature branch or inside a worktree — proceed.

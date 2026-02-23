@@ -1,11 +1,11 @@
 ---
-name: spec-writer
+name: spec
 description: "Write a complete Spec-Driven Development (SDD) spec for a software platform. Produces all required artifacts in dependency order through structured interviews, templates, and compliance checks. Use when a user asks to create, design, or write a spec for a platform, service, or product. Produces: GLOSSARY.md, CONSTITUTION.md, DATA-MODEL.md, specs/00-overview.md, per-subsystem specs, HTTP API contract, and UI behavioral spec."
 ---
 
-# Spec Writer
+# Spec
 
-**Announce at start:** "I'm using the spec-writer skill to produce a complete SDD spec."
+**Announce at start:** "I'm using the spec skill to produce a complete SDD spec."
 
 Load all reference documents before starting:
 - [references/PHASES.md](references/PHASES.md) — interview questions and per-artifact requirements
@@ -123,6 +123,6 @@ Do not guess. Wrong assumptions in Phase 2 propagate to every subsequent artifac
 ## Integration
 
 This skill produces the spec. Downstream skills:
-- **brainstorming** → design how to implement a specific subsystem
-- **writing-plans** → create a task-by-task implementation plan
-- **subagent-driven-development** → implement the plan
+- **brainstorm** → design how to implement a specific subsystem
+- **plan** → create a task-by-task implementation plan
+- **execute** → implement the plan

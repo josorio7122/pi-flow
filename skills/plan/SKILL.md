@@ -1,9 +1,9 @@
 ---
-name: writing-plans
+name: plan
 description: Breaks down a spec or set of requirements into a numbered, sequentially ordered implementation plan with clear task boundaries and file-level scope. Use before touching any code when you have a multi-step feature, fix, or refactor to implement.
 ---
 
-# Writing Plans
+# Plan
 
 ## Overview
 
@@ -11,9 +11,9 @@ Write comprehensive implementation plans assuming the engineer has zero context 
 
 Assume they are a skilled developer, but know almost nothing about our toolset or problem domain. Assume they don't know good test design very well.
 
-**Announce at start:** "I'm using the writing-plans skill to create the implementation plan."
+**Announce at start:** "I'm using the plan skill to create the implementation plan."
 
-**Context:** This should be run in a dedicated worktree (created by brainstorming skill).
+**Context:** This should be run in a dedicated worktree (created by brainstorm skill).
 
 **Save plans to:** `docs/plans/YYYY-MM-DD-<feature-name>.md`
 
@@ -33,7 +33,7 @@ Assume they are a skilled developer, but know almost nothing about our toolset o
 ```markdown
 # [Feature Name] Implementation Plan
 
-> **For Claude:** Implement this plan task-by-task using `subagent-driven-development` — fresh subagent per task with three-gate review (spec → quality → security). Load the skill and begin.
+> **For Claude:** Implement this plan task-by-task using `execute` — fresh subagent per task with three-gate review (spec → quality → security). Load the skill and begin.
 
 **Goal:** [One sentence describing what this builds]
 
@@ -97,7 +97,7 @@ git commit -m "feat: add specific feature"
 
 After saving the plan, say:
 
-**"Plan complete and saved to `docs/plans/<filename>.md`. Ready to execute with `subagent-driven-development` — fresh subagent per task, three-gate review (spec → quality → security) after each. Start now, or open a new session for a clean context window first?"**
+**"Plan complete and saved to `docs/plans/<filename>.md`. Ready to execute with `execute` — fresh subagent per task, three-gate review (spec → quality → security) after each. Start now, or open a new session for a clean context window first?"**
 
-- **Start now** — load `subagent-driven-development` skill and begin
-- **New session** — user opens a new pi session, loads `subagent-driven-development`, points it at the plan file
+- **Start now** — load `execute` skill and begin
+- **New session** — user opens a new pi session, loads `execute`, points it at the plan file

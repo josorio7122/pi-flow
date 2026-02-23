@@ -1,6 +1,6 @@
 # Phase Details
 
-> Detailed instructions for each phase of the spec-writer skill. Load this file at the start of Phase 1.
+> Detailed instructions for each phase of the spec skill. Load this file at the start of Phase 1.
 
 ---
 
