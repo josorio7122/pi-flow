@@ -15,6 +15,6 @@
   "pi": {
     "extensions": ["./extensions"],
     "skills": ["./skills"],
-    "prompts": ["./prompts"]
+    "prompts": ["./skills/pr-review/pr-review.md"]
   }
 }

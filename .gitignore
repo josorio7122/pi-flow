@@ -4,5 +4,11 @@ skills/exa-search/node_modules/
 skills/browser-tools/node_modules/
 skills/pr-review/node_modules/
 
+# Generated lockfiles — this is a peer-dep-only package, lockfile adds no value
+package-lock.json
+
 # Runtime state — generated during feature work, not part of the repo
 docs/plans/PROGRESS.md
+
+# Internal dev plans — not part of the published package
+docs/plans/*.md
