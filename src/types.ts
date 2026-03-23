@@ -70,7 +70,8 @@ export interface SingleAgentResult {
   model?: string;
   stopReason?: string;
   errorMessage?: string;
-  step?: number;  // for chain mode
+  step?: number;      // for chain mode
+  startedAt?: number; // epoch ms when agent was spawned — used for elapsed display
 }
 
 // Usage stats
