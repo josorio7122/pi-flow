@@ -4,12 +4,16 @@
   "description": "State-of-the-art agentic software development workflow for pi",
   "main": "src/index.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "packageManager": "pnpm@10.30.1",
   "type": "module",
-  "private": "true"
+  "private": "true",
+  "devDependencies": {
+    "vitest": "^4.1.1"
+  }
 }
