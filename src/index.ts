@@ -140,7 +140,7 @@ export default function piFlow(pi: ExtensionAPI) {
       'parallel (concurrent scouts), chain (sequential with {previous}).',
     promptSnippet:
       'Dispatch specialized subagents: scout (read-only analysis), ' +
-      'planner (wave task breakdown), builder (TDD implementation), ' +
+      'planner (task breakdown), builder (TDD implementation), ' +
       'reviewer (spec compliance + security). ' +
       'Feature is auto-inferred from active feature.',
     parameters: Type.Object({
