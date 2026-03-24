@@ -1,5 +1,9 @@
 import type { FlowAgentConfig, FlowState } from './types.js';
-import { getNextPhase, isTerminalPhase, phaseRequiresApproval } from './transitions.js';
+import {
+  getEffectivePipeline,
+  isTerminalPhase,
+  phaseRequiresApproval,
+} from './transitions.js';
 import { getApprovalFrontmatterExample } from './templates.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -118,15 +122,14 @@ Write task files to \`.flow/features/<feature>/\` before dispatching agents.`;
       activeLine += ` [${sentinel.open_halts} HALT]`;
     }
 
-    const nextPhase = getNextPhase(state.change_type, state.skipped_phases, current_phase);
-    if (nextPhase) {
-      const needsApproval = phaseRequiresApproval(nextPhase);
-      activeLine += `\nNext action: dispatch ${nextPhase} phase.`;
+    if (isTerminalPhase(state.change_type, state.skipped_phases, current_phase)) {
+      activeLine += '\nWorkflow complete — no more phases.';
+    } else {
+      const needsApproval = phaseRequiresApproval(current_phase);
+      activeLine += `\nAction: dispatch ${current_phase} phase.`;
       if (needsApproval) {
         activeLine += ' Gate requires human approval — present the artifact and ask.';
       }
-    } else if (isTerminalPhase(state.change_type, state.skipped_phases, current_phase)) {
-      activeLine += '\nWorkflow complete — no more phases.';
     }
 
     prompt += `\n\n${activeLine}`;
@@ -138,23 +141,29 @@ Write task files to \`.flow/features/<feature>/\` before dispatching agents.`;
 // ─── buildNudgeMessage ────────────────────────────────────────────────────────
 
 /**
- * Returns a nudge message that names the next action for the coordinator.
- * Uses the transition engine to determine what comes next.
+ * Returns a nudge message telling the coordinator to dispatch the current phase.
+ *
+ * After auto-advance, `current_phase` is "the phase that needs to be done next"
+ * — NOT "the phase just completed". The nudge directs the coordinator to dispatch
+ * that phase. If the current phase is terminal, the feature is complete.
  */
 export function buildNudgeMessage(state: FlowState): string {
-  const nextPhase = getNextPhase(state.change_type, state.skipped_phases, state.current_phase);
+  const { feature, current_phase, change_type, skipped_phases } = state;
 
-  if (!nextPhase) {
-    return `✅ Feature "${state.feature}" — all phases complete.`;
+  if (isTerminalPhase(change_type, skipped_phases, current_phase)) {
+    return `✅ Feature "${feature}" — all phases complete.`;
   }
 
-  const needsApproval = phaseRequiresApproval(nextPhase);
+  // Phase not in pipeline at all (stale state) — treat as complete
+  const pipeline = getEffectivePipeline(change_type, skipped_phases);
+  if (!pipeline.includes(current_phase)) {
+    return `✅ Feature "${feature}" — all phases complete.`;
+  }
+
+  const needsApproval = phaseRequiresApproval(current_phase);
   const approvalHint = needsApproval
     ? ' Gate requires human approval — present the artifact and ask.'
     : '';
 
-  return (
-    `⚠️ Feature "${state.feature}" — phase ${state.current_phase} complete. ` +
-    `Next: dispatch ${nextPhase} phase.${approvalHint}`
-  );
+  return `⚠️ Feature "${feature}" — dispatch ${current_phase} phase.${approvalHint}`;
 }

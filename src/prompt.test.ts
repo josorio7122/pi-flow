@@ -187,7 +187,7 @@ describe('buildCoordinatorPrompt', () => {
     expect(output).toContain('analyze');
   });
 
-  it('activeFeature includes next action when not terminal', () => {
+  it('activeFeature includes action to dispatch current phase', () => {
     const state = makeState({
       feature: 'auth',
       change_type: 'feature',
@@ -197,7 +197,7 @@ describe('buildCoordinatorPrompt', () => {
       state,
       featureDir: '.flow/features/auth',
     });
-    expect(output).toContain('review');
+    expect(output).toContain('dispatch execute');
   });
 
   it('activeFeature at terminal phase shows complete message', () => {
@@ -226,24 +226,26 @@ describe('buildNudgeMessage', () => {
     expect(msg).toContain('payment-refactor');
   });
 
-  it('names the next phase when not terminal', () => {
+  it('tells coordinator to dispatch the current phase (not the next one)', () => {
     const state = makeState({
       feature: 'auth-flow',
       change_type: 'feature',
-      current_phase: 'execute',
+      current_phase: 'review',
     });
     const msg = buildNudgeMessage(state);
-    expect(msg).toContain('review');
+    // current_phase = review means "review needs to be done"
+    expect(msg).toContain('dispatch review');
+    expect(msg).not.toContain('dispatch ship');
   });
 
-  it('mentions approval when next phase requires it', () => {
+  it('mentions approval when current phase requires it', () => {
     const state = makeState({
       feature: 'auth-flow',
       change_type: 'feature',
-      current_phase: 'spec',
+      current_phase: 'analyze',
     });
     const msg = buildNudgeMessage(state);
-    // Next phase is analyze, which requires spec approval
+    // analyze requires spec approval
     expect(msg).toContain('approval');
   });
 
@@ -267,15 +269,14 @@ describe('buildNudgeMessage', () => {
     expect(msg).toContain('complete');
   });
 
-  it('respects change_type skip paths', () => {
+  it('does not mention next phase — nudge is about the current phase', () => {
     const state = makeState({
       feature: 'fix-typo',
-      change_type: 'docs',
+      change_type: 'feature',
       current_phase: 'execute',
     });
     const msg = buildNudgeMessage(state);
-    // docs: execute → ship (no review)
-    expect(msg).toContain('ship');
-    expect(msg).not.toContain('review');
+    expect(msg).toContain('dispatch execute');
+    expect(msg).not.toContain('dispatch review');
   });
 });
