@@ -1,4 +1,6 @@
 import type { FlowAgentConfig, FlowState } from './types.js';
+import { getNextPhase, isTerminalPhase, phaseRequiresApproval } from './transitions.js';
+import { getApprovalFrontmatterExample } from './templates.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -32,7 +34,7 @@ function buildAgentTable(agents: FlowAgentConfig[]): string {
 // ─── buildCoordinatorPrompt ───────────────────────────────────────────────────
 
 /**
- * Builds the coordinator system prompt (~200-300 tokens).
+ * Builds the coordinator system prompt.
  * Pure function — no filesystem access.
  */
 export function buildCoordinatorPrompt(
@@ -40,6 +42,7 @@ export function buildCoordinatorPrompt(
   activeFeature: { state: FlowState; featureDir: string } | null,
 ): string {
   const agentTable = buildAgentTable(agents);
+  const approvalExample = getApprovalFrontmatterExample();
 
   let prompt = `## Coordinator
 
@@ -49,16 +52,47 @@ You coordinate work via \`dispatch_flow\`. You NEVER write code directly — onl
 
 **Just Answer** — Non-code questions → answer directly.
 **Understand** — Code questions → dispatch scouts → synthesize.
-**Implement** — Code changes → full pipeline: intent → spec → analyze → plan → execute → review → ship.
+**Implement** — Code changes → full pipeline per change type (see skip paths below).
 
 ### Agents
 
 ${agentTable}
 
-### Phase Pipeline
+### Phase Pipeline & Skip Paths
 
-intent → spec → analyze → plan → execute → review → ship
-Gates: spec.md (approval) → analysis.md → design.md (approval) + tasks.md → sentinel clear → review.md (PASSED)
+After each successful dispatch, state.md auto-advances to the next phase.
+Dispatch the next phase immediately unless a gate requires human approval.
+
+| Change Type | Pipeline |
+|-------------|----------|
+| feature | intent → spec → analyze → plan → execute → review → ship |
+| refactor | intent → analyze → plan → execute → review → ship |
+| hotfix | intent → analyze → execute → review → ship |
+| docs | intent → execute → ship |
+| config | intent → analyze → execute → ship |
+| research | intent → analyze |
+
+### Human Approval Gates
+
+spec.md and design.md require human approval before the next phase can begin.
+When you reach a gate that needs approval:
+1. Present a summary of the artifact to the user
+2. Ask: "Do you approve this [spec/design]?"
+3. Wait for the user's response
+4. Only after they say yes, write the approved frontmatter using this exact format:
+
+\`\`\`
+${approvalExample}
+\`\`\`
+
+The \`---\` delimiters are required. The value must be \`true\` (not \`yes\`, not \`1\`).
+NEVER self-approve. NEVER write \`approved: true\` without the user explicitly approving.
+
+### Analyze Phase — Always Use Scouts
+
+During the analyze phase, ALWAYS dispatch scout(s) via parallel mode — never read
+codebase files yourself. Scouts are specialized for exhaustive, scoped mapping and
+their output feeds the strategist. Multiple scouts can run in parallel for different domains.
 
 ### .flow/ Directory
 
@@ -84,6 +118,17 @@ Write task files to \`.flow/features/<feature>/\` before dispatching agents.`;
       activeLine += ` [${sentinel.open_halts} HALT]`;
     }
 
+    const nextPhase = getNextPhase(state.change_type, state.skipped_phases, current_phase);
+    if (nextPhase) {
+      const needsApproval = phaseRequiresApproval(nextPhase);
+      activeLine += `\nNext action: dispatch ${nextPhase} phase.`;
+      if (needsApproval) {
+        activeLine += ' Gate requires human approval — present the artifact and ask.';
+      }
+    } else if (isTerminalPhase(state.change_type, state.skipped_phases, current_phase)) {
+      activeLine += '\nWorkflow complete — no more phases.';
+    }
+
     prompt += `\n\n${activeLine}`;
   }
 
@@ -93,8 +138,23 @@ Write task files to \`.flow/features/<feature>/\` before dispatching agents.`;
 // ─── buildNudgeMessage ────────────────────────────────────────────────────────
 
 /**
- * Returns a one-liner nudge reminding the coordinator of the active workflow.
+ * Returns a nudge message that names the next action for the coordinator.
+ * Uses the transition engine to determine what comes next.
  */
 export function buildNudgeMessage(state: FlowState): string {
-  return `⚠️ Feature "${state.feature}" in progress — phase: ${state.current_phase}. Continue working. Read .flow/features/${state.feature}/state.md for next steps.`;
+  const nextPhase = getNextPhase(state.change_type, state.skipped_phases, state.current_phase);
+
+  if (!nextPhase) {
+    return `✅ Feature "${state.feature}" — all phases complete.`;
+  }
+
+  const needsApproval = phaseRequiresApproval(nextPhase);
+  const approvalHint = needsApproval
+    ? ' Gate requires human approval — present the artifact and ask.'
+    : '';
+
+  return (
+    `⚠️ Feature "${state.feature}" — phase ${state.current_phase} complete. ` +
+    `Next: dispatch ${nextPhase} phase.${approvalHint}`
+  );
 }

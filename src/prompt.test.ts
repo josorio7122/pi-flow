@@ -54,15 +54,19 @@ const STANDARD_AGENTS: FlowAgentConfig[] = [
 // ─── buildCoordinatorPrompt ───────────────────────────────────────────────────
 
 describe('buildCoordinatorPrompt', () => {
-  it('empty agents array → table contains header row only (no agent data rows)', () => {
+  it('empty agents array → agent table contains header row only (no agent data rows)', () => {
     const output = buildCoordinatorPrompt([], null);
     expect(output).toContain('| Agent |');
-    // No agent name rows — split by newline and check no row after separator
+    // Find the agent table separator and count rows until next blank line
     const lines = output.split('\n');
-    const separatorIdx = lines.findIndex((l) => l.startsWith('|---'));
-    // Everything after the separator until the next blank/non-table line should be empty
-    const rowsAfterSeparator = lines.slice(separatorIdx + 1).filter((l) => l.startsWith('|'));
-    expect(rowsAfterSeparator).toHaveLength(0);
+    const agentSepIdx = lines.findIndex((l) => l.startsWith('|---') && lines[l ? lines.indexOf(l) - 1 : 0]?.includes('Agent'));
+    // No agent rows between separator and next non-table line
+    let agentRows = 0;
+    for (let i = agentSepIdx + 1; i < lines.length; i++) {
+      if (!lines[i].startsWith('|')) break;
+      agentRows++;
+    }
+    expect(agentRows).toBe(0);
   });
 
   it('8 standard agents → each agent name appears in output', () => {
@@ -81,15 +85,20 @@ describe('buildCoordinatorPrompt', () => {
     expect(output).not.toContain('A'.repeat(81));
   });
 
-  it('16 agents → table contains exactly 15 rows plus "...and 1 more" line', () => {
+  it('16 agents → table contains exactly 15 agent rows plus "...and 1 more" line', () => {
     const agents = Array.from({ length: 16 }, (_, i) => makeAgent({ name: `agent${i}` }));
     const output = buildCoordinatorPrompt(agents, null);
     expect(output).toContain('...and 1 more');
-    // Count table data rows (lines starting with | that are not header or separator)
+    // Count agent table rows between separator and next non-table line
     const lines = output.split('\n');
-    const separatorIdx = lines.findIndex((l) => l.startsWith('|---'));
-    const dataRows = lines.slice(separatorIdx + 1).filter((l) => l.startsWith('|'));
-    expect(dataRows).toHaveLength(15);
+    const headerIdx = lines.findIndex((l) => l.includes('| Agent |'));
+    const sepIdx = headerIdx + 1; // separator follows header
+    let agentRows = 0;
+    for (let i = sepIdx + 1; i < lines.length; i++) {
+      if (!lines[i].startsWith('|')) break;
+      agentRows++;
+    }
+    expect(agentRows).toBe(15);
   });
 
   it('activeFeature=null → output does NOT contain "⚠️ Active:"', () => {
@@ -148,25 +157,115 @@ describe('buildCoordinatorPrompt', () => {
     expect(output).toContain('### .flow/ Directory');
     expect(output).toContain('### Dispatch Rules');
   });
+
+  it('output contains skip path table', () => {
+    const output = buildCoordinatorPrompt(STANDARD_AGENTS, null);
+    expect(output).toContain('feature');
+    expect(output).toContain('refactor');
+    expect(output).toContain('hotfix');
+    expect(output).toContain('docs');
+    expect(output).toContain('config');
+    expect(output).toContain('research');
+  });
+
+  it('output contains human approval gate instructions', () => {
+    const output = buildCoordinatorPrompt(STANDARD_AGENTS, null);
+    expect(output).toContain('Human Approval');
+    expect(output).toContain('NEVER self-approve');
+    expect(output).toContain('approved: true');
+  });
+
+  it('output contains frontmatter format example with --- delimiters', () => {
+    const output = buildCoordinatorPrompt(STANDARD_AGENTS, null);
+    expect(output).toContain('---');
+    expect(output).toContain('approved: true');
+  });
+
+  it('output contains scout enforcement instruction', () => {
+    const output = buildCoordinatorPrompt(STANDARD_AGENTS, null);
+    expect(output).toContain('scout');
+    expect(output).toContain('analyze');
+  });
+
+  it('activeFeature includes next action when not terminal', () => {
+    const state = makeState({
+      feature: 'auth',
+      change_type: 'feature',
+      current_phase: 'execute',
+    });
+    const output = buildCoordinatorPrompt(STANDARD_AGENTS, {
+      state,
+      featureDir: '.flow/features/auth',
+    });
+    expect(output).toContain('review');
+  });
+
+  it('activeFeature at terminal phase shows complete message', () => {
+    const state = makeState({
+      feature: 'auth',
+      change_type: 'feature',
+      current_phase: 'ship',
+    });
+    const output = buildCoordinatorPrompt(STANDARD_AGENTS, {
+      state,
+      featureDir: '.flow/features/auth',
+    });
+    expect(output).toContain('complete');
+  });
 });
 
 // ─── buildNudgeMessage ────────────────────────────────────────────────────────
 
 describe('buildNudgeMessage', () => {
-  it('returns string containing feature name and current_phase', () => {
+  it('returns string containing feature name', () => {
     const state = makeState({
       feature: 'payment-refactor',
       current_phase: 'plan',
     });
     const msg = buildNudgeMessage(state);
     expect(msg).toContain('payment-refactor');
-    expect(msg).toContain('plan');
   });
 
-  it('contains a reference to the state.md file for the feature', () => {
-    const state = makeState({ feature: 'auth-flow' });
+  it('names the next phase when not terminal', () => {
+    const state = makeState({
+      feature: 'auth-flow',
+      change_type: 'feature',
+      current_phase: 'execute',
+    });
     const msg = buildNudgeMessage(state);
-    expect(msg).toContain('auth-flow');
-    expect(msg).toContain('state.md');
+    expect(msg).toContain('review');
+  });
+
+  it('mentions approval when next phase requires it', () => {
+    const state = makeState({
+      feature: 'auth-flow',
+      change_type: 'feature',
+      current_phase: 'spec',
+    });
+    const msg = buildNudgeMessage(state);
+    // Next phase is analyze, which requires spec approval
+    expect(msg).toContain('approval');
+  });
+
+  it('shows complete message at terminal phase', () => {
+    const state = makeState({
+      feature: 'auth-flow',
+      change_type: 'feature',
+      current_phase: 'ship',
+    });
+    const msg = buildNudgeMessage(state);
+    expect(msg).toContain('complete');
+  });
+
+  it('respects change_type skip paths', () => {
+    const state = makeState({
+      feature: 'fix-typo',
+      change_type: 'docs',
+      current_phase: 'execute',
+    });
+    const msg = buildNudgeMessage(state);
+    // docs: execute → ship (no review)
+    expect(msg).toContain('ship');
+    expect(msg).not.toContain('review');
   });
 });
