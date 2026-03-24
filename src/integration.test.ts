@@ -115,7 +115,7 @@ describe('integration: full hotfix flow', () => {
 
     // Nudge should mention approval
     const nudge = buildNudgeMessage({ ...state, current_phase: 'plan' });
-    expect(nudge).toContain('dispatch plan');
+    expect(nudge).toContain('dispatch strategist');
     expect(nudge).toContain('approval');
     expect(nudge).toContain('execute');
   });

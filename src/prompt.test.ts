@@ -153,8 +153,8 @@ describe('buildCoordinatorPrompt', () => {
     expect(output).toContain('## Coordinator');
     expect(output).toContain('### Modes');
     expect(output).toContain('### Agents');
-    expect(output).toContain('### Phase Pipeline');
-    expect(output).toContain('### Dispatch Rules');
+    expect(output).toContain('### Workflow');
+    expect(output).toContain('### How to dispatch');
   });
 
   it('output contains delegation enforcement — dispatch only, no direct file access', () => {
@@ -203,7 +203,7 @@ describe('buildCoordinatorPrompt', () => {
     expect(output).toContain('analyze');
   });
 
-  it('activeFeature includes action to dispatch current phase', () => {
+  it('activeFeature includes action to dispatch agent for current phase', () => {
     const state = makeState({
       feature: 'auth',
       change_type: 'feature',
@@ -213,7 +213,7 @@ describe('buildCoordinatorPrompt', () => {
       state,
       featureDir: '.flow/features/auth',
     });
-    expect(output).toContain('dispatch execute');
+    expect(output).toContain('dispatch builder');
   });
 
   it('activeFeature at terminal phase shows complete message', () => {
@@ -242,16 +242,16 @@ describe('buildNudgeMessage', () => {
     expect(msg).toContain('payment-refactor');
   });
 
-  it('tells coordinator to dispatch the current phase (not the next one)', () => {
+  it('tells coordinator to dispatch the agent for current phase (not the next one)', () => {
     const state = makeState({
       feature: 'auth-flow',
       change_type: 'feature',
       current_phase: 'review',
     });
     const msg = buildNudgeMessage(state);
-    // current_phase = review means "review needs to be done"
-    expect(msg).toContain('dispatch review');
-    expect(msg).not.toContain('dispatch ship');
+    // current_phase = review → dispatch reviewer
+    expect(msg).toContain('dispatch reviewer');
+    expect(msg).not.toContain('shipper');
   });
 
   it('mentions approval when next phase requires it (spec → analyze)', () => {
@@ -308,14 +308,14 @@ describe('buildNudgeMessage', () => {
     expect(msg).toContain('complete');
   });
 
-  it('does not mention next phase — nudge is about the current phase', () => {
+  it('names the agent for the current phase, not the next', () => {
     const state = makeState({
       feature: 'fix-typo',
       change_type: 'feature',
       current_phase: 'execute',
     });
     const msg = buildNudgeMessage(state);
-    expect(msg).toContain('dispatch execute');
-    expect(msg).not.toContain('dispatch review');
+    expect(msg).toContain('dispatch builder');
+    expect(msg).not.toContain('reviewer');
   });
 });

@@ -33,6 +33,7 @@ import { findFlowDir, readStateFile, writeCheckpoint, readCheckpoint } from './s
 import { discoverAgents } from './agents.js';
 import { buildCoordinatorPrompt, buildNudgeMessage } from './prompt.js';
 import { isTerminalPhase } from './transitions.js';
+import { inferPhase, inferFeature } from './inference.js';
 import {
   renderSingleCall,
   renderParallelCall,
@@ -256,13 +257,14 @@ export default function piFlow(pi: ExtensionAPI) {
       'Dispatch specialized agents for pi-flow workflow phases. ' +
       'Modes: single (agent+task), parallel (all start simultaneously, good for Scouts), ' +
       'chain (sequential with {previous} substitution for prior output). ' +
-      'The coordinator NEVER writes production code — use agent="builder" for all code changes.',
+      'Phase and feature are auto-inferred — only provide feature when starting a new one.',
     promptSnippet:
       'Orchestrate software development via specialized subagents. ' +
       'Agents: clarifier (extract intent/spec), scout (read-only codebase analysis), ' +
       'strategist (design options), planner (wave task breakdown), ' +
       'builder (TDD implementation), sentinel (adversarial per-wave review), ' +
       'reviewer (final spec compliance), shipper (git/PR/docs). ' +
+      'Phase is auto-inferred from the agent type. Feature is auto-inferred from active feature. ' +
       'Use single for one agent, parallel for concurrent scouts, chain for sequential with {previous}.',
     parameters: Type.Object({
       agent: Type.Optional(
@@ -298,14 +300,20 @@ export default function piFlow(pi: ExtensionAPI) {
           },
         ),
       ),
-      phase: Type.String({
-        description: 'Current workflow phase (intent/spec/analyze/plan/execute/review/ship)',
-      }),
-      feature: Type.String({
-        description: 'Feature name (kebab-case), maps to .flow/features/<feature>/',
-        minLength: 1,
-        maxLength: 64,
-      }),
+      phase: Type.Optional(
+        Type.String({
+          description:
+            'Workflow phase — auto-inferred from agent type + state. Only provide to override.',
+        }),
+      ),
+      feature: Type.Optional(
+        Type.String({
+          description:
+            'Feature name (kebab-case). Auto-inferred from active feature. Provide when starting a NEW feature.',
+          minLength: 1,
+          maxLength: 64,
+        }),
+      ),
       wave: Type.Optional(
         Type.Number({
           description: 'Current wave number within execute phase',
@@ -321,16 +329,70 @@ export default function piFlow(pi: ExtensionAPI) {
         task?: string;
         parallel?: Array<{ agent: string; task: string }>;
         chain?: Array<{ agent: string; task: string }>;
-        phase: string;
-        feature: string;
+        phase?: string;
+        feature?: string;
         wave?: number;
       },
       signal: AbortSignal,
       onUpdate: AgentToolUpdateCallback<FlowDispatchDetails> | undefined,
       ctx: ExtensionContext,
     ) {
+      // ── Infer feature ──────────────────────────────────────────────────
+      const activeFeature = findActiveFeature(ctx.cwd);
+      const feature = inferFeature(activeFeature, params.feature);
+      if (!feature) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'No active feature and no feature name provided. Provide a feature name to start a new workflow.',
+            },
+          ],
+          details: undefined as unknown as FlowDispatchDetails,
+          isError: true,
+        };
+      }
+
+      // ── Infer phase from agent + state ─────────────────────────────────
+      let phase: import('./types.js').Phase;
+      if (params.phase) {
+        // Explicit phase provided — use it (escape hatch)
+        phase = params.phase as import('./types.js').Phase;
+      } else {
+        // Determine the primary agent name for inference
+        const primaryAgent =
+          params.agent ?? params.parallel?.[0]?.agent ?? params.chain?.[0]?.agent;
+        if (!primaryAgent) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: 'Cannot infer phase: no agent specified. Provide agent+task, parallel, or chain.',
+              },
+            ],
+            details: undefined as unknown as FlowDispatchDetails,
+            isError: true,
+          };
+        }
+        const activeState = activeFeature?.state ?? null;
+        const inferred = inferPhase(primaryAgent, activeState);
+        if (!inferred) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Cannot infer phase for agent '${primaryAgent}' at current phase '${activeState?.current_phase ?? 'none'}'. The agent has no valid phase ahead in the pipeline.`,
+              },
+            ],
+            details: undefined as unknown as FlowDispatchDetails,
+            isError: true,
+          };
+        }
+        phase = inferred;
+      }
+
       const result = await executeDispatch(
-        { ...params, phase: params.phase as import('./types.js').Phase },
+        { ...params, phase, feature },
         ctx.cwd,
         rootDir,
         signal,
@@ -352,9 +414,9 @@ export default function piFlow(pi: ExtensionAPI) {
       if (lastAgent === 'shipper' && !result.isError) {
         const flowDir = findFlowDir(ctx.cwd);
         if (flowDir) {
-          const featureDir = path.join(flowDir, 'features', params.feature);
+          const resolvedDir = path.join(flowDir, 'features', feature);
           try {
-            writeBackMemory(flowDir, featureDir);
+            writeBackMemory(flowDir, resolvedDir);
           } catch {
             // Best-effort — memory write-back is non-fatal
           }
@@ -365,8 +427,8 @@ export default function piFlow(pi: ExtensionAPI) {
       if (ctx.hasUI) {
         const flowDir = findFlowDir(ctx.cwd);
         if (flowDir) {
-          const featureDir = path.join(flowDir, 'features', params.feature);
-          const state = readStateFile(featureDir);
+          const resolvedDir = path.join(flowDir, 'features', feature);
+          const state = readStateFile(resolvedDir);
           if (state) {
             updateFooterStatus(state, ctx.ui);
           }

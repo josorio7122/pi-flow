@@ -12,6 +12,17 @@ import { getApprovalFrontmatterExample } from './templates.js';
 const AGENT_TABLE_CAP = 15;
 const DESCRIPTION_MAX_CHARS = 80;
 
+/** Maps phase → the primary agent name to hint in prompts/nudges. */
+const PHASE_TO_AGENT: Record<string, string> = {
+  intent: 'clarifier',
+  spec: 'clarifier',
+  analyze: 'scout(s)',
+  plan: 'strategist',
+  execute: 'builder',
+  review: 'reviewer',
+  ship: 'shipper',
+};
+
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
 function buildAgentTable(agents: FlowAgentConfig[]): string {
@@ -53,12 +64,39 @@ export function buildCoordinatorPrompt(
 
 You orchestrate work by dispatching agents via \`dispatch_flow\`. Every phase is delegated to the appropriate agent. You do NOT use Read, Write, Edit, or Bash tools — with one exception (see Approval Gates below).
 
+### How to dispatch
+
+Phase and feature are **auto-inferred**. You only need to provide the agent and task:
+
+\`\`\`
+dispatch_flow({ agent: "scout", task: "Map the auth module" })
+\`\`\`
+
+For parallel scouts:
+\`\`\`
+dispatch_flow({ parallel: [
+  { agent: "scout", task: "Map models" },
+  { agent: "scout", task: "Map views" }
+]})
+\`\`\`
+
+For sequential chain:
+\`\`\`
+dispatch_flow({ chain: [
+  { agent: "scout", task: "Find all endpoints" },
+  { agent: "strategist", task: "Design solution based on: {previous}" }
+]})
+\`\`\`
+
+Only provide \`feature\` when starting a NEW feature (first dispatch).
+Never provide \`phase\` — it is auto-inferred from the agent type.
+
 ### Delegation Rules
 
-1. **To understand code** → dispatch scout(s) in parallel. Never read codebase files yourself.
-2. **To write/change code** → dispatch builder(s). Never write or edit code yourself.
+1. **To understand code** → dispatch scout(s). Never read codebase files yourself.
+2. **To write/change code** → dispatch builder. Never write or edit code yourself.
 3. **To write artifacts** → agents write their own artifacts. Never write .flow/ artifact files yourself.
-4. **state.md** is managed automatically by the dispatch system. Never write state.md.
+4. **state.md** is managed automatically. Never write state.md.
 5. **Tasks must include**: objective, boundaries, context, output expectations.
 6. **The ONLY exception**: after the user explicitly approves spec.md or design.md, you use Edit to write the \`approved: true\` frontmatter. This is the only file write you ever do.
 
@@ -72,10 +110,10 @@ You orchestrate work by dispatching agents via \`dispatch_flow\`. Every phase is
 
 ${agentTable}
 
-### Phase Pipeline & Skip Paths
+### Workflow
 
-After each successful dispatch, state.md auto-advances to the next phase.
-Dispatch the current phase immediately unless a gate requires human approval.
+After each successful dispatch, the system auto-advances to the next phase.
+Keep dispatching until a gate requires human approval or the pipeline is complete.
 
 | Change Type | Pipeline |
 |-------------|----------|
@@ -86,22 +124,19 @@ Dispatch the current phase immediately unless a gate requires human approval.
 | config | intent → analyze → plan → execute → ship |
 | research | intent → analyze |
 
-Plan (design.md + tasks.md) is always required when execute is present.
-
 ### Agent Artifact Ownership
 
 Each agent writes its own artifacts. The coordinator NEVER writes these files.
 
-| Phase | Agent | Writes |
-|-------|-------|--------|
-| intent | clarifier | brief.md |
-| spec | clarifier | spec.md (approved: false) |
-| analyze | scout(s) | analysis.md |
-| plan | strategist | design.md (approved: false) |
-| plan | planner | tasks.md (full checklist) |
-| execute | builder | code changes + updates tasks.md (checks off done) |
-| review | reviewer | review.md (verdict: PASSED or FAILED) |
-| ship | shipper | MR/push |
+| Agent | Writes |
+|-------|--------|
+| clarifier | brief.md, spec.md (approved: false) |
+| scout(s) | analysis.md |
+| strategist | design.md (approved: false) |
+| planner | tasks.md (full checklist) |
+| builder | code changes + updates tasks.md (checks off done) |
+| reviewer | review.md (verdict: PASSED or FAILED) |
+| shipper | MR/push |
 
 ### Human Approval Gates
 
@@ -117,13 +152,7 @@ ${approvalExample}
 \`\`\`
 
 The \`---\` delimiters are required. The value must be \`true\` (not \`yes\`, not \`1\`).
-NEVER self-approve. NEVER write \`approved: true\` without the user explicitly approving.
-
-### Dispatch Rules
-
-Dispatch the current phase agent with a well-structured task description.
-After each dispatch, the system auto-advances to the next phase on success.
-Keep dispatching until you reach a gate that needs human approval or the pipeline is complete.`;
+NEVER self-approve. NEVER write \`approved: true\` without the user explicitly approving.`;
 
   if (activeFeature !== null) {
     const { state } = activeFeature;
@@ -142,7 +171,8 @@ Keep dispatching until you reach a gate that needs human approval or the pipelin
     if (isTerminalPhase(state.change_type, state.skipped_phases, current_phase)) {
       activeLine += '\nWorkflow complete — no more phases.';
     } else {
-      activeLine += `\nAction: dispatch ${current_phase} phase.`;
+      const agentHint = PHASE_TO_AGENT[current_phase] ?? current_phase;
+      activeLine += `\nAction: dispatch ${agentHint} with a task.`;
       const nextP = getNextPhase(state.change_type, state.skipped_phases, current_phase);
       if (nextP && phaseRequiresApproval(nextP)) {
         activeLine += ` Next phase (${nextP}) requires human approval — present the artifact and ask before advancing.`;
@@ -177,11 +207,12 @@ export function buildNudgeMessage(state: FlowState): string {
     return `✅ Feature "${feature}" — all phases complete.`;
   }
 
+  const agentHint = PHASE_TO_AGENT[current_phase] ?? current_phase;
   const nextPhase = getNextPhase(change_type, skipped_phases, current_phase);
   const nextNeedsApproval = nextPhase && phaseRequiresApproval(nextPhase);
   const approvalHint = nextNeedsApproval
     ? ` Next phase (${nextPhase}) requires human approval — present the artifact and ask before advancing.`
     : '';
 
-  return `⚠️ Feature "${feature}" — dispatch ${current_phase} phase.${approvalHint}`;
+  return `⚠️ Feature "${feature}" — dispatch ${agentHint} with a task.${approvalHint}`;
 }
