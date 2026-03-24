@@ -542,8 +542,12 @@ export default function piFlow(pi: ExtensionAPI) {
     const messages = event.messages ?? [];
     const lastAssistant = [...messages]
       .reverse()
-      .find((m: Record<string, unknown>) => m.role === 'assistant');
-    if (lastAssistant && (lastAssistant as Record<string, unknown>).stopReason === 'aborted')
+      .find((m) => 'role' in m && m.role === 'assistant');
+    if (
+      lastAssistant &&
+      'stopReason' in lastAssistant &&
+      lastAssistant.stopReason === 'aborted'
+    )
       return;
 
     const active = findActiveFeature(ctx.cwd);

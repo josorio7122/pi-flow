@@ -504,6 +504,7 @@ export function buildVariableMap(
     SPEC_TEMPLATE: renderArtifactTemplate('spec', featureName) ?? '',
     DESIGN_TEMPLATE: renderArtifactTemplate('design', featureName) ?? '',
     TASKS_TEMPLATE: renderArtifactTemplate('tasks', featureName) ?? '',
+    SENTINEL_LOG_TEMPLATE: renderArtifactTemplate('sentinel-log', featureName) ?? '',
     REVIEW_TEMPLATE: renderArtifactTemplate('review', featureName) ?? '',
   };
 }

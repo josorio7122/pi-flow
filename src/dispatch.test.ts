@@ -2346,8 +2346,6 @@ describe('integration: full lifecycle sequence', () => {
   // ─── Phase auto-advance ───────────────────────────────────────────────────
 
   describe('phase auto-advance', () => {
-    const featureDir = path.join(CWD, '.flow', 'features', 'auth');
-
     beforeEach(() => {
       vi.mocked(discoverAgents).mockReturnValue([makeAgent({ name: 'builder' })]);
       vi.mocked(buildVariableMap).mockReturnValue({});
@@ -2458,6 +2456,63 @@ describe('integration: full lifecycle sequence', () => {
             { agent: 'scout', task: 'scan routes' },
           ],
           phase: 'analyze',
+          feature: 'auth',
+        },
+        CWD,
+        EXTENSION_DIR,
+      );
+
+      const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(lastCall[1].current_phase).toBe('plan');
+    });
+
+    it('advances phase in chain mode when all steps succeed', async () => {
+      vi.mocked(readStateFile).mockReturnValue(
+        makeFlowState({ change_type: 'feature', current_phase: 'plan' }),
+      );
+      vi.mocked(discoverAgents).mockReturnValue([
+        makeAgent({ name: 'strategist', phases: ['plan'] as any }),
+        makeAgent({ name: 'planner', phases: ['plan'] as any }),
+      ]);
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult({ exitCode: 0 }));
+
+      await executeDispatch(
+        {
+          chain: [
+            { agent: 'strategist', task: 'design' },
+            { agent: 'planner', task: 'plan waves from {previous}' },
+          ],
+          phase: 'plan',
+          feature: 'auth',
+        },
+        CWD,
+        EXTENSION_DIR,
+      );
+
+      const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(lastCall[1].current_phase).toBe('execute');
+    });
+
+    it('does NOT advance in chain mode when a step fails', async () => {
+      vi.mocked(readStateFile).mockReturnValue(
+        makeFlowState({ change_type: 'feature', current_phase: 'plan' }),
+      );
+      vi.mocked(discoverAgents).mockReturnValue([
+        makeAgent({ name: 'strategist', phases: ['plan'] as any }),
+        makeAgent({ name: 'planner', phases: ['plan'] as any }),
+      ]);
+      // First succeeds, second fails → chain stops
+      vi.mocked(spawnAgentWithRetry)
+        .mockResolvedValueOnce(makeResult({ exitCode: 0 }))
+        .mockResolvedValueOnce(makeResult({ exitCode: 1 }));
+
+      await executeDispatch(
+        {
+          chain: [
+            { agent: 'strategist', task: 'design' },
+            { agent: 'planner', task: 'plan waves from {previous}' },
+          ],
+          phase: 'plan',
           feature: 'auth',
         },
         CWD,

@@ -1097,6 +1097,12 @@ open_warns: 1
     expect(map.TASKS_TEMPLATE).toContain('wave_count');
   });
 
+  it('includes SENTINEL_LOG_TEMPLATE with sentinel-log frontmatter template', () => {
+    const map = buildVariableMap(cwd, featureDir, null);
+    expect(map.SENTINEL_LOG_TEMPLATE).toContain('---');
+    expect(map.SENTINEL_LOG_TEMPLATE).toContain('open_halts: 0');
+  });
+
   it('includes REVIEW_TEMPLATE with review frontmatter template', () => {
     const map = buildVariableMap(cwd, featureDir, null);
     expect(map.REVIEW_TEMPLATE).toContain('---');

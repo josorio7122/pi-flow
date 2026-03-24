@@ -257,6 +257,16 @@ describe('buildNudgeMessage', () => {
     expect(msg).toContain('complete');
   });
 
+  it('returns complete message when current_phase is not in pipeline', () => {
+    const state = makeState({
+      feature: 'stale-feature',
+      change_type: 'docs',
+      current_phase: 'review', // not in docs pipeline
+    });
+    const msg = buildNudgeMessage(state);
+    expect(msg).toContain('complete');
+  });
+
   it('respects change_type skip paths', () => {
     const state = makeState({
       feature: 'fix-typo',

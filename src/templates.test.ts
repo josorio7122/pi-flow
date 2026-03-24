@@ -55,6 +55,22 @@ describe('renderArtifactTemplate', () => {
     expect(rendered).toContain('feature: auth-refresh');
   });
 
+  it('replaces feature placeholder in tasks template', () => {
+    const rendered = renderArtifactTemplate('tasks', 'auth-refresh');
+    expect(rendered).toContain('feature: auth-refresh');
+  });
+
+  it('replaces feature placeholder in review template', () => {
+    const rendered = renderArtifactTemplate('review', 'auth-refresh');
+    expect(rendered).toContain('feature: auth-refresh');
+  });
+
+  it('returns sentinel-log template without feature placeholder', () => {
+    const rendered = renderArtifactTemplate('sentinel-log', 'auth-refresh');
+    expect(rendered).toContain('open_halts: 0');
+    expect(rendered).not.toContain('auth-refresh');
+  });
+
   it('returns null for unknown artifact', () => {
     expect(renderArtifactTemplate('unknown', 'feat')).toBeNull();
   });

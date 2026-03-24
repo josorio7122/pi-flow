@@ -5,8 +5,6 @@ import {
   isTerminalPhase,
   phaseRequiresApproval,
 } from './transitions.js';
-import type { Phase } from './types.js';
-import type { ChangeType } from './types.js';
 
 // ─── getEffectivePipeline ─────────────────────────────────────────────────────
 
@@ -78,6 +76,16 @@ describe('getEffectivePipeline', () => {
       'ship',
     ]);
   });
+
+  it('returns empty array when all phases are skipped', () => {
+    expect(getEffectivePipeline('docs', ['intent', 'execute', 'ship'])).toEqual([]);
+  });
+
+  it('returns the base array by reference when no phases are skipped', () => {
+    const result1 = getEffectivePipeline('feature', []);
+    const result2 = getEffectivePipeline('feature', []);
+    expect(result1).toBe(result2);
+  });
 });
 
 // ─── getNextPhase ─────────────────────────────────────────────────────────────
@@ -136,6 +144,17 @@ describe('getNextPhase', () => {
     // docs pipeline has no analyze phase
     expect(getNextPhase('docs', [], 'analyze')).toBeNull();
   });
+
+  it('returns null when all phases are skipped', () => {
+    expect(getNextPhase('docs', ['intent', 'execute', 'ship'], 'intent')).toBeNull();
+  });
+
+  it('advances through each phase of config pipeline', () => {
+    expect(getNextPhase('config', [], 'intent')).toBe('analyze');
+    expect(getNextPhase('config', [], 'analyze')).toBe('execute');
+    expect(getNextPhase('config', [], 'execute')).toBe('ship');
+    expect(getNextPhase('config', [], 'ship')).toBeNull();
+  });
 });
 
 // ─── isTerminalPhase ──────────────────────────────────────────────────────────
@@ -163,6 +182,10 @@ describe('isTerminalPhase', () => {
 
   it('phase not in pipeline returns false', () => {
     expect(isTerminalPhase('docs', [], 'review')).toBe(false);
+  });
+
+  it('returns false when all phases are skipped (empty pipeline)', () => {
+    expect(isTerminalPhase('docs', ['intent', 'execute', 'ship'], 'ship')).toBe(false);
   });
 });
 
