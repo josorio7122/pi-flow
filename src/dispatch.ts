@@ -11,6 +11,7 @@ import { loadConfig } from './config.js';
 import { discoverAgents, buildVariableMap } from './agents.js';
 import { spawnAgentWithRetry, mapWithConcurrencyLimit, getFinalOutput } from './spawn.js';
 import { readStateFile, writeDispatchLog, writeStateFile, ensureFeatureDir, appendProgressLog } from './state.js';
+import { checkPhaseGate } from './gates.js';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -313,9 +314,6 @@ export async function executeDispatch(
     // a. Load config
     const config = loadConfig(cwd);
 
-    // b. Discover agents
-    const agents = discoverAgents(extensionDir, cwd);
-
     // e. Build variable map (done once, shared across all agents)
     const featureDir = path.join(cwd, '.flow', 'features', params.feature);
 
@@ -338,6 +336,20 @@ export async function executeDispatch(
       } satisfies FlowState;
       writeStateFile(featureDir, currentState);
     }
+
+    // Gate enforcement: check if the workflow can advance to this phase
+    try {
+      const gate = checkPhaseGate(params.phase, featureDir);
+      if (!gate.canAdvance) {
+        return errorResult(`Gate blocked for phase '${params.phase}': ${gate.reason}`, params);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return errorResult(`Gate check failed: ${message}`, params);
+    }
+
+    // b. Discover agents
+    const agents = discoverAgents(extensionDir, cwd);
 
     const variableMap = buildVariableMap(cwd, featureDir, currentState);
 

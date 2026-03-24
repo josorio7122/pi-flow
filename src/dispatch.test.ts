@@ -30,6 +30,10 @@ vi.mock('./state.js', () => ({
   ensureFeatureDir: vi.fn(),
 }));
 
+vi.mock('./gates.js', () => ({
+  checkPhaseGate: vi.fn().mockReturnValue({ canAdvance: true, reason: 'ok' }),
+}));
+
 // ─── imports (after mocks) ────────────────────────────────────────────────────
 
 import {
@@ -44,6 +48,7 @@ import { spawnAgentWithRetry } from './spawn.js';
 import { discoverAgents, buildVariableMap } from './agents.js';
 import { loadConfig } from './config.js';
 import { writeDispatchLog, writeStateFile, ensureFeatureDir, appendProgressLog, readStateFile } from './state.js';
+import { checkPhaseGate } from './gates.js';
 
 // ─── test helpers ─────────────────────────────────────────────────────────────
 
@@ -1180,6 +1185,136 @@ describe('executeDispatch', () => {
 
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toBeTruthy();
+    });
+  });
+
+  // ─── gate enforcement ────────────────────────────────────────────────────
+
+  describe('gate enforcement', () => {
+    const featureDir = path.join(CWD, '.flow', 'features', 'auth');
+
+    it('(a) gate blocks: returns isError=true with "Gate" and reason in content', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(checkPhaseGate).mockReturnValue({ canAdvance: false, reason: 'spec not approved' });
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toMatch(/Gate/);
+      expect(result.content[0].text).toContain('spec not approved');
+    });
+
+    it('(a) gate blocks: spawnAgentWithRetry is NOT called', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(checkPhaseGate).mockReturnValue({ canAdvance: false, reason: 'design not approved' });
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(spawnAgentWithRetry).not.toHaveBeenCalled();
+    });
+
+    it('(a) gate blocks: writeStateFile NOT called when existing state (no init write needed)', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(checkPhaseGate).mockReturnValue({ canAdvance: false, reason: 'blocked' });
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      // readStateFile returns existing state → no init write; gate blocks → no budget write
+      expect(writeStateFile).not.toHaveBeenCalled();
+    });
+
+    it('(b) gate passes: execution proceeds, spawnAgentWithRetry is called', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(checkPhaseGate).mockReturnValue({ canAdvance: true, reason: 'ok' });
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult());
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(result.isError).toBeUndefined();
+      expect(spawnAgentWithRetry).toHaveBeenCalledTimes(1);
+    });
+
+    it('(c) gate throws: treated as blocked, result.isError is true', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(checkPhaseGate).mockImplementation(() => { throw new Error('gate file missing'); });
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(result.isError).toBe(true);
+      expect(spawnAgentWithRetry).not.toHaveBeenCalled();
+    });
+
+    it('(d) gate check uses featureDir derived from cwd + feature, not hardcoded', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState({ feature: 'my-feature' }));
+      vi.mocked(checkPhaseGate).mockReturnValue({ canAdvance: true, reason: 'ok' });
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult());
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'my-feature',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      const expectedFeatureDir = path.join(CWD, '.flow', 'features', 'my-feature');
+      expect(checkPhaseGate).toHaveBeenCalledWith('execute', expectedFeatureDir);
+    });
+
+    it('(e) gate blocks even for intent phase if checkPhaseGate returns canAdvance: false', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState({ current_phase: 'intent' }));
+      vi.mocked(checkPhaseGate).mockReturnValue({ canAdvance: false, reason: 'unexpected block' });
+      vi.mocked(discoverAgents).mockReturnValue([
+        makeAgent({ name: 'clarifier', phases: ['intent'] }),
+      ]);
+
+      const params: DispatchParams = {
+        agent: 'clarifier',
+        task: 'clarify',
+        phase: 'intent',
+        feature: 'auth',
+      };
+
+      const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(result.isError).toBe(true);
+      expect(spawnAgentWithRetry).not.toHaveBeenCalled();
     });
   });
 });
