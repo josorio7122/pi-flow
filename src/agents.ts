@@ -177,9 +177,6 @@ function toStringArray(val: unknown): string[] {
   return [];
 }
 
-// ─── Flat frontmatter parser (for simple state/tasks files) ──────────────────
-
-
 // ─── extractSection ───────────────────────────────────────────────────────────
 
 /**

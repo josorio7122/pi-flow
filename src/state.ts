@@ -96,8 +96,6 @@ export function appendProgressLog(featureDir: string, message: string): void {
   fs.writeFileSync(statePath, current + entry);
 }
 
-
-
 // ─── writeCheckpoint ─────────────────────────────────────────────────────────
 
 /**

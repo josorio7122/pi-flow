@@ -152,6 +152,7 @@ export default function piFlow(pi: ExtensionAPI) {
       feature: Type.Optional(
         Type.String({
           description: 'Feature name (kebab-case). Only needed for first dispatch.',
+          pattern: '^[a-z0-9][a-z0-9-]*$',
           minLength: 1,
           maxLength: 64,
         }),
@@ -260,19 +261,6 @@ export default function piFlow(pi: ExtensionAPI) {
     },
   });
 
-  pi.registerCommand('flow:budget', {
-    description: 'Show pi-flow budget details',
-    handler: async (_args: string, ctx: ExtensionCommandContext) => {
-      const active = findActiveFeature(ctx.cwd);
-      if (!active) {
-        pi.sendMessage({ customType: 'pi-flow-budget', content: 'No active pi-flow feature.', display: true });
-        return;
-      }
-      const table = formatStatus(active.state);
-      pi.sendMessage({ customType: 'pi-flow-budget', content: `[Flow Budget]\n\n${table}`, display: true });
-    },
-  });
-
   // ─── 3. Event hooks ─────────────────────────────────────────────────────────
 
   // before_agent_start — inject coordinator prompt
@@ -318,7 +306,7 @@ export default function piFlow(pi: ExtensionAPI) {
       if (loopHistory.length > LOOP_WINDOW) loopHistory.shift();
 
       const loop = detectLoop(loopHistory, LOOP_WINDOW, LOOP_THRESHOLD);
-      if (loop) {
+      if (loop.tripped) {
         return {
           block: true,
           reason: `Loop detected: '${loop.tool}' called ${loop.count} times with identical args. Try a different approach.`,
