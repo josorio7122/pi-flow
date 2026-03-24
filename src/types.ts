@@ -93,10 +93,4 @@ export interface FlowDispatchDetails {
   results: SingleAgentResult[];
 }
 
-// Scope check result
-export interface ScopeCheckResult {
-  overThreshold: boolean;
-  planned: number;
-  actual: number;
-  ratio: number;
-}
+

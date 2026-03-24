@@ -15,5 +15,10 @@
   "private": "true",
   "devDependencies": {
     "vitest": "^4.1.1"
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.62.0",
+    "@mariozechner/pi-tui": "^0.62.0",
+    "@sinclair/typebox": "^0.34.48"
   }
 }

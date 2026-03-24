@@ -86,9 +86,10 @@ export function makeDetails(
 }
 
 /**
- * Sums input+output tokens and cost across an array of SingleAgentResults.
+ * Sums input+output tokens and cost across an array of SingleAgentResults for budget tracking.
+ * Returns `{ tokens, cost }` — distinct from spawn.ts `aggregateUsage` which returns `UsageStats`.
  */
-export function aggregateUsage(results: SingleAgentResult[]): { tokens: number; cost: number } {
+function sumBudget(results: SingleAgentResult[]): { tokens: number; cost: number } {
   return results.reduce(
     (acc, r) => ({
       tokens: acc.tokens + r.usage.input + r.usage.output,
@@ -522,7 +523,7 @@ function accumulateBudget(
   writeCheckpointOnSuccess: boolean,
 ): void {
   try {
-    const usage = aggregateUsage(results);
+    const usage = sumBudget(results);
     const updatedState: FlowState = {
       ...currentState,
       budget: {

@@ -12,10 +12,10 @@ export const TOOL_DETAIL_CHARS = 60;
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 /** Maps (colorName, text) → text. In production: theme.fg(). In tests: identity. */
-export type Colorize = (color: string, text: string) => string;
+type Colorize = (color: string, text: string) => string;
 
 /** Maps text → bold text. In production: theme.bold(). In tests: identity. */
-export type Bold = (text: string) => string;
+type Bold = (text: string) => string;
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 

@@ -7,9 +7,9 @@ import { injectVariables } from './agents.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-export const MAX_PARALLEL_TASKS = 8;
-export const MAX_CONCURRENCY = 4;
-export const SPAWN_STAGGER_MS = 150;
+const MAX_PARALLEL_TASKS = 8;
+const MAX_CONCURRENCY = 4;
+const SPAWN_STAGGER_MS = 150;
 export const RETRY_DELAYS_MS = [500, 1000, 2000];
 
 // ─── DisplayItem type ─────────────────────────────────────────────────────────

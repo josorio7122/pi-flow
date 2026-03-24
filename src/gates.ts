@@ -9,7 +9,7 @@ import type { Phase, GateResult } from './types.js';
  * object. Handles simple flat key-value pairs; nested structures are ignored.
  * Returns an empty object if the file has no frontmatter block.
  */
-export function parseFrontmatter(content: string): Record<string, unknown> {
+function parseFrontmatter(content: string): Record<string, unknown> {
   const result: Record<string, unknown> = {};
 
   const lines = content.split('\n');
