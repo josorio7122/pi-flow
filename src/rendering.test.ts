@@ -69,7 +69,11 @@ import {
   renderParallelResult,
   renderChainResult,
   renderFlowStatus,
+  buildAgentCardComponent,
+  buildFlowResult,
 } from './rendering.js';
+import { Container } from '@mariozechner/pi-tui';
+import type { FlowDispatchDetails } from './types.js';
 
 // ─── formatTokens ────────────────────────────────────────────────────────────
 
@@ -869,5 +873,171 @@ describe('exported constants', () => {
 
   it('exports TOOL_DETAIL_CHARS = 60', () => {
     expect(TOOL_DETAIL_CHARS).toBe(60);
+  });
+});
+
+// ─── buildAgentCardComponent ──────────────────────────────────────────────────
+
+// Minimal theme stub for Component tests
+const stubTheme = {
+  fg: (_color: string, text: string) => text,
+  bold: (text: string) => text,
+};
+
+describe('buildAgentCardComponent', () => {
+  it('returns a Container', () => {
+    const result = makeResult({ exitCode: 0 });
+    const card = buildAgentCardComponent(result, false, stubTheme as any);
+    expect(card).toBeInstanceOf(Container);
+  });
+
+  it('returns a Container for running state (exitCode=-1, ● icon path)', () => {
+    const result = makeResult({
+      exitCode: -1,
+      messages: [makeToolCallMessage('read', { path: '/tmp/file.ts' })],
+      usage: { ...zeroUsage, turns: 2 },
+    });
+    const card = buildAgentCardComponent(result, false, stubTheme as any);
+    expect(card).toBeInstanceOf(Container);
+    // Container has children (header + border at minimum)
+    expect((card as any).children.length).toBeGreaterThan(0);
+  });
+
+  it('running state includes ● icon in rendered text', () => {
+    const result = makeResult({
+      exitCode: -1,
+      messages: [makeToolCallMessage('read', { path: '/tmp/file.ts' })],
+      usage: { ...zeroUsage, turns: 1 },
+    });
+    const card = buildAgentCardComponent(result, false, stubTheme as any);
+    // Collect all Text children's text
+    const texts = (card as any).children
+      .filter((c: any) => c.constructor?.name === 'Text')
+      .map((c: any) => c.text ?? c.content ?? '');
+    const combined = texts.join('');
+    expect(combined).toContain('●');
+  });
+
+  it('done state (exitCode=0) includes ✓ icon in rendered text', () => {
+    const result = makeResult({ exitCode: 0 });
+    const card = buildAgentCardComponent(result, false, stubTheme as any);
+    const texts = (card as any).children
+      .filter((c: any) => c.constructor?.name === 'Text')
+      .map((c: any) => c.text ?? c.content ?? '');
+    expect(texts.join('')).toContain('✓');
+  });
+
+  it('error state (exitCode=1) includes ✗ icon in rendered text', () => {
+    const result = makeResult({ exitCode: 1, errorMessage: 'Build failed' });
+    const card = buildAgentCardComponent(result, false, stubTheme as any);
+    const texts = (card as any).children
+      .filter((c: any) => c.constructor?.name === 'Text')
+      .map((c: any) => c.text ?? c.content ?? '');
+    expect(texts.join('')).toContain('✗');
+  });
+
+  it('queued state (exitCode=-1, no messages) includes ○ icon', () => {
+    const result = makeResult({ exitCode: -1, messages: [] });
+    const card = buildAgentCardComponent(result, false, stubTheme as any);
+    const texts = (card as any).children
+      .filter((c: any) => c.constructor?.name === 'Text')
+      .map((c: any) => c.text ?? c.content ?? '');
+    expect(texts.join('')).toContain('○');
+  });
+
+  it('has DynamicBorder children as borders', () => {
+    const result = makeResult({ exitCode: 0 });
+    const card = buildAgentCardComponent(result, false, stubTheme as any);
+    const borders = (card as any).children.filter(
+      (c: any) => c.constructor?.name === 'DynamicBorder',
+    );
+    expect(borders.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('expanded mode returns a Container without throwing', () => {
+    const messages = [makeTextMessage('## Final output\n\nDone.')];
+    const result = makeResult({ exitCode: 0, messages });
+    const card = buildAgentCardComponent(result, true, stubTheme as any);
+    expect(card).toBeInstanceOf(Container);
+  });
+});
+
+// ─── buildFlowResult ─────────────────────────────────────────────────────────
+
+describe('buildFlowResult', () => {
+  function makeDetails(
+    mode: FlowDispatchDetails['mode'],
+    results: SingleAgentResult[],
+  ): FlowDispatchDetails {
+    return { mode, phase: 'execute', feature: 'test-feature', results };
+  }
+
+  it('returns a Container', () => {
+    const details = makeDetails('single', [makeResult({ exitCode: 0 })]);
+    const root = buildFlowResult(details, { expanded: false, isPartial: false }, stubTheme as any);
+    expect(root).toBeInstanceOf(Container);
+  });
+
+  it('has one child per agent card for single mode', () => {
+    const details = makeDetails('single', [makeResult({ exitCode: 0 })]);
+    const root = buildFlowResult(details, { expanded: false, isPartial: false }, stubTheme as any);
+    // 1 agent card + 1 footer text = 2 children minimum
+    expect((root as any).children.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('has N child cards for N agents in parallel mode', () => {
+    const details = makeDetails('parallel', [
+      makeResult({ agent: 'scout', exitCode: 0 }),
+      makeResult({ agent: 'scout', exitCode: 0 }),
+      makeResult({ agent: 'scout', exitCode: 0 }),
+    ]);
+    const root = buildFlowResult(details, { expanded: false, isPartial: false }, stubTheme as any);
+    // At least 3 Container children (one per agent card)
+    const containerChildren = (root as any).children.filter(
+      (c: any) => c instanceof Container,
+    );
+    expect(containerChildren.length).toBe(3);
+  });
+
+  it('includes total usage footer when not partial and multiple agents', () => {
+    const details = makeDetails('parallel', [
+      makeResult({ agent: 'scout', exitCode: 0, usage: { ...zeroUsage, turns: 2, cost: 0.01 } }),
+      makeResult({ agent: 'scout', exitCode: 0, usage: { ...zeroUsage, turns: 3, cost: 0.02 } }),
+    ]);
+    const root = buildFlowResult(details, { expanded: false, isPartial: false }, stubTheme as any);
+    const texts = (root as any).children
+      .filter((c: any) => c.constructor?.name === 'Text')
+      .map((c: any) => c.text ?? c.content ?? '');
+    expect(texts.join('')).toContain('Total:');
+  });
+
+  it('does not include total footer when isPartial=true', () => {
+    const details = makeDetails('parallel', [
+      makeResult({ agent: 'scout', exitCode: 0, usage: { ...zeroUsage, turns: 2, cost: 0.01 } }),
+      makeResult({ agent: 'scout', exitCode: 0, usage: { ...zeroUsage, turns: 3, cost: 0.02 } }),
+    ]);
+    const root = buildFlowResult(details, { expanded: false, isPartial: true }, stubTheme as any);
+    const texts = (root as any).children
+      .filter((c: any) => c.constructor?.name === 'Text')
+      .map((c: any) => c.text ?? c.content ?? '');
+    expect(texts.join('')).not.toContain('Total:');
+  });
+
+  it('includes expand hint in footer when collapsed and not partial', () => {
+    const details = makeDetails('single', [makeResult({ exitCode: 0 })]);
+    const root = buildFlowResult(details, { expanded: false, isPartial: false }, stubTheme as any);
+    const texts = (root as any).children
+      .filter((c: any) => c.constructor?.name === 'Text')
+      .map((c: any) => c.text ?? c.content ?? '');
+    expect(texts.join('')).toContain('to expand');
+  });
+
+  it('does not include expand hint when expanded=true', () => {
+    const details = makeDetails('single', [makeResult({ exitCode: 0 })]);
+    const root = buildFlowResult(details, { expanded: true, isPartial: false }, stubTheme as any);
+    const texts = (root as any).children
+      .filter((c: any) => c.constructor?.name === 'Text')
+      .map((c: any) => c.text ?? c.content ?? '');
+    expect(texts.join('')).not.toContain('to expand');
   });
 });

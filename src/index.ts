@@ -11,8 +11,7 @@ import { fileURLToPath } from 'node:url';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { Type } from '@sinclair/typebox';
-import { getMarkdownTheme } from '@mariozechner/pi-coding-agent';
-import { Container, Markdown, Spacer, Text } from '@mariozechner/pi-tui';
+import { Text } from '@mariozechner/pi-tui';
 
 import { executeDispatch } from './dispatch.js';
 import { findFlowDir, readStateFile, writeCheckpoint, readCheckpoint } from './state.js';
@@ -22,15 +21,11 @@ import {
   renderSingleCall,
   renderParallelCall,
   renderChainCall,
-  renderSingleResult,
-  renderParallelResult,
-  renderChainResult,
   renderFlowStatus,
-  formatToolCall,
+  buildFlowResult,
 } from './rendering.js';
 import { hashToolCall, detectLoop } from './guardrails.js';
 import { writeBackMemory } from './memory.js';
-import { aggregateUsage, getFinalOutput, getDisplayItems } from './spawn.js';
 import type { FlowDispatchDetails, FlowState } from './types.js';
 
 // ─── Module-level state ───────────────────────────────────────────────────────
@@ -368,268 +363,13 @@ export default function piFlow(pi: any) {
       return new Text(text, 0, 0);
     },
 
-    renderResult(result: any, { expanded, isPartial }: any, theme: any, _context: any) {
-      const colorize = (color: string, t: string): string => theme.fg(color, t);
-      const bold = (t: string): string => theme.bold(t);
+    renderResult(result: any, options: any, theme: any, _context: any) {
       const details = result.details as FlowDispatchDetails | undefined;
-
       if (!details || details.results.length === 0) {
         const first = result.content[0];
-        const textStr = first?.type === 'text' ? first.text : '(no output)';
-        return new Text(textStr, 0, 0);
+        return new Text(first?.type === 'text' ? first.text : '(no output)', 0, 0);
       }
-
-      // ── Single mode ─────────────────────────────────────────────────────────
-      if (details.mode === 'single' && details.results.length === 1) {
-        const r = details.results[0];
-        const isDone = r.exitCode !== -1;
-        const isError =
-          isDone &&
-          (r.exitCode !== 0 ||
-            r.stopReason === 'error' ||
-            r.stopReason === 'aborted');
-
-        // Expanded done view: Container with Markdown for final assistant output
-        if (expanded && isDone && !isPartial) {
-          const mdTheme = getMarkdownTheme();
-          const container = new Container();
-
-          const icon = isError ? theme.fg('error', '✗') : theme.fg('success', '✓');
-          let header = `${icon} ${theme.fg('toolTitle', theme.bold(r.agent))}${theme.fg('muted', ` (${r.agentSource})`)}`;
-          if (isError && r.stopReason) header += ` ${theme.fg('error', `[${r.stopReason}]`)}`;
-          container.addChild(new Text(header, 0, 0));
-
-          if (isError && r.errorMessage) {
-            container.addChild(
-              new Text(theme.fg('error', `Error: ${r.errorMessage}`), 0, 0),
-            );
-          }
-
-          container.addChild(new Spacer(1));
-          container.addChild(new Text(theme.fg('muted', '─── Task ───'), 0, 0));
-          container.addChild(new Text(theme.fg('dim', r.task), 0, 0));
-
-          container.addChild(new Spacer(1));
-          container.addChild(new Text(theme.fg('muted', '─── Output ───'), 0, 0));
-
-          const displayItems = getDisplayItems(r.messages);
-          for (const item of displayItems) {
-            if (item.type === 'toolCall') {
-              container.addChild(
-                new Text(
-                  theme.fg('muted', '→ ') +
-                    formatToolCall(item.name, item.args, colorize),
-                  0,
-                  0,
-                ),
-              );
-            }
-          }
-
-          const finalOutput = getFinalOutput(r.messages);
-          if (finalOutput) {
-            container.addChild(new Spacer(1));
-            container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
-          }
-
-          const total = aggregateUsage([r]);
-          const usageStr = [
-            total.turns > 0 ? `${total.turns} turn${total.turns > 1 ? 's' : ''}` : '',
-            total.input > 0 ? `↑${total.input}` : '',
-            total.output > 0 ? `↓${total.output}` : '',
-            total.cost > 0 ? `$${total.cost.toFixed(4)}` : '',
-            r.model ? r.model : '',
-          ]
-            .filter(Boolean)
-            .join(' ');
-          if (usageStr) {
-            container.addChild(new Spacer(1));
-            container.addChild(new Text(theme.fg('dim', usageStr), 0, 0));
-          }
-
-          return container;
-        }
-
-        // Collapsed or still running: plain Text
-        const text = renderSingleResult(r, false, colorize, bold);
-        return new Text(text, 0, 0);
-      }
-
-      // ── Chain mode ──────────────────────────────────────────────────────────
-      if (details.mode === 'chain') {
-        const runningCount = details.results.filter((r) => r.exitCode === -1).length;
-
-        // Expanded done view: Container per step with Markdown
-        if (expanded && runningCount === 0 && !isPartial) {
-          const mdTheme = getMarkdownTheme();
-          const container = new Container();
-          const successCount = details.results.filter((r) => r.exitCode === 0).length;
-          const icon =
-            successCount === details.results.length
-              ? theme.fg('success', '✓')
-              : theme.fg('error', '✗');
-
-          container.addChild(
-            new Text(
-              `${icon} ${theme.fg('toolTitle', theme.bold('chain '))}${theme.fg('accent', `${successCount}/${details.results.length} steps`)}`,
-              0,
-              0,
-            ),
-          );
-
-          for (let i = 0; i < details.results.length; i++) {
-            const r = details.results[i];
-            const stepNum = r.step ?? i + 1;
-            const rIcon =
-              r.exitCode === 0
-                ? theme.fg('success', '✓')
-                : theme.fg('error', '✗');
-            const finalOutput = getFinalOutput(r.messages);
-
-            container.addChild(new Spacer(1));
-            container.addChild(
-              new Text(
-                `${theme.fg('muted', `─── Step ${stepNum}: `)}${theme.fg('accent', r.agent)} ${rIcon}`,
-                0,
-                0,
-              ),
-            );
-            container.addChild(new Text(theme.fg('dim', r.task), 0, 0));
-
-            const displayItems = getDisplayItems(r.messages);
-            for (const item of displayItems) {
-              if (item.type === 'toolCall') {
-                container.addChild(
-                  new Text(
-                    theme.fg('muted', '→ ') +
-                      formatToolCall(item.name, item.args, colorize),
-                    0,
-                    0,
-                  ),
-                );
-              }
-            }
-
-            if (finalOutput) {
-              container.addChild(new Spacer(1));
-              container.addChild(
-                new Markdown(finalOutput.trim(), 0, 0, mdTheme),
-              );
-            }
-          }
-
-          const total = aggregateUsage(details.results);
-          const totalStr = [
-            total.turns > 0 ? `${total.turns} turns` : '',
-            total.cost > 0 ? `$${total.cost.toFixed(4)}` : '',
-          ]
-            .filter(Boolean)
-            .join(' ');
-          if (totalStr) {
-            container.addChild(new Spacer(1));
-            container.addChild(
-              new Text(theme.fg('dim', `Total: ${totalStr}`), 0, 0),
-            );
-          }
-
-          return container;
-        }
-
-        const text = renderChainResult(details.results, false, colorize, bold);
-        return new Text(text, 0, 0);
-      }
-
-      // ── Parallel mode ───────────────────────────────────────────────────────
-      if (details.mode === 'parallel') {
-        const runningCount = details.results.filter((r) => r.exitCode === -1).length;
-
-        if (expanded && runningCount === 0 && !isPartial) {
-          const mdTheme = getMarkdownTheme();
-          const container = new Container();
-          const successCount = details.results.filter((r) => r.exitCode === 0).length;
-          const failCount = details.results.filter(
-            (r) => r.exitCode !== -1 && r.exitCode !== 0,
-          ).length;
-          const icon =
-            failCount > 0
-              ? theme.fg('warning', '◐')
-              : theme.fg('success', '✓');
-
-          container.addChild(
-            new Text(
-              `${icon} ${theme.fg('toolTitle', theme.bold('parallel '))}${theme.fg('accent', `${successCount}/${details.results.length} tasks`)}`,
-              0,
-              0,
-            ),
-          );
-
-          for (const r of details.results) {
-            const rIcon =
-              r.exitCode === 0
-                ? theme.fg('success', '✓')
-                : theme.fg('error', '✗');
-            const finalOutput = getFinalOutput(r.messages);
-
-            container.addChild(new Spacer(1));
-            container.addChild(
-              new Text(
-                `${theme.fg('muted', '─── ')}${theme.fg('accent', r.agent)} ${rIcon}`,
-                0,
-                0,
-              ),
-            );
-            container.addChild(new Text(theme.fg('dim', r.task), 0, 0));
-
-            const displayItems = getDisplayItems(r.messages);
-            for (const item of displayItems) {
-              if (item.type === 'toolCall') {
-                container.addChild(
-                  new Text(
-                    theme.fg('muted', '→ ') +
-                      formatToolCall(item.name, item.args, colorize),
-                    0,
-                    0,
-                  ),
-                );
-              }
-            }
-
-            if (finalOutput) {
-              container.addChild(new Spacer(1));
-              container.addChild(
-                new Markdown(finalOutput.trim(), 0, 0, mdTheme),
-              );
-            }
-          }
-
-          const total = aggregateUsage(details.results);
-          const totalStr = [
-            total.turns > 0 ? `${total.turns} turns` : '',
-            total.cost > 0 ? `$${total.cost.toFixed(4)}` : '',
-          ]
-            .filter(Boolean)
-            .join(' ');
-          if (totalStr) {
-            container.addChild(new Spacer(1));
-            container.addChild(
-              new Text(theme.fg('dim', `Total: ${totalStr}`), 0, 0),
-            );
-          }
-
-          return container;
-        }
-
-        const text = renderParallelResult(details.results, false, colorize, bold);
-        return new Text(text, 0, 0);
-      }
-
-      // Fallback
-      const fallback = result.content[0];
-      return new Text(
-        fallback?.type === 'text' ? fallback.text : '(no output)',
-        0,
-        0,
-      );
+      return buildFlowResult(details, options, theme);
     },
   });
 

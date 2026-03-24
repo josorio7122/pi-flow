@@ -1,5 +1,8 @@
 import * as os from 'node:os';
-import type { SingleAgentResult, UsageStats } from './types.js';
+import { DynamicBorder, getMarkdownTheme, keyHint } from '@mariozechner/pi-coding-agent';
+import { Container, Markdown, Spacer, Text } from '@mariozechner/pi-tui';
+import type { Theme } from '@mariozechner/pi-coding-agent';
+import type { SingleAgentResult, UsageStats, FlowDispatchDetails } from './types.js';
 import { getDisplayItems, getFinalOutput, aggregateUsage } from './spawn.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -596,6 +599,212 @@ export function renderChainResult(
   }
 
   return text;
+}
+
+// ─── buildAgentCardComponent ──────────────────────────────────────────────────
+
+/**
+ * Build a single agent card as a Container with DynamicBorder borders.
+ * Mirrors pi-crew's buildAgentCard pattern.
+ *
+ * States:
+ *   Queued  (exitCode=-1, no messages): ○ icon + "(waiting...)"
+ *   Running (exitCode=-1, has messages): ● icon + turn/tool count + last 3 tool calls
+ *   Done collapsed: ✓ icon + last 5 tool calls + output preview + usage
+ *   Done expanded:  ✓ icon + all tool calls + Markdown output + usage
+ *   Error:  ✗ icon + error summary
+ */
+export function buildAgentCardComponent(
+  result: SingleAgentResult,
+  expanded: boolean,
+  theme: Theme,
+): Container {
+  const card = new Container();
+  const borderFn = (s: string) => theme.fg('dim', s);
+
+  const isRunning = result.exitCode === -1;
+  const isQueued = isRunning && result.messages.length === 0;
+  const isError =
+    !isRunning &&
+    (result.exitCode !== 0 ||
+      result.stopReason === 'error' ||
+      result.stopReason === 'aborted');
+
+  // Status icon
+  const icon = isQueued
+    ? theme.fg('dim', '○')
+    : isRunning
+      ? theme.fg('warning', '●')
+      : isError
+        ? theme.fg('error', '✗')
+        : theme.fg('success', '✓');
+
+  // Header line
+  let header: string;
+  if (isQueued) {
+    header =
+      `${icon} ${theme.fg('accent', result.agent)}` +
+      theme.fg('muted', ` (${result.agentSource})`);
+  } else if (isRunning) {
+    header = `${icon} ${theme.fg('accent', theme.bold(result.agent))}`;
+    if (result.startedAt) {
+      header += theme.fg('dim', `  ${formatElapsed(result.startedAt)} · turn ${result.usage.turns}`);
+    } else if (result.usage.turns > 0) {
+      header += theme.fg('dim', `  turn ${result.usage.turns}`);
+    }
+  } else if (isError) {
+    header =
+      `${icon} ${theme.fg('accent', theme.bold(result.agent))}` +
+      theme.fg('muted', ` (${result.agentSource})`);
+    if (result.stopReason) {
+      header += ` ${theme.fg('error', `[${result.stopReason}]`)}`;
+    }
+  } else {
+    header =
+      `${icon} ${theme.fg('accent', theme.bold(result.agent))}` +
+      theme.fg('muted', ` (${result.agentSource})`);
+  }
+
+  card.addChild(new DynamicBorder(borderFn));
+  card.addChild(new Text(header, 0, 0));
+
+  // Task preview
+  const taskPreview = result.task.length > TASK_PREVIEW_CHARS
+    ? `${result.task.slice(0, TASK_PREVIEW_CHARS)}...`
+    : result.task;
+
+  const colorize: Colorize = (color, t) => theme.fg(color, t);
+  const displayItems = getDisplayItems(result.messages);
+
+  if (isQueued) {
+    card.addChild(new Text(theme.fg('dim', `  ${taskPreview}`), 0, 0));
+    card.addChild(new Text(theme.fg('muted', '  waiting...'), 0, 0));
+  } else if (isRunning) {
+    card.addChild(new Text(theme.fg('dim', `  ${taskPreview}`), 0, 0));
+    const toolCalls = displayItems.filter((d) => d.type === 'toolCall');
+    const recentTools = toolCalls.slice(-RUNNING_TOOL_COUNT);
+    for (const item of recentTools) {
+      if (item.type === 'toolCall') {
+        card.addChild(
+          new Text(
+            theme.fg('muted', '  → ') + formatToolCall(item.name, item.args, colorize),
+            0,
+            0,
+          ),
+        );
+      }
+    }
+  } else if (isError) {
+    card.addChild(new Text(theme.fg('dim', `  ${taskPreview}`), 0, 0));
+    if (result.errorMessage) {
+      card.addChild(new Text(theme.fg('error', `  Error: ${result.errorMessage}`), 0, 0));
+    }
+    const firstStderr = result.stderr.split('\n').find((l) => l.trim());
+    if (firstStderr) {
+      card.addChild(new Text(theme.fg('dim', `  ${firstStderr}`), 0, 0));
+    }
+  } else if (expanded) {
+    // Expanded done: Task section + all tool calls + Markdown output + usage
+    card.addChild(new Spacer(1));
+    card.addChild(new Text(theme.fg('muted', '─── Task ───'), 0, 0));
+    card.addChild(new Text(theme.fg('dim', `  ${result.task}`), 0, 0));
+    card.addChild(new Spacer(1));
+    card.addChild(new Text(theme.fg('muted', '─── Output ───'), 0, 0));
+    for (const item of displayItems) {
+      if (item.type === 'toolCall') {
+        card.addChild(
+          new Text(
+            theme.fg('muted', '  → ') + formatToolCall(item.name, item.args, colorize),
+            0,
+            0,
+          ),
+        );
+      }
+    }
+    const finalOutput = getFinalOutput(result.messages);
+    if (finalOutput) {
+      card.addChild(new Spacer(1));
+      card.addChild(new Markdown(finalOutput.trim(), 0, 0, getMarkdownTheme()));
+    }
+    const usageStr = formatUsageStats(result.usage, result.model);
+    if (usageStr) {
+      card.addChild(new Spacer(1));
+      card.addChild(new Text(theme.fg('dim', usageStr), 0, 0));
+    }
+  } else {
+    // Collapsed done: task + last COLLAPSED_ITEM_COUNT items + usage
+    card.addChild(new Text(theme.fg('dim', `  ${taskPreview}`), 0, 0));
+    const toShow = displayItems.slice(-COLLAPSED_ITEM_COUNT);
+    const skipped = displayItems.length - toShow.length;
+    if (skipped > 0) {
+      card.addChild(new Text(theme.fg('muted', `  ... ${skipped} earlier items`), 0, 0));
+    }
+    for (const item of toShow) {
+      if (item.type === 'toolCall') {
+        card.addChild(
+          new Text(
+            theme.fg('muted', '  → ') + formatToolCall(item.name, item.args, colorize),
+            0,
+            0,
+          ),
+        );
+      } else if (item.type === 'text') {
+        const preview = item.text.split('\n').slice(0, 3).join('\n');
+        card.addChild(new Text(theme.fg('toolOutput', `  ${preview}`), 0, 0));
+      }
+    }
+    const usageStr = formatUsageStats(result.usage, result.model);
+    if (usageStr) card.addChild(new Text(theme.fg('dim', `  ${usageStr}`), 0, 0));
+  }
+
+  card.addChild(new DynamicBorder(borderFn));
+  return card;
+}
+
+// ─── buildFlowResult ──────────────────────────────────────────────────────────
+
+/**
+ * Build the full flow result: stacked agent cards + total usage footer.
+ * Mirrors pi-crew's buildRenderResult pattern.
+ */
+export function buildFlowResult(
+  details: FlowDispatchDetails,
+  options: { expanded: boolean; isPartial: boolean },
+  theme: Theme,
+): Container {
+  const root = new Container();
+  const { expanded, isPartial } = options;
+
+  // Build one agent card per result
+  for (const result of details.results) {
+    root.addChild(buildAgentCardComponent(result, expanded, theme));
+  }
+
+  // Footer: total usage + expand hint (only when not partial)
+  if (!isPartial) {
+    const total = aggregateUsage(details.results);
+    let footerParts: string[] = [];
+
+    if (details.results.length > 1) {
+      const totalStr = formatUsageStats(total);
+      if (totalStr) footerParts.push(`Total: ${theme.fg('dim', totalStr)}`);
+    }
+
+    if (!expanded) {
+      try {
+        footerParts.push(keyHint('app.tools.expand', 'to expand'));
+      } catch {
+        // keyHint requires an initialized pi theme — fall back in test/headless contexts
+        footerParts.push('(Ctrl+O to expand)');
+      }
+    }
+
+    if (footerParts.length > 0) {
+      root.addChild(new Text(footerParts.join('  '), 0, 0));
+    }
+  }
+
+  return root;
 }
 
 // ─── renderFlowStatus ─────────────────────────────────────────────────────────
