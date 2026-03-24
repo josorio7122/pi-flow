@@ -38,13 +38,15 @@ verdict: null
 };
 
 /**
- * All known artifact names.
+ * All known artifact names. Exported for testing only — production code
+ * uses `renderArtifactTemplate` with a specific artifact name.
  */
 export const ARTIFACT_NAMES = Object.keys(TEMPLATES);
 
 /**
  * Returns the raw frontmatter template for an artifact, or null if unknown.
- * Contains `{{FEATURE_NAME}}` placeholder.
+ * Contains `{{FEATURE_NAME}}` placeholder. Exported for testing only —
+ * production code uses `renderArtifactTemplate` which resolves the placeholder.
  */
 export function getArtifactTemplate(artifact: string): string | null {
   return TEMPLATES[artifact] ?? null;
