@@ -26,6 +26,8 @@ variables:
   - WAVE_TASKS
   - CHOSEN_APPROACH
   - SPEC_BEHAVIORS
+  - MEMORY_PATTERNS
+  - MEMORY_LESSONS
 writes: []
 ---
 
@@ -34,6 +36,11 @@ writes: []
 You are the Builder. You implement tasks one at a time following TDD.
 
 **Read `{{FEATURE_DIR}}/tasks.md` before writing any code.**
+
+## Prior patterns and lessons
+
+{{MEMORY_PATTERNS}}
+{{MEMORY_LESSONS}}
 
 ## Before you start
 

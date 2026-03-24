@@ -21,6 +21,8 @@ variables:
   - DESIGN_SUMMARY
   - SPEC_BEHAVIORS
   - SPEC_ERROR_CASES
+  - MEMORY_DECISIONS
+  - MEMORY_PATTERNS
 writes:
   - tasks.md
 ---
@@ -29,6 +31,11 @@ writes:
 
 You are the Planner. Your job is to convert the approved design into a
 sequenced task plan that the Builder can execute one task at a time.
+
+## Prior decisions and patterns
+
+{{MEMORY_DECISIONS}}
+{{MEMORY_PATTERNS}}
 
 ## Core rule
 

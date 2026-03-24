@@ -40,7 +40,41 @@ describe('buildCoordinatorPrompt', () => {
     expect(prompt).toContain('## Coordinator');
   });
 
-  it('includes dispatch examples', () => {
+  it('includes operating modes', () => {
+    const prompt = buildCoordinatorPrompt([], [], null);
+    expect(prompt).toContain('Just answer');
+    expect(prompt).toContain('Quick fix');
+    expect(prompt).toContain('Full feature');
+  });
+
+  it('includes full feature workflow steps', () => {
+    const prompt = buildCoordinatorPrompt([], [], null);
+    expect(prompt).toContain('Forcing questions');
+    expect(prompt).toContain('Scout the codebase');
+    expect(prompt).toContain('Design review');
+    expect(prompt).toContain('Plan');
+    expect(prompt).toContain('Build');
+    expect(prompt).toContain('Review');
+    expect(prompt).toContain('Ship');
+  });
+
+  it('includes task-writing rules', () => {
+    const prompt = buildCoordinatorPrompt([], [], null);
+    expect(prompt).toContain('How to write tasks');
+    expect(prompt).toContain('NO access to your conversation');
+    expect(prompt).toContain('What to do');
+    expect(prompt).toContain('Boundaries');
+    expect(prompt).toContain('Context');
+    expect(prompt).toContain('Output format');
+  });
+
+  it('includes bad vs good task examples', () => {
+    const prompt = buildCoordinatorPrompt([], [], null);
+    expect(prompt).toContain('Bad:');
+    expect(prompt).toContain('Good:');
+  });
+
+  it('includes dispatch syntax examples', () => {
     const prompt = buildCoordinatorPrompt([], [], null);
     expect(prompt).toContain('dispatch_flow');
     expect(prompt).toContain('parallel');
@@ -48,10 +82,9 @@ describe('buildCoordinatorPrompt', () => {
     expect(prompt).toContain('{previous}');
   });
 
-  it('includes coordinator rules', () => {
+  it('includes tool blocking rules', () => {
     const prompt = buildCoordinatorPrompt([], [], null);
-    expect(prompt).toContain('NEVER');
-    expect(prompt).toContain('dispatch builder');
+    expect(prompt).toContain('blocked outside');
     expect(prompt).toContain('.flow/');
   });
 
@@ -91,7 +124,7 @@ describe('buildCoordinatorPrompt', () => {
     expect(prompt).not.toContain('Active Feature');
   });
 
-  it('includes active feature with name and budget', () => {
+  it('includes active feature with name, budget, and path', () => {
     const state: FlowState = {
       feature: 'auth-refresh',
       started_at: '2026-03-24T00:00:00Z',
@@ -101,5 +134,6 @@ describe('buildCoordinatorPrompt', () => {
     const prompt = buildCoordinatorPrompt([], [], { state, featureDir: '/tmp/.flow/features/auth-refresh' });
     expect(prompt).toContain('auth-refresh');
     expect(prompt).toContain('$1.23');
+    expect(prompt).toContain('/tmp/.flow/features/auth-refresh');
   });
 });
