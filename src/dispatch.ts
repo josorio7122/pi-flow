@@ -73,6 +73,31 @@ export function validateAgentPhase(
 }
 
 /**
+ * Finds and validates all agent+task pairs for parallel or chain dispatch.
+ * Returns `{ resolved }` on success or `{ error }` if any agent is missing or
+ * is not allowed in the given phase.
+ */
+export function resolveAgentTasks(
+  items: Array<{ agent: string; task: string }>,
+  agents: FlowAgentConfig[],
+  phase: Phase,
+): { resolved: Array<{ agent: FlowAgentConfig; task: string }> } | { error: string } {
+  const resolved: Array<{ agent: FlowAgentConfig; task: string }> = [];
+  for (const { agent: agentName, task } of items) {
+    const agent = findAgent(agents, agentName);
+    if (!agent) {
+      return { error: `Agent '${agentName}' not found. Available agents: ${agents.map((a) => a.name).join(', ')}` };
+    }
+    const check = validateAgentPhase(agent, phase);
+    if (!check.allowed) {
+      return { error: `Phase validation failed: ${check.reason}` };
+    }
+    resolved.push({ agent, task });
+  }
+  return { resolved };
+}
+
+/**
  * Factory that creates a `FlowDispatchDetails` builder bound to the given
  * mode, phase, and feature. Call the returned function with the results array
  * to produce the final details object.
@@ -316,6 +341,46 @@ async function executeChain(
   return allResults;
 }
 
+// ─── State initializer ────────────────────────────────────────────────────────
+
+/**
+ * Reads existing state for `featureDir`, or creates and writes a fresh
+ * `FlowState` when no state.md exists yet. Returns the state (which may be
+ * null only if both reading and writing fail).
+ *
+ * State-init failure is non-fatal — the caller proceeds without state tracking.
+ */
+function initializeState(
+  cwd: string,
+  featureDir: string,
+  params: DispatchParams,
+): FlowState | null {
+  const existing = readStateFile(featureDir);
+  if (existing) return existing;
+
+  try {
+    ensureFeatureDir(cwd, params.feature);
+    const fresh: FlowState = {
+      feature: params.feature,
+      change_type: 'feature',
+      current_phase: params.phase,
+      current_wave: params.wave ?? null,
+      wave_count: null,
+      skipped_phases: [],
+      started_at: new Date().toISOString(),
+      last_updated: new Date().toISOString(),
+      budget: { total_tokens: 0, total_cost_usd: 0 },
+      gates: { spec_approved: false, design_approved: false, review_verdict: null },
+      sentinel: { open_halts: 0, open_warns: 0 },
+    } satisfies FlowState;
+    writeStateFile(featureDir, fresh);
+    return fresh;
+  } catch {
+    // State init failure is non-fatal — proceed without state tracking
+    return null;
+  }
+}
+
 // ─── Public entry point ───────────────────────────────────────────────────────
 
 /**
@@ -338,28 +403,7 @@ export async function executeDispatch(
     const featureDir = path.join(cwd, '.flow', 'features', params.feature);
 
     // State initialization: create state.md if this is the first dispatch for this feature
-    let currentState = readStateFile(featureDir);
-    if (!currentState) {
-      try {
-        ensureFeatureDir(cwd, params.feature);
-        currentState = {
-          feature: params.feature,
-          change_type: 'feature',
-          current_phase: params.phase,
-          current_wave: params.wave ?? null,
-          wave_count: null,
-          skipped_phases: [],
-          started_at: new Date().toISOString(),
-          last_updated: new Date().toISOString(),
-          budget: { total_tokens: 0, total_cost_usd: 0 },
-          gates: { spec_approved: false, design_approved: false, review_verdict: null },
-          sentinel: { open_halts: 0, open_warns: 0 },
-        } satisfies FlowState;
-        writeStateFile(featureDir, currentState);
-      } catch {
-        // State init failure is non-fatal — proceed without state tracking
-      }
-    }
+    const currentState = initializeState(cwd, featureDir, params);
 
     // Gate enforcement: check if the workflow can advance to this phase
     try {
@@ -381,24 +425,11 @@ export async function executeDispatch(
 
     if (params.parallel) {
       // c. Find and validate all parallel agents
-      const agentTasks: Array<{ agent: FlowAgentConfig; task: string }> = [];
-      for (const { agent: agentName, task } of params.parallel) {
-        const agent = findAgent(agents, agentName);
-        if (!agent) {
-          return errorResult(
-            `Agent '${agentName}' not found. Available agents: ${agents.map((a) => a.name).join(', ')}`,
-            params,
-          );
-        }
-        const phaseCheck = validateAgentPhase(agent, params.phase);
-        if (!phaseCheck.allowed) {
-          return errorResult(`Phase validation failed: ${phaseCheck.reason}`, params);
-        }
-        agentTasks.push({ agent, task });
-      }
+      const resolved = resolveAgentTasks(params.parallel, agents, params.phase);
+      if ('error' in resolved) return errorResult(resolved.error, params);
 
       const results = await executeParallel(
-        agentTasks,
+        resolved.resolved,
         cwd,
         variableMap,
         config,
@@ -419,21 +450,9 @@ export async function executeDispatch(
 
     if (params.chain) {
       // c. Find and validate all chain agents
-      const steps: Array<{ agent: FlowAgentConfig; task: string }> = [];
-      for (const { agent: agentName, task } of params.chain) {
-        const agent = findAgent(agents, agentName);
-        if (!agent) {
-          return errorResult(
-            `Agent '${agentName}' not found. Available agents: ${agents.map((a) => a.name).join(', ')}`,
-            params,
-          );
-        }
-        const phaseCheck = validateAgentPhase(agent, params.phase);
-        if (!phaseCheck.allowed) {
-          return errorResult(`Phase validation failed: ${phaseCheck.reason}`, params);
-        }
-        steps.push({ agent, task });
-      }
+      const resolvedChain = resolveAgentTasks(params.chain, agents, params.phase);
+      if ('error' in resolvedChain) return errorResult(resolvedChain.error, params);
+      const steps = resolvedChain.resolved;
 
       const results = await executeChain(
         steps,

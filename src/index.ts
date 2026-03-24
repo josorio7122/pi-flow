@@ -12,6 +12,21 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { Type } from '@sinclair/typebox';
 import { Text } from '@mariozechner/pi-tui';
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+  ExtensionCommandContext,
+  BeforeAgentStartEvent,
+  AgentEndEvent,
+  SessionStartEvent,
+  SessionBeforeCompactEvent,
+  ToolCallEvent,
+  ToolCallEventResult,
+  ToolRenderResultOptions,
+  AgentToolResult,
+  AgentToolUpdateCallback,
+} from '@mariozechner/pi-coding-agent';
+import type { Theme } from '@mariozechner/pi-coding-agent';
 
 import { executeDispatch } from './dispatch.js';
 import { findFlowDir, readStateFile, writeCheckpoint, readCheckpoint } from './state.js';
@@ -50,6 +65,26 @@ function isAllowedCoordinatorWrite(filePath: string, cwd: string): boolean {
   return normalized.startsWith(flowDir + path.sep) || normalized === flowDir;
 }
 
+// ─── Resume snapshot helpers ──────────────────────────────────────────────────
+
+/** Extracts the ## Goal section body from spec.md content (capped at 400 chars). */
+function extractGoalFromSpec(specContent: string): string {
+  const match = /^## Goal\s*\n([\s\S]*?)(?=^## |\s*$)/m.exec(specContent);
+  return match ? match[1].trim().slice(0, 400) : '(no spec goal)';
+}
+
+/** Extracts the tasks for a given wave from tasks.md content (capped at 800 chars). */
+function extractWaveTasks(tasksContent: string, waveNum: number): string {
+  const match = new RegExp(`^## Wave ${waveNum}\\s*\\n([\\s\\S]*?)(?=^## |\\s*$)`, 'm').exec(tasksContent);
+  return match ? match[1].trim().slice(0, 800) : '(no tasks for this wave)';
+}
+
+/** Extracts the ## Decision section body from design.md content (capped at 400 chars). */
+function extractChosenApproach(designContent: string): string {
+  const match = /^## Decision\s*\n([\s\S]*?)(?=^## |\s*$)/m.exec(designContent);
+  return match ? match[1].trim().slice(0, 400) : '(no design decision)';
+}
+
 // ─── Resume snapshot builder ──────────────────────────────────────────────────
 //
 // Builds a compact XML snapshot (<2KB) for injection after compaction.
@@ -69,21 +104,9 @@ function buildResumeSnapshot(state: FlowState, featureDir: string): string {
   const sentinelContent = safeRead('sentinel-log.md');
   const designContent = safeRead('design.md');
 
-  // Extract goal from spec.md ## Goal section
-  const goalMatch = /^## Goal\s*\n([\s\S]*?)(?=^## |\s*$)/m.exec(specContent);
-  const specGoal = goalMatch ? goalMatch[1].trim().slice(0, 400) : '(no spec goal)';
-
-  // Extract current wave tasks from tasks.md
-  const waveNum = state.current_wave ?? 1;
-  const waveMatch = new RegExp(
-    `^## Wave ${waveNum}\\s*\\n([\\s\\S]*?)(?=^## |\\s*$)`,
-    'm',
-  ).exec(tasksContent);
-  const waveTasks = waveMatch ? waveMatch[1].trim().slice(0, 800) : '(no tasks for this wave)';
-
-  // Extract chosen approach from design.md ## Decision section
-  const approachMatch = /^## Decision\s*\n([\s\S]*?)(?=^## |\s*$)/m.exec(designContent);
-  const chosenApproach = approachMatch ? approachMatch[1].trim().slice(0, 400) : '(no design decision)';
+  const specGoal = extractGoalFromSpec(specContent);
+  const waveTasks = extractWaveTasks(tasksContent, state.current_wave ?? 1);
+  const chosenApproach = extractChosenApproach(designContent);
 
   // Sentinel issues excerpt (capped at 500 chars)
   const haltExcerpt =
@@ -166,7 +189,7 @@ function formatBudgetTable(state: FlowState): string {
 
 // ─── Footer status helper ─────────────────────────────────────────────────────
 
-function updateFooterStatus(state: FlowState, ui: any): void {
+function updateFooterStatus(state: FlowState, ui: ExtensionContext['ui']): void {
   const statusText = renderFlowStatus(
     state.feature,
     state.current_phase,
@@ -216,7 +239,7 @@ function findActiveFeature(cwd: string): { state: FlowState; featureDir: string 
 
 // ─── Extension entry point ────────────────────────────────────────────────────
 
-export default function piFlow(pi: any) {
+export default function piFlow(pi: ExtensionAPI) {
   const extensionDir = path.dirname(fileURLToPath(import.meta.url));
   // rootDir is one level up from src/ — needed for agents/ directory
   const rootDir = path.resolve(extensionDir, '..');
@@ -290,18 +313,26 @@ export default function piFlow(pi: any) {
 
     async execute(
       _toolCallId: string,
-      params: any,
+      params: {
+        agent?: string;
+        task?: string;
+        parallel?: Array<{ agent: string; task: string }>;
+        chain?: Array<{ agent: string; task: string }>;
+        phase: string;
+        feature: string;
+        wave?: number;
+      },
       signal: AbortSignal,
-      onUpdate: any,
-      ctx: any,
+      onUpdate: AgentToolUpdateCallback<FlowDispatchDetails> | undefined,
+      ctx: ExtensionContext,
     ) {
       const result = await executeDispatch(
-        params,
+        { ...params, phase: params.phase as import('./types.js').Phase },
         ctx.cwd,
         rootDir,
         signal,
         onUpdate
-          ? (partial: any) => {
+          ? (partial: { content: Array<{ type: 'text'; text: string }>; details: FlowDispatchDetails }) => {
               onUpdate({
                 content: partial.content,
                 details: partial.details,
@@ -341,7 +372,15 @@ export default function piFlow(pi: any) {
       return result;
     },
 
-    renderCall(args: any, theme: any, _context: any) {
+    renderCall(
+      args: {
+        agent?: string;
+        task?: string;
+        parallel?: Array<{ agent: string; task: string }>;
+        chain?: Array<{ agent: string; task: string }>;
+      },
+      theme: Theme,
+    ) {
       const colorize = (color: string, t: string): string => theme.fg(color, t);
       const bold = (t: string): string => theme.bold(t);
 
@@ -363,7 +402,11 @@ export default function piFlow(pi: any) {
       return new Text(text, 0, 0);
     },
 
-    renderResult(result: any, options: any, theme: any, _context: any) {
+    renderResult(
+      result: AgentToolResult<FlowDispatchDetails>,
+      options: ToolRenderResultOptions,
+      theme: Theme,
+    ) {
       const details = result.details as FlowDispatchDetails | undefined;
       if (!details || details.results.length === 0) {
         const first = result.content[0];
@@ -378,7 +421,7 @@ export default function piFlow(pi: any) {
   // /flow — one-liner status
   pi.registerCommand('flow', {
     description: 'Show current workflow status (one-liner)',
-    handler: async (_args: string, ctx: any) => {
+    handler: async (_args: string, ctx: ExtensionCommandContext) => {
       const active = findActiveFeature(ctx.cwd);
       if (!active) {
         ctx.ui.notify('pi-flow: no active feature', 'info');
@@ -404,7 +447,7 @@ export default function piFlow(pi: any) {
   // /flow:status — detailed status
   pi.registerCommand('flow:status', {
     description: 'Detailed workflow status with budget breakdown and gate conditions',
-    handler: async (_args: string, ctx: any) => {
+    handler: async (_args: string, ctx: ExtensionCommandContext) => {
       const active = findActiveFeature(ctx.cwd);
       if (!active) {
         ctx.ui.notify(
@@ -424,7 +467,7 @@ export default function piFlow(pi: any) {
   // /flow:budget — cost breakdown
   pi.registerCommand('flow:budget', {
     description: 'Show token and cost breakdown for the current feature',
-    handler: async (_args: string, ctx: any) => {
+    handler: async (_args: string, ctx: ExtensionCommandContext) => {
       const active = findActiveFeature(ctx.cwd);
       if (!active) {
         ctx.ui.notify('pi-flow: no active feature', 'info');
@@ -443,7 +486,7 @@ export default function piFlow(pi: any) {
     description:
       'Reset workflow state for a feature (deletes phase files and checkpoints). ' +
       'Usage: /flow:reset  or  /flow:reset <feature-name>',
-    handler: async (args: string, ctx: any) => {
+    handler: async (args: string, ctx: ExtensionCommandContext) => {
       const flowDir = findFlowDir(ctx.cwd);
       if (!flowDir) {
         ctx.ui.notify('pi-flow: no .flow/ directory found', 'warn');
@@ -494,7 +537,7 @@ export default function piFlow(pi: any) {
   });
 
   // before_agent_start — inject coordinator prompt into system prompt
-  pi.on('before_agent_start', async (event: any, ctx: any) => {
+  pi.on('before_agent_start', async (event: BeforeAgentStartEvent, ctx: ExtensionContext) => {
     try {
       const agents = discoverAgents(rootDir, ctx.cwd);
       const active = findActiveFeature(ctx.cwd);
@@ -510,7 +553,7 @@ export default function piFlow(pi: any) {
   });
 
   // agent_end — nudge coordinator to continue if a workflow is in progress
-  pi.on('agent_end', async (_event: any, ctx: any) => {
+  pi.on('agent_end', async (_event: AgentEndEvent, ctx: ExtensionContext) => {
     const active = findActiveFeature(ctx.cwd);
     if (!active) return;
     if (active.state.current_phase === 'ship') return;
@@ -527,7 +570,7 @@ export default function piFlow(pi: any) {
   });
 
   // session_start — restore footer status for any in-progress feature
-  pi.on('session_start', async (_event: any, ctx: any) => {
+  pi.on('session_start', async (_event: SessionStartEvent, ctx: ExtensionContext) => {
     // Reset loop detection history for this session
     loopHistory.length = 0;
 
@@ -570,10 +613,10 @@ export default function piFlow(pi: any) {
   });
 
   // tool_call — block coordinator writes outside .flow/ and detect loops
-  pi.on('tool_call', async (event: any, ctx: any) => {
-    const toolName: string = event.toolName ?? event.toolCall?.name;
+  pi.on('tool_call', async (event: ToolCallEvent, ctx: ExtensionContext): Promise<ToolCallEventResult | void> => {
+    const toolName: string = event.toolName;
     const args: Record<string, unknown> =
-      event.input ?? event.toolCall?.args ?? {};
+      (event as { toolName: string; input: Record<string, unknown> }).input ?? {};
 
     // Loop detection (runs for all tools)
     const argsHash = hashToolCall(toolName, args);
@@ -610,7 +653,7 @@ export default function piFlow(pi: any) {
   });
 
   // session_before_compact — write a resume snapshot before context is lost
-  pi.on('session_before_compact', async (_event: any, ctx: any) => {
+  pi.on('session_before_compact', async (_event: SessionBeforeCompactEvent, ctx: ExtensionContext) => {
     const active = findActiveFeature(ctx.cwd);
     if (!active) return;
 

@@ -98,6 +98,10 @@ export async function writeAgentPrompt(
  * Parses a single NDJSON line from the pi subprocess stdout and mutates the
  * result object in place.
  *
+ * **Intentional mutation for streaming performance**: updating the result
+ * in-place avoids object copies on every NDJSON line, which matters for
+ * long-running agents that emit thousands of lines.
+ *
  * Handles two event types:
  *   - `message_end`     — push message; if role=assistant, extract usage/model/stopReason
  *   - `tool_result_end` — push message
@@ -112,7 +116,7 @@ export function processNdjsonLine(
 ): void {
   if (!line.trim()) return;
 
-  let event: { type: string; message?: any };
+  let event: { type: string; message?: Record<string, unknown> };
   try {
     event = JSON.parse(line);
   } catch {
@@ -127,19 +131,19 @@ export function processNdjsonLine(
     if (msg.role === 'assistant') {
       result.usage.turns++;
 
-      const u = msg.usage;
+      const u = msg.usage as Record<string, unknown> | undefined;
       if (u) {
-        result.usage.input      += u.input      || 0;
-        result.usage.output     += u.output     || 0;
-        result.usage.cacheRead  += u.cacheRead  || 0;
-        result.usage.cacheWrite += u.cacheWrite || 0;
-        result.usage.cost       += u.cost?.total || 0;
-        result.usage.contextTokens = u.totalTokens || 0;
+        result.usage.input      += (u.input      as number) || 0;
+        result.usage.output     += (u.output     as number) || 0;
+        result.usage.cacheRead  += (u.cacheRead  as number) || 0;
+        result.usage.cacheWrite += (u.cacheWrite as number) || 0;
+        result.usage.cost       += ((u.cost as Record<string, unknown> | undefined)?.total as number) || 0;
+        result.usage.contextTokens = (u.totalTokens as number) || 0;
       }
 
-      if (!result.model && msg.model)          result.model = msg.model;
-      if (msg.stopReason)                      result.stopReason = msg.stopReason;
-      if (msg.errorMessage)                    result.errorMessage = msg.errorMessage;
+      if (!result.model && msg.model)          result.model = msg.model as string;
+      if (msg.stopReason)                      result.stopReason = msg.stopReason as string;
+      if (msg.errorMessage)                    result.errorMessage = msg.errorMessage as string;
     }
 
     emitUpdate();
@@ -192,12 +196,12 @@ export function aggregateUsage(results: SingleAgentResult[]): UsageStats {
  * Walks messages backward to find the last assistant message that contains
  * a text block. Returns the text, or empty string if none found.
  */
-export function getFinalOutput(messages: any[]): string {
+export function getFinalOutput(messages: Record<string, unknown>[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
     if (msg.role === 'assistant') {
-      for (const part of msg.content ?? []) {
-        if (part.type === 'text') return part.text;
+      for (const part of (msg.content as Record<string, unknown>[] | undefined) ?? []) {
+        if (part.type === 'text') return part.text as string;
       }
     }
   }
@@ -210,16 +214,16 @@ export function getFinalOutput(messages: any[]): string {
  * Walks all messages and extracts text blocks and tool calls from assistant
  * messages. Returns a flat array in message order for rendering.
  */
-export function getDisplayItems(messages: any[]): DisplayItem[] {
+export function getDisplayItems(messages: Record<string, unknown>[]): DisplayItem[] {
   const items: DisplayItem[] = [];
 
   for (const msg of messages) {
     if (msg.role === 'assistant') {
-      for (const part of msg.content ?? []) {
+      for (const part of (msg.content as Record<string, unknown>[] | undefined) ?? []) {
         if (part.type === 'text') {
-          items.push({ type: 'text', text: part.text });
+          items.push({ type: 'text', text: part.text as string });
         } else if (part.type === 'toolCall') {
-          items.push({ type: 'toolCall', name: part.name, args: part.arguments });
+          items.push({ type: 'toolCall', name: part.name as string, args: part.arguments as Record<string, unknown> });
         }
       }
     }
@@ -258,6 +262,76 @@ export async function mapWithConcurrencyLimit<T, R>(
 
   await Promise.all(workerFns);
   return results;
+}
+
+// ─── runChildProcess ──────────────────────────────────────────────────────────
+
+/**
+ * Spawns the pi child process and streams its stdout/stderr into `currentResult`.
+ * Handles AbortSignal: SIGTERM → 5s grace → SIGKILL.
+ *
+ * Returns the process exit code and whether the run was aborted.
+ */
+function runChildProcess(
+  invocation: { command: string; args: string[] },
+  cwd: string,
+  currentResult: SingleAgentResult,
+  emitUpdate: () => void,
+  signal?: AbortSignal,
+): Promise<{ exitCode: number; wasAborted: boolean }> {
+  return new Promise((resolve) => {
+    const proc = spawn(invocation.command, invocation.args, {
+      cwd,
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let buffer = '';
+    let wasAborted = false;
+
+    proc.stdout.on('data', (data: Buffer) => {
+      buffer += data.toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        processNdjsonLine(line, currentResult, emitUpdate);
+      }
+    });
+
+    proc.stderr.on('data', (data: Buffer) => {
+      currentResult.stderr += data.toString();
+    });
+
+    proc.on('close', (code) => {
+      // Flush any remaining partial line in the buffer
+      if (buffer.trim()) {
+        processNdjsonLine(buffer, currentResult, emitUpdate);
+      }
+      resolve({ exitCode: code ?? 0, wasAborted });
+    });
+
+    proc.on('error', () => {
+      resolve({ exitCode: 1, wasAborted });
+    });
+
+    if (signal) {
+      const killProc = () => {
+        wasAborted = true;
+        proc.kill('SIGTERM');
+        const forceKillTimer = setTimeout(() => {
+          if (!proc.killed) proc.kill('SIGKILL');
+        }, 5000);
+        // Prevent the timer from keeping the process alive
+        forceKillTimer.unref();
+      };
+
+      if (signal.aborted) {
+        killProc();
+      } else {
+        signal.addEventListener('abort', killProc, { once: true });
+      }
+    }
+  });
 }
 
 // ─── spawnAgent ───────────────────────────────────────────────────────────────
@@ -314,60 +388,13 @@ export async function spawnAgent(
     const spawnArgs = buildSpawnArgs(agent, task, tmpFilePath);
     const invocation = getPiInvocation(spawnArgs);
 
-    let wasAborted = false;
-
-    const exitCode = await new Promise<number>((resolve) => {
-      const proc = spawn(invocation.command, invocation.args, {
-        cwd,
-        shell: false,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-
-      let buffer = '';
-
-      proc.stdout.on('data', (data: Buffer) => {
-        buffer += data.toString();
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-        for (const line of lines) {
-          processNdjsonLine(line, currentResult, emitUpdate);
-        }
-      });
-
-      proc.stderr.on('data', (data: Buffer) => {
-        currentResult.stderr += data.toString();
-      });
-
-      proc.on('close', (code) => {
-        // Flush any remaining partial line in the buffer
-        if (buffer.trim()) {
-          processNdjsonLine(buffer, currentResult, emitUpdate);
-        }
-        resolve(code ?? 0);
-      });
-
-      proc.on('error', () => {
-        resolve(1);
-      });
-
-      if (signal) {
-        const killProc = () => {
-          wasAborted = true;
-          proc.kill('SIGTERM');
-          const forceKillTimer = setTimeout(() => {
-            if (!proc.killed) proc.kill('SIGKILL');
-          }, 5000);
-          // Prevent the timer from keeping the process alive
-          forceKillTimer.unref();
-        };
-
-        if (signal.aborted) {
-          killProc();
-        } else {
-          signal.addEventListener('abort', killProc, { once: true });
-        }
-      }
-    });
+    const { exitCode, wasAborted } = await runChildProcess(
+      invocation,
+      cwd,
+      currentResult,
+      emitUpdate,
+      signal,
+    );
 
     currentResult.exitCode = exitCode;
 

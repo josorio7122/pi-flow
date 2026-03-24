@@ -1,5 +1,9 @@
 // Phase type — 7 phases of the pi-flow state machine
-export type Phase = 'intent' | 'spec' | 'analyze' | 'plan' | 'execute' | 'review' | 'ship';
+export const PHASES = ['intent', 'spec', 'analyze', 'plan', 'execute', 'review', 'ship'] as const;
+export type Phase = typeof PHASES[number];
+
+export const CHANGE_TYPES = ['feature', 'refactor', 'hotfix', 'docs', 'config', 'research'] as const;
+export type ChangeType = typeof CHANGE_TYPES[number];
 
 // Agent config parsed from .md frontmatter
 export interface FlowAgentConfig {
@@ -22,7 +26,7 @@ export interface FlowAgentConfig {
 // Flow state from state.md frontmatter
 export interface FlowState {
   feature: string;
-  change_type: 'feature' | 'refactor' | 'hotfix' | 'docs' | 'config' | 'research';
+  change_type: ChangeType;
   current_phase: Phase;
   current_wave: number | null;
   wave_count: number | null;
@@ -64,7 +68,12 @@ export interface SingleAgentResult {
   agentSource: 'builtin' | 'custom';
   task: string;
   exitCode: number;
-  messages: any[];  // pi Message type
+  /**
+   * Raw NDJSON-parsed message objects from the pi subprocess.
+   * Typed as Record<string, unknown> because the NDJSON parser produces untyped
+   * objects; the actual shape matches pi's Message type at runtime.
+   */
+  messages: Record<string, unknown>[];
   stderr: string;
   usage: UsageStats;
   model?: string;
