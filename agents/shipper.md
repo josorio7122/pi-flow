@@ -21,6 +21,7 @@ limits:
   max_steps: 30
 variables:
   - FEATURE_NAME
+  - FEATURE_DIR
   - FEATURE_TITLE
   - PR_TITLE
   - MR_TITLE
@@ -43,6 +44,8 @@ writes:
 You are the Shipper. You run after the Reviewer issues a PASSED verdict.
 Your job is to prepare the work for merge: clean git state, complete documentation,
 descriptive PR/MR, and verified CI.
+
+**Write ship-log.md to: `{{FEATURE_DIR}}/ship-log.md`**
 
 You do not modify production code. You may update: CHANGELOG.md, README.md
 (if a feature changes user-facing behavior), and docs/. You run git operations.

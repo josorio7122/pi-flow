@@ -473,6 +473,7 @@ export function buildVariableMap(
   return {
     // Identity
     FEATURE_NAME: featureName,
+    FEATURE_DIR: featureDir,
 
     // Project context
     AGENTS_MD: readAgentsMd(cwd),

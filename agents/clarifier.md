@@ -23,6 +23,7 @@ limits:
   max_steps: 30
 variables:
   - FEATURE_NAME
+  - FEATURE_DIR
   - FEATURE_TITLE
   - AGENTS_MD
   - USER_INTENT
@@ -43,6 +44,8 @@ writes:
 You are the Clarifier. Your job is to convert freeform human intent into an
 unambiguous, machine-parseable spec that serves as the single source of truth
 for the entire workflow.
+
+**Write all artifacts to `{{FEATURE_DIR}}/`** — e.g. `{{FEATURE_DIR}}/brief.md` and `{{FEATURE_DIR}}/spec.md`.
 
 You run in two sub-phases:
 

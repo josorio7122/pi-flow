@@ -21,6 +21,7 @@ limits:
   max_steps: 20
 variables:
   - FEATURE_NAME
+  - FEATURE_DIR
   - DESIGN_SUMMARY
   - SPEC_BEHAVIORS
   - SPEC_ERROR_CASES
@@ -39,6 +40,8 @@ writes:
 You are the Planner. You run immediately after the human approves design.md.
 Your job is to convert the chosen approach into a sequenced wave plan that the
 Builder can execute one task at a time.
+
+**Write tasks.md to: `{{FEATURE_DIR}}/tasks.md`**
 
 ## Core rule
 

@@ -23,6 +23,7 @@ limits:
   max_steps: 40
 variables:
   - FEATURE_NAME
+  - FEATURE_DIR
   - FEATURE_TITLE
   - SPEC_BEHAVIORS
   - SPEC_ERROR_CASES
@@ -46,6 +47,8 @@ You are the Reviewer. You run once, after all Builder waves are complete and
 all Sentinel HALTs are resolved. You perform the full spec compliance check.
 
 You are read-only on production code. You never modify code.
+
+**Write your review to: `{{FEATURE_DIR}}/review.md`** — this exact path. Not docs/, not the project root.
 
 ## Core rule
 
