@@ -55,6 +55,8 @@ const LOOP_THRESHOLD = 3;
 // Nudge guard — prevents sending more than one nudge per user input cycle.
 let nudgedThisCycle = false;
 
+
+
 // ─── Coordinator write whitelist ──────────────────────────────────────────────
 //
 // Per §14 S2: the coordinator may write anything inside .flow/.
@@ -615,6 +617,18 @@ export default function piFlow(pi: ExtensionAPI) {
       lastAssistant.stopReason === 'aborted'
     )
       return;
+
+    // Only nudge if the coordinator dispatched an agent this turn.
+    // If the coordinator just talked (no dispatch), don't nudge — the user is in conversation.
+    // This prevents the "dispatch analyze" loop when the coordinator says "analyze already completed".
+    const hadDispatch = messages.some((m) => {
+      const msg = m as unknown as Record<string, unknown>;
+      if (!Array.isArray(msg.content)) return false;
+      return (msg.content as Array<Record<string, unknown>>).some(
+        (c) => c.type === 'tool_use' && c.name === 'dispatch_flow',
+      );
+    });
+    if (!hadDispatch) return;
 
     const active = findActiveFeature(ctx.cwd);
     if (!active) return;

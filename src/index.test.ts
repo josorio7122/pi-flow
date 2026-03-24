@@ -225,20 +225,28 @@ describe('input hook', () => {
     vi.mocked(readStateFile).mockReturnValue(makeFlowState() as any);
 
     const ctx = makeCtx();
+    const eventWithDispatch = {
+      messages: [
+        {
+          role: 'assistant',
+          content: [{ type: 'tool_use', name: 'dispatch_flow', input: {} }],
+        },
+      ],
+    };
 
     // First agent_end — should nudge
-    await pi.trigger('agent_end', {}, ctx);
+    await pi.trigger('agent_end', eventWithDispatch, ctx);
     expect(pi.sendMessage).toHaveBeenCalledTimes(1);
 
     // Second agent_end — nudgedThisCycle is true, should NOT nudge again
-    await pi.trigger('agent_end', {}, ctx);
+    await pi.trigger('agent_end', eventWithDispatch, ctx);
     expect(pi.sendMessage).toHaveBeenCalledTimes(1);
 
     // Fire input hook — resets the guard
     await pi.trigger('input', {}, ctx);
 
     // Third agent_end — guard reset, should nudge again
-    await pi.trigger('agent_end', {}, ctx);
+    await pi.trigger('agent_end', eventWithDispatch, ctx);
     expect(pi.sendMessage).toHaveBeenCalledTimes(2);
   });
 });
@@ -366,7 +374,7 @@ describe('agent_end hook', () => {
     expect(pi.sendMessage).not.toHaveBeenCalled();
   });
 
-  it('sends a nudge message when feature is active and phase is not ship', async () => {
+  it('sends a nudge message when feature is active and a dispatch happened', async () => {
     const pi = makePiMock();
     piFlow(pi);
 
@@ -378,7 +386,17 @@ describe('agent_end hook', () => {
     vi.mocked(readStateFile).mockReturnValue(state as any);
     vi.mocked(buildNudgeMessage).mockReturnValue('Keep going!');
 
-    await pi.trigger('agent_end', {}, makeCtx());
+    const event = {
+      messages: [
+        {
+          role: 'assistant',
+          stopReason: 'toolUse',
+          content: [{ type: 'tool_use', name: 'dispatch_flow', input: {} }],
+        },
+      ],
+    };
+
+    await pi.trigger('agent_end', event, makeCtx());
 
     expect(pi.sendMessage).toHaveBeenCalledTimes(1);
     const [msgArg, optsArg] = vi.mocked(pi.sendMessage).mock.calls[0];
@@ -398,13 +416,47 @@ describe('agent_end hook', () => {
     vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as any);
     vi.mocked(readStateFile).mockReturnValue(makeFlowState() as any);
 
+    const event = {
+      messages: [
+        {
+          role: 'assistant',
+          content: [{ type: 'tool_use', name: 'dispatch_flow', input: {} }],
+        },
+      ],
+    };
+
     // First call — should nudge
-    await pi.trigger('agent_end', {}, makeCtx());
+    await pi.trigger('agent_end', event, makeCtx());
     expect(pi.sendMessage).toHaveBeenCalledTimes(1);
 
     // Second call in same cycle — guard prevents nudge
-    await pi.trigger('agent_end', {}, makeCtx());
+    await pi.trigger('agent_end', event, makeCtx());
     expect(pi.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT nudge when no dispatch_flow was called (conversation only)', async () => {
+    const pi = makePiMock();
+    piFlow(pi);
+
+    vi.mocked(findFlowDir).mockReturnValue('/project/.flow');
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readdirSync).mockReturnValue(['my-feature'] as any);
+    vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as any);
+    vi.mocked(readStateFile).mockReturnValue(makeFlowState() as any);
+
+    // No dispatch_flow in messages — just text
+    const event = {
+      messages: [
+        {
+          role: 'assistant',
+          stopReason: 'stop',
+          content: [{ type: 'text', text: 'Analyze already completed.' }],
+        },
+      ],
+    };
+
+    await pi.trigger('agent_end', event, makeCtx());
+    expect(pi.sendMessage).not.toHaveBeenCalled();
   });
 
   it('does not nudge when the last assistant message was aborted', async () => {
@@ -430,7 +482,7 @@ describe('agent_end hook', () => {
     expect(pi.sendMessage).not.toHaveBeenCalled();
   });
 
-  it('nudges normally when the last assistant message has stopReason=stop', async () => {
+  it('nudges normally when dispatch_flow was called and stopReason=stop', async () => {
     const pi = makePiMock();
     piFlow(pi);
 
@@ -442,7 +494,11 @@ describe('agent_end hook', () => {
 
     const event = {
       messages: [
-        { role: 'user', content: 'do something' },
+        {
+          role: 'assistant',
+          stopReason: 'toolUse',
+          content: [{ type: 'tool_use', name: 'dispatch_flow', input: {} }],
+        },
         { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'done' }] },
       ],
     };
@@ -463,7 +519,16 @@ describe('agent_end hook', () => {
     const state = makeFlowState({ feature: 'feature-x', current_phase: 'review' });
     vi.mocked(readStateFile).mockReturnValue(state as any);
 
-    await pi.trigger('agent_end', {}, makeCtx());
+    const event = {
+      messages: [
+        {
+          role: 'assistant',
+          content: [{ type: 'tool_use', name: 'dispatch_flow', input: {} }],
+        },
+      ],
+    };
+
+    await pi.trigger('agent_end', event, makeCtx());
 
     expect(buildNudgeMessage).toHaveBeenCalledWith(state);
   });
