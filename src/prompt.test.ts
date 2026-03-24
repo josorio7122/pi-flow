@@ -154,8 +154,24 @@ describe('buildCoordinatorPrompt', () => {
     expect(output).toContain('### Modes');
     expect(output).toContain('### Agents');
     expect(output).toContain('### Phase Pipeline');
-    expect(output).toContain('### .flow/ Directory');
     expect(output).toContain('### Dispatch Rules');
+  });
+
+  it('output contains delegation enforcement — dispatch only, no direct file access', () => {
+    const output = buildCoordinatorPrompt(STANDARD_AGENTS, null);
+    expect(output).toContain('dispatch_flow');
+    // Must explicitly forbid direct tool use
+    expect(output).toMatch(/never.*(Read|Write|Edit|Bash)/i);
+    // Must forbid writing .flow/ artifacts
+    expect(output).toMatch(/never.*write.*artifact/i);
+  });
+
+  it('output contains agent artifact ownership', () => {
+    const output = buildCoordinatorPrompt(STANDARD_AGENTS, null);
+    // Each agent writes its own artifacts
+    expect(output).toContain('tasks.md');
+    expect(output).toContain('design.md');
+    expect(output).toContain('review.md');
   });
 
   it('output contains skip path table', () => {
