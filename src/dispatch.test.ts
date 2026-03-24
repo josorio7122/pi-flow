@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { execSync } from 'node:child_process';
 import * as path from 'node:path';
 import type { FlowAgentConfig, FlowConfig, FlowState, Phase, SingleAgentResult } from './types.js';
 
@@ -1847,5 +1848,277 @@ describe('executeDispatch', () => {
       expect(result.isError).toBeUndefined();
       expect(fs.writeFileSync).not.toHaveBeenCalled();
     });
+  });
+});
+
+// ─── integration: full lifecycle sequence ─────────────────────────────────────
+
+describe('integration: full lifecycle sequence', () => {
+  const builder = makeAgent({ name: 'builder', phases: ['execute'] });
+  const scout = makeAgent({ name: 'scout', phases: ['execute'] });
+
+  // Tracks the sequence of key mock invocations for call-order assertions
+  let callOrder: string[];
+
+  beforeEach(() => {
+    callOrder = [];
+    vi.clearAllMocks();
+
+    vi.mocked(loadConfig).mockReturnValue(makeConfig());
+    vi.mocked(buildVariableMap).mockReturnValue({ FEATURE_NAME: 'auth' });
+    vi.mocked(writeDispatchLog).mockReturnValue(undefined);
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.readFileSync).mockReturnValue('');
+
+    // Default: first-dispatch scenario (readStateFile returns null)
+    vi.mocked(readStateFile).mockReturnValue(null);
+
+    // Wire order-tracking into every mock of interest
+    vi.mocked(ensureFeatureDir).mockImplementation(() => {
+      callOrder.push('ensureFeatureDir');
+    });
+    vi.mocked(writeStateFile).mockImplementation(() => {
+      callOrder.push('writeStateFile');
+    });
+    vi.mocked(checkPhaseGate).mockImplementation(() => {
+      callOrder.push('checkPhaseGate');
+      return { canAdvance: true, reason: 'ok' };
+    });
+    vi.mocked(discoverAgents).mockImplementation(() => {
+      callOrder.push('discoverAgents');
+      return [builder, scout];
+    });
+    vi.mocked(spawnAgentWithRetry).mockImplementation(async () => {
+      callOrder.push('spawnAgentWithRetry');
+      return makeResult();
+    });
+    vi.mocked(writeCheckpoint).mockImplementation(() => {
+      callOrder.push('writeCheckpoint');
+    });
+    vi.mocked(appendProgressLog).mockImplementation(() => {
+      callOrder.push('appendProgressLog');
+    });
+  });
+
+  it('(a) first-dispatch state creation sequence: ensureFeatureDir → writeStateFile(init) → checkPhaseGate → discoverAgents → spawnAgentWithRetry → writeStateFile(budget) → writeCheckpoint → appendProgressLog', async () => {
+    const params: DispatchParams = {
+      agent: 'builder',
+      task: 'implement task-1.1',
+      phase: 'execute',
+      feature: 'auth',
+    };
+
+    await executeDispatch(params, CWD, EXTENSION_DIR);
+
+    expect(callOrder).toEqual([
+      'ensureFeatureDir',
+      'writeStateFile',      // init write
+      'checkPhaseGate',
+      'discoverAgents',
+      'spawnAgentWithRetry',
+      'writeStateFile',      // budget write
+      'writeCheckpoint',
+      'appendProgressLog',
+    ]);
+  });
+
+  it('(b) gate blocks execution: spawnAgentWithRetry and writeCheckpoint not called; state IS initialised on first dispatch', async () => {
+    vi.mocked(checkPhaseGate).mockImplementation(() => {
+      callOrder.push('checkPhaseGate');
+      return { canAdvance: false, reason: 'design not approved' };
+    });
+
+    const params: DispatchParams = {
+      agent: 'builder',
+      task: 'implement feature',
+      phase: 'execute',
+      feature: 'auth',
+    };
+
+    const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+    // Error result with the gate reason
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('design not approved');
+
+    // State IS initialised (ensureFeatureDir + writeStateFile called before the gate)
+    expect(callOrder).toContain('ensureFeatureDir');
+    expect(callOrder.filter((c) => c === 'writeStateFile')).toHaveLength(1);
+    expect(callOrder.indexOf('ensureFeatureDir')).toBeLessThan(
+      callOrder.indexOf('checkPhaseGate'),
+    );
+
+    // Agents were never spawned; no checkpoint written
+    expect(spawnAgentWithRetry).not.toHaveBeenCalled();
+    expect(writeCheckpoint).not.toHaveBeenCalled();
+  });
+
+  it('(c) 3-step chain counter: every onUpdate shows results.length === 3; final results.length === 3; budget accumulated from all 3 steps', async () => {
+    const step1Usage = { input: 100, output: 50, cacheRead: 0, cacheWrite: 0, cost: 0.001, contextTokens: 150, turns: 1 };
+    const step2Usage = { input: 200, output: 80, cacheRead: 0, cacheWrite: 0, cost: 0.002, contextTokens: 280, turns: 1 };
+    const step3Usage = { input: 150, output: 60, cacheRead: 0, cacheWrite: 0, cost: 0.0015, contextTokens: 210, turns: 1 };
+
+    vi.mocked(spawnAgentWithRetry)
+      .mockImplementation(async () => { callOrder.push('spawnAgentWithRetry'); return makeResult({ usage: step1Usage }); })
+      .mockImplementationOnce(async () => { callOrder.push('spawnAgentWithRetry'); return makeResult({ usage: step1Usage }); })
+      .mockImplementationOnce(async (_cwd, _agent, _task, _vm, _sig, onAgentUpdate) => {
+        callOrder.push('spawnAgentWithRetry');
+        return makeResult({ usage: step2Usage });
+      })
+      .mockImplementationOnce(async () => {
+        callOrder.push('spawnAgentWithRetry');
+        return makeResult({ usage: step3Usage });
+      });
+
+    const updateLengths: number[] = [];
+    const onUpdate = (partial: DispatchResult) => {
+      updateLengths.push(partial.details.results.length);
+    };
+
+    const params: DispatchParams = {
+      chain: [
+        { agent: 'builder', task: 'step 1' },
+        { agent: 'builder', task: 'step 2' },
+        { agent: 'builder', task: 'step 3' },
+      ],
+      phase: 'execute',
+      feature: 'auth',
+    };
+
+    const result = await executeDispatch(params, CWD, EXTENSION_DIR, undefined, onUpdate);
+
+    // All onUpdate calls reported the full 3-slot array
+    expect(updateLengths.length).toBeGreaterThan(0);
+    expect(updateLengths.every((len) => len === 3)).toBe(true);
+
+    // Final result carries all 3 steps
+    expect(result.details.results).toHaveLength(3);
+    expect(result.details.results.every((r) => r.exitCode === 0)).toBe(true);
+
+    // Budget was accumulated across all 3 steps
+    const expectedTokens =
+      (step1Usage.input + step1Usage.output) +
+      (step2Usage.input + step2Usage.output) +
+      (step3Usage.input + step3Usage.output);
+    const expectedCost = step1Usage.cost + step2Usage.cost + step3Usage.cost;
+
+    const budgetCall = vi.mocked(writeStateFile).mock.calls.find(
+      ([, state]) => (state as FlowState).budget.total_tokens > 0,
+    );
+    expect(budgetCall).toBeDefined();
+    const budgetState = budgetCall![1] as FlowState;
+    expect(budgetState.budget.total_tokens).toBe(expectedTokens);
+    expect(budgetState.budget.total_cost_usd).toBeCloseTo(expectedCost, 6);
+  });
+
+  it('(d) chain error at step 2: results.length === 2; writeCheckpoint not called; budget covers steps 1+2 only', async () => {
+    const step1Usage = { input: 100, output: 50, cacheRead: 0, cacheWrite: 0, cost: 0.001, contextTokens: 150, turns: 1 };
+    const step2Usage = { input: 200, output: 80, cacheRead: 0, cacheWrite: 0, cost: 0.002, contextTokens: 280, turns: 1 };
+
+    vi.mocked(spawnAgentWithRetry)
+      .mockResolvedValueOnce(makeResult({ usage: step1Usage, exitCode: 0 }))
+      .mockResolvedValueOnce(makeResult({ usage: step2Usage, exitCode: 1 }));
+
+    const params: DispatchParams = {
+      chain: [
+        { agent: 'builder', task: 'step 1' },
+        { agent: 'builder', task: 'step 2' },
+        { agent: 'builder', task: 'step 3' },
+      ],
+      phase: 'execute',
+      feature: 'auth',
+    };
+
+    const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+    // Only steps 1 and 2 appear in results (step 3 was never attempted)
+    expect(result.details.results).toHaveLength(2);
+
+    // No checkpoint when chain fails
+    expect(writeCheckpoint).not.toHaveBeenCalled();
+
+    // Budget covers only steps 1+2
+    const expectedTokens =
+      (step1Usage.input + step1Usage.output) +
+      (step2Usage.input + step2Usage.output);
+    const expectedCost = step1Usage.cost + step2Usage.cost;
+
+    const budgetCall = vi.mocked(writeStateFile).mock.calls.find(
+      ([, state]) => (state as FlowState).budget.total_tokens > 0,
+    );
+    expect(budgetCall).toBeDefined();
+    const budgetState = budgetCall![1] as FlowState;
+    expect(budgetState.budget.total_tokens).toBe(expectedTokens);
+    expect(budgetState.budget.total_cost_usd).toBeCloseTo(expectedCost, 6);
+
+    // spawnAgentWithRetry was called exactly twice
+    expect(spawnAgentWithRetry).toHaveBeenCalledTimes(2);
+  });
+
+  it('(e) footer auto-fix: writeStateFile called on first dispatch proves state.md is created; second dispatch proceeds without re-init', async () => {
+    // First dispatch: readStateFile returns null → state is created
+    vi.mocked(readStateFile).mockReturnValueOnce(null);
+    vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult());
+
+    const params: DispatchParams = {
+      agent: 'builder',
+      task: 'implement feature',
+      phase: 'execute',
+      feature: 'auth',
+    };
+
+    await executeDispatch(params, CWD, EXTENSION_DIR);
+
+    // writeStateFile was called — state.md would now exist on disk
+    expect(writeStateFile).toHaveBeenCalled();
+    const initCall = vi.mocked(writeStateFile).mock.calls[0];
+    const initState = initCall[1] as FlowState;
+    expect(initState.feature).toBe('auth');
+    expect(initState.budget).toBeDefined();
+
+    // Simulate persistence: next readStateFile returns the written state
+    const writtenState = initState;
+    vi.mocked(readStateFile).mockReturnValue(writtenState);
+    vi.clearAllMocks();
+    callOrder = [];
+
+    // Re-wire order tracking after clearAllMocks
+    vi.mocked(ensureFeatureDir).mockImplementation(() => { callOrder.push('ensureFeatureDir'); });
+    vi.mocked(writeStateFile).mockImplementation(() => { callOrder.push('writeStateFile'); });
+    vi.mocked(checkPhaseGate).mockImplementation(() => {
+      callOrder.push('checkPhaseGate');
+      return { canAdvance: true, reason: 'ok' };
+    });
+    vi.mocked(discoverAgents).mockImplementation(() => {
+      callOrder.push('discoverAgents');
+      return [builder, scout];
+    });
+    vi.mocked(spawnAgentWithRetry).mockImplementation(async () => {
+      callOrder.push('spawnAgentWithRetry');
+      return makeResult();
+    });
+    vi.mocked(writeCheckpoint).mockImplementation(() => { callOrder.push('writeCheckpoint'); });
+    vi.mocked(appendProgressLog).mockImplementation(() => { callOrder.push('appendProgressLog'); });
+    vi.mocked(loadConfig).mockReturnValue(makeConfig());
+    vi.mocked(buildVariableMap).mockReturnValue({ FEATURE_NAME: 'auth' });
+    vi.mocked(writeDispatchLog).mockReturnValue(undefined);
+
+    await executeDispatch(params, CWD, EXTENSION_DIR);
+
+    // Second dispatch skips re-init: ensureFeatureDir NOT called
+    expect(callOrder).not.toContain('ensureFeatureDir');
+    // But still dispatches the agent normally
+    expect(callOrder).toContain('spawnAgentWithRetry');
+  });
+
+  it('(f) readCheckpoint is present in the index.ts import list', () => {
+    const grep = execSync(
+      'grep -n "readCheckpoint" /Users/josorio/Code/pi-flow/src/index.ts',
+      { encoding: 'utf8' },
+    );
+    // Must appear on an import line
+    const importLine = grep.split('\n').find((l) => l.includes('import'));
+    expect(importLine).toBeDefined();
+    expect(importLine).toContain('readCheckpoint');
   });
 });
