@@ -26,7 +26,6 @@ function makeSkill(overrides: Partial<FlowSkillConfig> = {}): FlowSkillConfig {
   return {
     name: 'forcing-questions',
     description: 'Ask questions before implementation.',
-    trigger: 'before implementation',
     body: '### Before starting\n\nAsk 5 questions.',
     source: 'builtin',
     filePath: '/skills/forcing-questions.md',

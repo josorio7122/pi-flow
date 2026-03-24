@@ -21,7 +21,6 @@ export interface FlowAgentConfig {
 export interface FlowSkillConfig {
   name: string;
   description: string;
-  trigger: string;
   body: string; // markdown body after frontmatter
   source: 'builtin' | 'custom';
   filePath: string;

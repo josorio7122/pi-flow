@@ -9,7 +9,6 @@ describe('parseSkillFrontmatter', () => {
     const content = `---
 name: forcing-questions
 description: Ask forcing questions before implementation.
-trigger: before implementation
 ---
 
 ### Before starting
@@ -21,7 +20,6 @@ Ask 5 questions.
     expect(skill).not.toBeNull();
     expect(skill!.name).toBe('forcing-questions');
     expect(skill!.description).toBe('Ask forcing questions before implementation.');
-    expect(skill!.trigger).toBe('before implementation');
     expect(skill!.body).toContain('Ask 5 questions.');
     expect(skill!.source).toBe('builtin');
     expect(skill!.filePath).toBe('/skills/forcing-questions.md');
@@ -38,7 +36,7 @@ Body here.
     const skill = parseSkillFrontmatter(content, '/skills/test.md');
 
     expect(skill).not.toBeNull();
-    expect(skill!.trigger).toBe('');
+    expect(skill!.description).toBe('A test skill.');
     expect(skill!.body).toContain('Body here.');
   });
 
@@ -78,7 +76,6 @@ describe('discoverSkills', () => {
       `---
 name: my-skill
 description: A skill.
-trigger: always
 ---
 
 Do the thing.

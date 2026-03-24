@@ -1,7 +1,6 @@
 ---
 name: design-review
 description: Present design options with trade-offs after codebase analysis and before dispatching the planner. Ensures the user approves the approach before implementation begins.
-trigger: after scout analysis, before planner
 ---
 
 ### Design review — before dispatching planner
@@ -13,12 +12,13 @@ After scouts return analysis, present a design to the user:
    - Project conventions from AGENTS.md
    - Performance budgets, security requirements
 
-2. **Precedent search** — how was a similar problem solved in this codebase?
-   Use the same pattern unless there is a specific reason not to (state the reason).
+2. **Precedent search** — check scout analysis for how a similar problem
+   was solved in this codebase. Use the same pattern unless there is a
+   specific reason not to (state the reason).
 
 3. **Options** — present 2-3 approaches. For each:
    - **How**: one paragraph explaining the approach
-   - **Pros**: concrete advantages (cite codebase evidence)
+   - **Pros**: concrete advantages (cite codebase evidence from scouts)
    - **Cons**: concrete costs — never omit the cost column
    - **Complexity**: low / medium / high
    - **Scope**: estimated file count + list key files

@@ -1,7 +1,6 @@
 ---
 name: investigation
 description: Systematic debugging protocol with root-cause-first analysis and 3-strike escalation. Use when encountering failures, unexpected behavior, or flaky tests.
-trigger: when debugging failures or unexpected behavior
 ---
 
 ### Investigation protocol
@@ -18,14 +17,18 @@ When something fails or behaves unexpectedly:
 
 4. **Verify** — run the failing test or command again. Confirm it passes.
 
-**3-strike rule:** If you have tried 3 distinct approaches and all
-failed, STOP. Tell the user:
-- What you tried (all 3 approaches)
-- Why each failed
-- What you think is actually wrong
-- What information or decision you need
+**3-strike rule:** If 3 distinct approaches all failed, STOP and escalate:
 
-Do not try a fourth approach. Escalate.
+```
+## Escalation: [what failed]
+1. Tried: [approach 1] → Failed because: [reason]
+2. Tried: [approach 2] → Failed because: [reason]
+3. Tried: [approach 3] → Failed because: [reason]
+Hypothesis: [what you think is actually wrong]
+Need: [what information or decision is required]
+```
 
-**Scope lock:** When debugging, restrict changes to the affected files.
+Do not try a fourth approach. Present the escalation to the user.
+
+**Scope lock:** Restrict changes to the affected files.
 Do not refactor adjacent code during a debugging session.

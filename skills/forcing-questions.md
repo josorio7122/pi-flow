@@ -1,10 +1,9 @@
 ---
 name: forcing-questions
 description: Ask structured forcing questions before starting implementation work to eliminate ambiguity and prevent wasted effort.
-trigger: before implementation
 ---
 
-### Before starting any implementation
+### Before starting implementation
 
 Ask up to 5 forcing questions — **one at a time**, not batched.
 Each answer informs whether the next question is still needed.

@@ -42,7 +42,6 @@ export function parseSkillFrontmatter(
   return {
     name,
     description: fields.description ?? '',
-    trigger: fields.trigger ?? '',
     body: body.trim(),
     source: 'builtin',
     filePath,
