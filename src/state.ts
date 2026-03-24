@@ -2,41 +2,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { FlowState } from './types.js';
 
-// ─── readFrontmatter ──────────────────────────────────────────────────────────
-
-/**
- * Extracts YAML frontmatter from a markdown string and returns it as a
- * Record<string, string> with raw (un-coerced) string values.
- * Returns an empty object if no frontmatter block is present.
- */
-export function readFrontmatter(content: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  const lines = content.split('\n');
-  if (lines[0]?.trim() !== '---') return result;
-
-  let end = -1;
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i]?.trim() === '---') {
-      end = i;
-      break;
-    }
-  }
-  if (end === -1) return result;
-
-  for (let i = 1; i < end; i++) {
-    const line = lines[i];
-    if (!line || line.trimStart().startsWith('#')) continue;
-    const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    const rawValue = line.slice(colonIdx + 1).trim();
-    if (!key || rawValue === '') continue;
-    result[key] = rawValue;
-  }
-
-  return result;
-}
-
 // ─── findFlowDir ──────────────────────────────────────────────────────────────
 
 /**
@@ -143,112 +108,13 @@ export function appendProgressLog(featureDir: string, message: string): void {
   fs.writeFileSync(statePath, current + entry);
 }
 
-// ─── readPhaseFile ────────────────────────────────────────────────────────────
 
-/**
- * Reads any phase file (spec.md, analysis.md, etc.) from `featureDir`.
- * Returns null if the file does not exist.
- */
-export function readPhaseFile(featureDir: string, filename: string): string | null {
-  const filePath = path.join(featureDir, filename);
-  if (!fs.existsSync(filePath)) return null;
-  try {
-    return fs.readFileSync(filePath, 'utf8');
-  } catch {
-    return null;
-  }
-}
-
-// ─── writePhaseFile ───────────────────────────────────────────────────────────
-
-/**
- * Writes a phase file to `<featureDir>/<filename>`.
- * Creates any intermediate directories as needed.
- */
-export function writePhaseFile(featureDir: string, filename: string, content: string): void {
-  const filePath = path.join(featureDir, filename);
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, content);
-}
-
-// ─── updateFrontmatter ────────────────────────────────────────────────────────
-
-/**
- * Updates specific frontmatter fields in `<featureDir>/<filename>` without
- * touching the markdown body.  Existing keys are overwritten in-place;
- * new keys are inserted before the closing `---`.
- */
-export function updateFrontmatter(
-  featureDir: string,
-  filename: string,
-  updates: Record<string, string>,
-): void {
-  const filePath = path.join(featureDir, filename);
-  const content = fs.readFileSync(filePath, 'utf8');
-  const lines = content.split('\n');
-
-  // If there is no frontmatter, prepend one.
-  if (lines[0]?.trim() !== '---') {
-    const fm: string[] = ['---'];
-    for (const [k, v] of Object.entries(updates)) {
-      fm.push(`${k}: ${v}`);
-    }
-    fm.push('---');
-    fs.writeFileSync(filePath, fm.join('\n') + '\n' + content);
-    return;
-  }
-
-  let end = -1;
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i]?.trim() === '---') {
-      end = i;
-      break;
-    }
-  }
-
-  if (end === -1) {
-    // Unclosed frontmatter — just append to end of file.
-    const extra = Object.entries(updates).map(([k, v]) => `${k}: ${v}`);
-    fs.writeFileSync(filePath, content + '\n' + extra.join('\n') + '\n');
-    return;
-  }
-
-  const newLines = [...lines];
-  const updatedKeys = new Set<string>();
-
-  for (let i = 1; i < end; i++) {
-    const line = lines[i];
-    if (!line) continue;
-    const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    if (key in updates) {
-      newLines[i] = `${key}: ${updates[key]}`;
-      updatedKeys.add(key);
-    }
-  }
-
-  // Insert new keys before the closing ---.
-  const toAdd: string[] = [];
-  for (const [k, v] of Object.entries(updates)) {
-    if (!updatedKeys.has(k)) {
-      toAdd.push(`${k}: ${v}`);
-    }
-  }
-
-  if (toAdd.length > 0) {
-    newLines.splice(end, 0, ...toAdd);
-  }
-
-  fs.writeFileSync(filePath, newLines.join('\n'));
-}
 
 // ─── writeCheckpoint ─────────────────────────────────────────────────────────
 
 /**
- * Writes a checkpoint XML file to `<featureDir>/checkpoints/`.
- * Filename: `<phase>.xml` (no wave) or `<phase>-wave-<n>.xml`.
- * Also copies the data to `latest.xml` — a regular file, not a symlink.
+ * Writes a checkpoint JSON file to `<featureDir>/checkpoints/`.
+ * Filename: `<timestamp>.json`. Also copies to `latest.json`.
  */
 export function writeCheckpoint(
   featureDir: string,
@@ -268,11 +134,11 @@ export function writeCheckpoint(
 // ─── readCheckpoint ───────────────────────────────────────────────────────────
 
 /**
- * Reads the latest checkpoint from `<featureDir>/checkpoints/latest.xml`.
+ * Reads the latest checkpoint from `<featureDir>/checkpoints/latest.json`.
  * Returns null if the file does not exist.
  */
 export function readCheckpoint(featureDir: string): string | null {
-  const latestPath = path.join(featureDir, 'checkpoints', 'latest.xml');
+  const latestPath = path.join(featureDir, 'checkpoints', 'latest.json');
   if (!fs.existsSync(latestPath)) return null;
   try {
     return fs.readFileSync(latestPath, 'utf8');
@@ -330,7 +196,7 @@ function extractBody(content: string): string {
 /**
  * Serialises a FlowState into a YAML frontmatter block.
  * Nested objects are flattened with underscore-delimited keys so that the
- * output is parseable with the simple single-level readFrontmatter.
+ * output is parseable with a simple single-level frontmatter parser.
  */
 function serializeFlowState(state: FlowState): string {
   const lines = [

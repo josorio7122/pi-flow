@@ -8,8 +8,6 @@ import {
   appendPattern,
   appendLesson,
   readMemoryFile,
-  searchMemory,
-  writeBackMemory,
 } from './memory.js';
 
 let tmpDir: string;
@@ -28,7 +26,7 @@ describe('ensureMemoryDir', () => {
   it('creates .flow/memory/ if it does not exist', () => {
     const memDir = ensureMemoryDir(tmpDir);
     expect(fs.existsSync(memDir)).toBe(true);
-    expect(memDir).toBe(path.join(tmpDir, '.flow', 'memory'));
+    expect(memDir).toBe(path.join(tmpDir, 'memory'));
   });
 
   it('returns the memory dir path even when it already exists', () => {
@@ -51,7 +49,7 @@ describe('appendDecision', () => {
       date: '2026-03-24',
     });
 
-    const decisionsPath = path.join(tmpDir, '.flow', 'memory', 'decisions.md');
+    const decisionsPath = path.join(tmpDir, 'memory', 'decisions.md');
     expect(fs.existsSync(decisionsPath)).toBe(true);
 
     const content = fs.readFileSync(decisionsPath, 'utf8');
@@ -78,7 +76,7 @@ describe('appendDecision', () => {
       date: '2026-03-25',
     });
 
-    const content = fs.readFileSync(path.join(tmpDir, '.flow', 'memory', 'decisions.md'), 'utf8');
+    const content = fs.readFileSync(path.join(tmpDir, 'memory', 'decisions.md'), 'utf8');
     expect(content).toContain('## feature-a — 2026-03-24');
     expect(content).toContain('## feature-b — 2026-03-25');
   });
@@ -95,7 +93,7 @@ describe('appendPattern', () => {
       date: '2026-03-24',
     });
 
-    const patternsPath = path.join(tmpDir, '.flow', 'memory', 'patterns.md');
+    const patternsPath = path.join(tmpDir, 'memory', 'patterns.md');
     expect(fs.existsSync(patternsPath)).toBe(true);
 
     const content = fs.readFileSync(patternsPath, 'utf8');
@@ -119,7 +117,7 @@ describe('appendPattern', () => {
       date: '2026-03-25',
     });
 
-    const content = fs.readFileSync(path.join(tmpDir, '.flow', 'memory', 'patterns.md'), 'utf8');
+    const content = fs.readFileSync(path.join(tmpDir, 'memory', 'patterns.md'), 'utf8');
     expect(content).toContain('## Pattern A — first seen 2026-03-24');
     expect(content).toContain('## Pattern B — first seen 2026-03-25');
   });
@@ -136,7 +134,7 @@ describe('appendLesson', () => {
       date: '2026-03-24',
     });
 
-    const lessonsPath = path.join(tmpDir, '.flow', 'memory', 'lessons.md');
+    const lessonsPath = path.join(tmpDir, 'memory', 'lessons.md');
     expect(fs.existsSync(lessonsPath)).toBe(true);
 
     const content = fs.readFileSync(lessonsPath, 'utf8');
@@ -162,7 +160,7 @@ describe('appendLesson', () => {
       date: '2026-03-25',
     });
 
-    const content = fs.readFileSync(path.join(tmpDir, '.flow', 'memory', 'lessons.md'), 'utf8');
+    const content = fs.readFileSync(path.join(tmpDir, 'memory', 'lessons.md'), 'utf8');
     expect(content).toContain('## Lesson A — 2026-03-24');
     expect(content).toContain('## Lesson B — 2026-03-25');
   });
@@ -178,207 +176,8 @@ describe('readMemoryFile', () => {
 
   it('returns file content when it exists', () => {
     ensureMemoryDir(tmpDir);
-    fs.writeFileSync(path.join(tmpDir, '.flow', 'memory', 'decisions.md'), 'hello memory');
+    fs.writeFileSync(path.join(tmpDir, 'memory', 'decisions.md'), 'hello memory');
     expect(readMemoryFile(tmpDir, 'decisions.md')).toBe('hello memory');
   });
 });
 
-// ─── searchMemory ─────────────────────────────────────────────────────────────
-
-describe('searchMemory', () => {
-  it('returns empty string when no memory files exist', () => {
-    const result = searchMemory(tmpDir, 'redis');
-    expect(result).toBe('');
-  });
-
-  it('returns matching sections ranked by keyword hits', () => {
-    ensureMemoryDir(tmpDir);
-    // Write a decisions.md with two sections
-    fs.writeFileSync(
-      path.join(tmpDir, '.flow', 'memory', 'decisions.md'),
-      [
-        '## auth-refresh — 2026-03-24',
-        '**Decision:** Use Redis for token blacklist',
-        '**Approach:** Redis TTL-based eviction',
-        '**Outcome:** PASSED',
-        '---',
-        '## payment-flow — 2026-03-25',
-        '**Decision:** Stripe webhooks',
-        '**Approach:** Queue-based processing',
-        '**Outcome:** PASSED',
-        '---',
-      ].join('\n'),
-    );
-
-    // "redis" appears twice in the first section → should be ranked first
-    const result = searchMemory(tmpDir, 'redis');
-    expect(result).toContain('auth-refresh');
-    // payment section has 0 redis matches so not included in top 1
-    expect(result).not.toContain('payment-flow');
-  });
-
-  it('searches across all three memory files', () => {
-    ensureMemoryDir(tmpDir);
-    fs.writeFileSync(
-      path.join(tmpDir, '.flow', 'memory', 'decisions.md'),
-      '## decision-section — 2026-03-24\nsome content here\n---\n',
-    );
-    fs.writeFileSync(
-      path.join(tmpDir, '.flow', 'memory', 'patterns.md'),
-      '## pattern-section — first seen 2026-03-24\nsome pattern content\n---\n',
-    );
-    fs.writeFileSync(
-      path.join(tmpDir, '.flow', 'memory', 'lessons.md'),
-      '## lesson-section — 2026-03-24\nsome lesson content\n---\n',
-    );
-
-    const result = searchMemory(tmpDir, 'some', 3);
-    expect(result).toContain('decision-section');
-    expect(result).toContain('pattern-section');
-    expect(result).toContain('lesson-section');
-  });
-
-  it('respects maxResults limit', () => {
-    ensureMemoryDir(tmpDir);
-    const sections = Array.from({ length: 5 }, (_, i) =>
-      [`## section-${i} — 2026-03-24`, `content keyword`, '---'].join('\n'),
-    ).join('\n');
-    fs.writeFileSync(path.join(tmpDir, '.flow', 'memory', 'decisions.md'), sections);
-
-    const result = searchMemory(tmpDir, 'keyword', 2);
-    const matches = result.match(/## section-/g) ?? [];
-    expect(matches.length).toBe(2);
-  });
-
-  it('returns empty string when query has no matches', () => {
-    ensureMemoryDir(tmpDir);
-    fs.writeFileSync(
-      path.join(tmpDir, '.flow', 'memory', 'decisions.md'),
-      '## some-feature — 2026-03-24\nsome content\n---\n',
-    );
-    const result = searchMemory(tmpDir, 'zzznomatch');
-    expect(result).toBe('');
-  });
-
-  it('defaults to maxResults = 3', () => {
-    ensureMemoryDir(tmpDir);
-    const sections = Array.from({ length: 5 }, (_, i) =>
-      [`## section-${i} — 2026-03-24`, `content keyword`, '---'].join('\n'),
-    ).join('\n');
-    fs.writeFileSync(path.join(tmpDir, '.flow', 'memory', 'decisions.md'), sections);
-
-    const result = searchMemory(tmpDir, 'keyword');
-    const matches = result.match(/## section-/g) ?? [];
-    expect(matches.length).toBe(3);
-  });
-});
-
-// ─── writeBackMemory ──────────────────────────────────────────────────────────
-
-describe('writeBackMemory', () => {
-  it('does nothing when ship-log.md does not exist', () => {
-    const featureDir = path.join(tmpDir, '.flow', 'features', 'my-feature');
-    fs.mkdirSync(featureDir, { recursive: true });
-
-    writeBackMemory(tmpDir, featureDir);
-
-    const memDir = path.join(tmpDir, '.flow', 'memory');
-    expect(fs.existsSync(path.join(memDir, 'decisions.md'))).toBe(false);
-  });
-
-  it('extracts and appends the Decisions section from ship-log.md', () => {
-    const featureDir = path.join(tmpDir, '.flow', 'features', 'my-feature');
-    fs.mkdirSync(featureDir, { recursive: true });
-
-    fs.writeFileSync(
-      path.join(featureDir, 'ship-log.md'),
-      [
-        '---',
-        'feature: my-feature',
-        'shipped_at: 2026-03-24',
-        '---',
-        '',
-        '# Ship Log: My Feature',
-        '',
-        '## Decisions',
-        'Used Redis for caching with TTL strategy.',
-        '',
-        '## CI',
-        'Status: passing',
-      ].join('\n'),
-    );
-
-    writeBackMemory(tmpDir, featureDir);
-
-    const decisionsContent = fs.readFileSync(
-      path.join(tmpDir, '.flow', 'memory', 'decisions.md'),
-      'utf8',
-    );
-    expect(decisionsContent).toContain('Redis');
-  });
-
-  it('extracts and appends the Patterns section from ship-log.md', () => {
-    const featureDir = path.join(tmpDir, '.flow', 'features', 'my-feature');
-    fs.mkdirSync(featureDir, { recursive: true });
-
-    fs.writeFileSync(
-      path.join(featureDir, 'ship-log.md'),
-      [
-        '# Ship Log',
-        '## Patterns',
-        'Result<T> used throughout service layer.',
-        '## CI',
-        'passing',
-      ].join('\n'),
-    );
-
-    writeBackMemory(tmpDir, featureDir);
-
-    const patternsContent = fs.readFileSync(
-      path.join(tmpDir, '.flow', 'memory', 'patterns.md'),
-      'utf8',
-    );
-    expect(patternsContent).toContain('Result<T>');
-  });
-
-  it('extracts and appends the Lessons section from ship-log.md', () => {
-    const featureDir = path.join(tmpDir, '.flow', 'features', 'my-feature');
-    fs.mkdirSync(featureDir, { recursive: true });
-
-    fs.writeFileSync(
-      path.join(featureDir, 'ship-log.md'),
-      [
-        '# Ship Log',
-        '## Lessons',
-        'Always add rate limits to mutation endpoints.',
-        '## CI',
-        'passing',
-      ].join('\n'),
-    );
-
-    writeBackMemory(tmpDir, featureDir);
-
-    const lessonsContent = fs.readFileSync(
-      path.join(tmpDir, '.flow', 'memory', 'lessons.md'),
-      'utf8',
-    );
-    expect(lessonsContent).toContain('rate limits');
-  });
-
-  it('skips sections not present in ship-log.md', () => {
-    const featureDir = path.join(tmpDir, '.flow', 'features', 'my-feature');
-    fs.mkdirSync(featureDir, { recursive: true });
-
-    fs.writeFileSync(
-      path.join(featureDir, 'ship-log.md'),
-      ['# Ship Log', '## CI', 'passing'].join('\n'),
-    );
-
-    writeBackMemory(tmpDir, featureDir);
-
-    const memDir = path.join(tmpDir, '.flow', 'memory');
-    expect(fs.existsSync(path.join(memDir, 'decisions.md'))).toBe(false);
-    expect(fs.existsSync(path.join(memDir, 'patterns.md'))).toBe(false);
-    expect(fs.existsSync(path.join(memDir, 'lessons.md'))).toBe(false);
-  });
-});

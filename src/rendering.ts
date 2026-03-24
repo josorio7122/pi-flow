@@ -804,43 +804,4 @@ export function buildFlowResult(
   return root;
 }
 
-// ─── renderFlowStatus ─────────────────────────────────────────────────────────
 
-/**
- * One-liner footer status for ctx.ui.setStatus().
- *
- *   ● auth-refresh  |  EXECUTE wave 2/4  |  $2.34  |  1 HALT
- *
- * Icon is success-colored when no halts, warning-colored when halts exist.
- * Budget uses dim color. HALT count uses error color.
- */
-export function renderFlowStatus(
-  feature: string,
-  phase: string,
-  wave: number | null,
-  waveCount: number | null,
-  budgetUsd: number,
-  openHalts: number,
-  colorize: Colorize,
-  _bold: Bold,
-): string {
-  const sep = colorize('muted', '  |  ');
-  const runIcon = openHalts > 0 ? colorize('warning', '●') : colorize('success', '●');
-
-  const featurePart = colorize('accent', feature);
-
-  let phasePart = colorize('accent', phase.toUpperCase());
-  if (wave !== null && waveCount !== null) {
-    phasePart += colorize('dim', ` wave ${wave}/${waveCount}`);
-  }
-
-  const budgetPart = colorize('dim', `$${budgetUsd.toFixed(2)}`);
-
-  let status = `${runIcon} ${featurePart}${sep}${phasePart}${sep}${budgetPart}`;
-
-  if (openHalts > 0) {
-    status += sep + colorize('error', `${openHalts} HALT`);
-  }
-
-  return status;
-}

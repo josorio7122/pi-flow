@@ -211,7 +211,7 @@ export function extractSection(content: string, heading: string): string {
  * `systemPrompt`.
  *
  * Handles:
- * - Tools/phases/variables as either YAML list or comma-separated string
+ * - Tools/variables/writes as either YAML list or comma-separated string
  * - Nested `limits:` object with `max_tokens` and `max_steps`
  * - Folded description strings (`description: >`)
  */
@@ -255,7 +255,7 @@ const ALLOWED_TOOLS = new Set(['read', 'write', 'edit', 'bash', 'grep', 'find', 
  * An empty array means the agent is valid.
  *
  * Checks:
- * - Required fields: name, model, tools, phases
+ * - Required fields: name, model, tools
  * - Model must be a valid Claude model string (contains "claude")
  * - Tools must be from the allowed set
  * - If writable === false, write and edit are not permitted in tools
@@ -392,8 +392,8 @@ export function readAgentsMd(cwd: string): string {
 /**
  * Builds the complete variable map for injecting into agent system prompts.
  *
- * Reads from the feature directory's phase files (spec.md, design.md,
- * tasks.md, sentinel-log.md) and cross-feature memory files
+ * Reads from the feature directory's artifact files (spec.md, design.md,
+ * tasks.md) and cross-feature memory files
  * (.flow/memory/decisions.md, patterns.md, lessons.md).
  *
  * Per §13 B8 (canonical variable table) and §14 S3 (AGENTS_MD variable).
@@ -417,20 +417,34 @@ export function buildVariableMap(
   const specContent = safeRead(path.join(featureDir, 'spec.md'));
   const designContent = safeRead(path.join(featureDir, 'design.md'));
   const tasksContent = safeRead(path.join(featureDir, 'tasks.md'));
+  const analysisContent = safeRead(path.join(featureDir, 'analysis.md'));
 
   return {
     FEATURE_NAME: featureName,
     FEATURE_DIR: featureDir,
     AGENTS_MD: readAgentsMd(cwd),
+
+    // Spec variables
     SPEC_GOAL: extractSection(specContent, '## Goal'),
     SPEC_BEHAVIORS: extractSection(specContent, '## Behaviors'),
     SPEC_ERROR_CASES: extractSection(specContent, '## Error Cases'),
+
+    // Design variables
     CHOSEN_APPROACH: extractSection(designContent, '## Decision'),
     DESIGN_SUMMARY: extractSection(designContent, '## Decision'),
+
+    // Tasks
     WAVE_TASKS: tasksContent,
+
+    // Analysis
+    ANALYSIS_SUMMARY: analysisContent,
+
+    // Memory
     MEMORY_DECISIONS: safeRead(path.join(memoryDir, 'decisions.md')),
     MEMORY_PATTERNS: safeRead(path.join(memoryDir, 'patterns.md')),
     MEMORY_LESSONS: safeRead(path.join(memoryDir, 'lessons.md')),
+
+    // Git
     BASE_BRANCH: detectBaseBranch(cwd),
   };
 }

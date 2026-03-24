@@ -1,5 +1,3 @@
-import { execSync } from 'node:child_process';
-
 // ── Budget guards ─────────────────────────────────────────────────────────────
 
 export interface BudgetCheckResult {
@@ -82,7 +80,7 @@ export interface LoopDetectionResult {
 
 /**
  * Creates a deterministic hash key for a (tool, args) pair by sorting the
- * args object's keys before stringifying. Returns a compact numeric string.
+ * args object's keys before stringifying.
  */
 export function hashToolCall(tool: string, args: Record<string, unknown>): string {
   const sortedArgs = sortedStringify(args);
@@ -101,7 +99,6 @@ export function detectLoop(
 ): LoopDetectionResult {
   const slice = history.slice(-window);
 
-  // Count occurrences of each composite key in the window
   const counts = new Map<string, { tool: string; count: number }>();
 
   for (const entry of slice) {
@@ -114,7 +111,6 @@ export function detectLoop(
     }
   }
 
-  // Find the maximum-count pair
   let maxCount = 0;
   let maxTool: string | null = null;
 
@@ -130,168 +126,6 @@ export function detectLoop(
   }
 
   return { tripped: false, tool: null, count: maxCount };
-}
-
-// ── Scope creep ───────────────────────────────────────────────────────────────
-
-export interface ScopeCreepResult {
-  warn: boolean;
-  halt: boolean;
-  ratio: number;
-  message: string;
-}
-
-/**
- * Checks whether the number of actually-changed files has grown beyond the
- * planned count by more than the warning or halt thresholds.
- *
- * Per §13 C7: thresholds are strictly greater-than (ratio > 1 + threshold),
- * so a ratio of exactly 1.30 with haltThreshold=0.30 does NOT halt.
- *
- * @param plannedFiles     - files declared in this wave's scope
- * @param actualFiles      - files actually changed
- * @param warningThreshold - default 0.20 (warn when ratio > 1.20)
- * @param haltThreshold    - default 0.30 (halt when ratio > 1.30)
- */
-export function checkScopeCreep(
-  plannedFiles: number,
-  actualFiles: number,
-  warningThreshold: number,
-  haltThreshold: number,
-): ScopeCreepResult {
-  // Treat 0 planned files as no-op (ratio 1) to avoid division by zero
-  const ratio = plannedFiles > 0 ? actualFiles / plannedFiles : 1;
-
-  if (ratio > 1 + haltThreshold) {
-    return {
-      warn: true,
-      halt: true,
-      ratio,
-      message:
-        `HALT: Scope creep detected. ${actualFiles} files changed, ${plannedFiles} planned ` +
-        `(ratio ${ratio.toFixed(2)} > ${(1 + haltThreshold).toFixed(2)}).`,
-    };
-  }
-
-  if (ratio > 1 + warningThreshold) {
-    return {
-      warn: true,
-      halt: false,
-      ratio,
-      message:
-        `WARN: Scope expanding. ${actualFiles} files changed, ${plannedFiles} planned ` +
-        `(ratio ${ratio.toFixed(2)}).`,
-    };
-  }
-
-  return {
-    warn: false,
-    halt: false,
-    ratio,
-    message: `OK: ${actualFiles}/${plannedFiles} files changed.`,
-  };
-}
-
-// ── Analysis paralysis ────────────────────────────────────────────────────────
-
-export interface AnalysisParalysisResult {
-  tripped: boolean;
-  count: number;
-}
-
-const READ_ONLY_TOOLS = new Set(['read', 'grep', 'find', 'ls']);
-
-/**
- * Counts consecutive read-only tool calls from the end of the array.
- * bash, write, and edit reset the streak to zero.
- * Trips when the streak reaches `threshold`.
- */
-export function checkAnalysisParalysis(
-  recentCalls: Array<{ tool: string }>,
-  threshold: number,
-): AnalysisParalysisResult {
-  let count = 0;
-
-  // Walk backwards from the end to find the streak length
-  for (let i = recentCalls.length - 1; i >= 0; i--) {
-    if (READ_ONLY_TOOLS.has(recentCalls[i].tool)) {
-      count += 1;
-    } else {
-      // Action tool encountered — streak ends here
-      break;
-    }
-  }
-
-  return { tripped: count >= threshold, count };
-}
-
-// ── Git activity watchdog ─────────────────────────────────────────────────────
-
-export interface GitActivityResult {
-  hasCommits: boolean;
-  commitCount: number;
-}
-
-/**
- * Runs `git log --oneline --since="N minutes ago"` in `cwd` and returns the
- * count of commits. Handles errors gracefully (not a git repo, etc.).
- */
-export async function checkGitActivity(
-  cwd: string,
-  sinceMinutes: number,
-): Promise<GitActivityResult> {
-  try {
-    const output = execSync(`git log --oneline --since="${sinceMinutes} minutes ago"`, {
-      cwd,
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-
-    const lines = output.split('\n').filter((l) => l.trim().length > 0);
-    return { hasCommits: lines.length > 0, commitCount: lines.length };
-  } catch {
-    return { hasCommits: false, commitCount: 0 };
-  }
-}
-
-// ── Cost estimation ───────────────────────────────────────────────────────────
-
-interface ModelPricing {
-  inputPerMillion: number;
-  outputPerMillion: number;
-}
-
-const PRICING: Record<string, ModelPricing> = {
-  sonnet: { inputPerMillion: 3.0, outputPerMillion: 15.0 },
-  opus: { inputPerMillion: 15.0, outputPerMillion: 75.0 },
-  haiku: { inputPerMillion: 0.25, outputPerMillion: 1.25 },
-};
-
-/**
- * Estimates USD cost for a model + usage combination.
- * Matches model tier by substring: "sonnet", "opus", "haiku".
- * Falls back to sonnet pricing for unknown models.
- */
-export function estimateCost(
-  model: string,
-  usage: { input: number; output: number; cacheRead: number; cacheWrite: number },
-): number {
-  const modelLower = model.toLowerCase();
-
-  let pricing: ModelPricing;
-  if (modelLower.includes('opus')) {
-    pricing = PRICING.opus;
-  } else if (modelLower.includes('haiku')) {
-    pricing = PRICING.haiku;
-  } else {
-    // sonnet or unknown — fall back to sonnet
-    pricing = PRICING.sonnet;
-  }
-
-  const inputCost = (usage.input / 1_000_000) * pricing.inputPerMillion;
-  const outputCost = (usage.output / 1_000_000) * pricing.outputPerMillion;
-
-  return inputCost + outputCost;
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -312,7 +146,7 @@ function simpleHash(str: string): number {
   let hash = 5381;
   for (let i = 0; i < str.length; i++) {
     hash = ((hash << 5) + hash) ^ str.charCodeAt(i);
-    hash = hash >>> 0; // keep unsigned 32-bit
+    hash = hash >>> 0;
   }
   return hash;
 }

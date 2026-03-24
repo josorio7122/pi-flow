@@ -69,7 +69,7 @@ import {
   renderSingleResult,
   renderParallelResult,
   renderChainResult,
-  renderFlowStatus,
+
   buildAgentCardComponent,
   buildFlowResult,
 } from './rendering.js';
@@ -824,63 +824,7 @@ describe('renderChainResult', () => {
   });
 });
 
-// ─── renderFlowStatus ────────────────────────────────────────────────────────
 
-describe('renderFlowStatus', () => {
-  it('includes feature name, phase, budget', () => {
-    const text = renderFlowStatus('auth-refresh', 'execute', null, null, 2.34, 0, noColor, noBold);
-    expect(text).toContain('auth-refresh');
-    expect(text).toContain('EXECUTE');
-    expect(text).toContain('$2.34');
-  });
-
-  it('includes wave info when wave is set', () => {
-    const text = renderFlowStatus('auth-refresh', 'execute', 2, 4, 2.34, 0, noColor, noBold);
-    expect(text).toContain('wave 2/4');
-  });
-
-  it('omits wave info when wave is null', () => {
-    const text = renderFlowStatus('auth-refresh', 'spec', null, null, 0.5, 0, noColor, noBold);
-    expect(text).not.toContain('wave');
-  });
-
-  it('shows HALT count when openHalts > 0', () => {
-    const text = renderFlowStatus('auth-refresh', 'execute', 2, 4, 2.34, 1, noColor, noBold);
-    expect(text).toContain('1 HALT');
-  });
-
-  it('omits HALT section when openHalts is 0', () => {
-    const text = renderFlowStatus('auth-refresh', 'execute', 2, 4, 2.34, 0, noColor, noBold);
-    expect(text).not.toContain('HALT');
-  });
-
-  it('uses separator between sections', () => {
-    const text = renderFlowStatus('auth-refresh', 'execute', null, null, 2.34, 0, noColor, noBold);
-    expect(text).toContain('|');
-  });
-
-  it('formats phase name in uppercase', () => {
-    const text = renderFlowStatus('feature', 'execute', null, null, 0, 0, noColor, noBold);
-    expect(text).toContain('EXECUTE');
-  });
-
-  it('formats budget with 2 decimal places', () => {
-    const text = renderFlowStatus('feature', 'spec', null, null, 1.5, 0, noColor, noBold);
-    expect(text).toContain('$1.50');
-  });
-
-  it('applies colorize to all parts', () => {
-    const colors: string[] = [];
-    const trackColor: Colorize = (color, text) => {
-      colors.push(color);
-      return text;
-    };
-    renderFlowStatus('feature', 'execute', 1, 2, 1.0, 1, trackColor, noBold);
-    expect(colors).toContain('accent');
-    expect(colors).toContain('dim');
-    expect(colors).toContain('error');
-  });
-});
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
