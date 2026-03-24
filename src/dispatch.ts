@@ -339,21 +339,25 @@ export async function executeDispatch(
     // State initialization: create state.md if this is the first dispatch for this feature
     let currentState = readStateFile(featureDir);
     if (!currentState) {
-      ensureFeatureDir(cwd, params.feature);
-      currentState = {
-        feature: params.feature,
-        change_type: 'feature',
-        current_phase: params.phase,
-        current_wave: params.wave ?? null,
-        wave_count: null,
-        skipped_phases: [],
-        started_at: new Date().toISOString(),
-        last_updated: new Date().toISOString(),
-        budget: { total_tokens: 0, total_cost_usd: 0 },
-        gates: { spec_approved: false, design_approved: false, review_verdict: null },
-        sentinel: { open_halts: 0, open_warns: 0 },
-      } satisfies FlowState;
-      writeStateFile(featureDir, currentState);
+      try {
+        ensureFeatureDir(cwd, params.feature);
+        currentState = {
+          feature: params.feature,
+          change_type: 'feature',
+          current_phase: params.phase,
+          current_wave: params.wave ?? null,
+          wave_count: null,
+          skipped_phases: [],
+          started_at: new Date().toISOString(),
+          last_updated: new Date().toISOString(),
+          budget: { total_tokens: 0, total_cost_usd: 0 },
+          gates: { spec_approved: false, design_approved: false, review_verdict: null },
+          sentinel: { open_halts: 0, open_warns: 0 },
+        } satisfies FlowState;
+        writeStateFile(featureDir, currentState);
+      } catch {
+        // State init failure is non-fatal — proceed without state tracking
+      }
     }
 
     // Gate enforcement: check if the workflow can advance to this phase
@@ -565,10 +569,10 @@ function markTaskComplete(featureDir: string, taskString: string): void {
   if (!fs.existsSync(tasksPath)) return;
 
   const content = fs.readFileSync(tasksPath, 'utf8') as string;
-  const pattern = `- [ ] ${taskId}`;
-  if (!content.includes(pattern)) return;
+  const replacePattern = new RegExp(`- \\[ \\] ${taskId}\\b`);
+  if (!replacePattern.test(content)) return;
 
-  const updated = content.replace(pattern, `- [x] ${taskId}`);
+  const updated = content.replace(replacePattern, `- [x] ${taskId}`);
   fs.writeFileSync(tasksPath, updated, 'utf8');
 }
 

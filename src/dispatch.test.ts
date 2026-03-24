@@ -2121,4 +2121,94 @@ describe('integration: full lifecycle sequence', () => {
     expect(importLine).toBeDefined();
     expect(importLine).toContain('readCheckpoint');
   });
+
+  // ─── WARN-1: markTaskComplete substring collision ────────────────────────
+
+  describe('markTaskComplete substring collision (WARN-1)', () => {
+    it('marking task-1.1 does not corrupt task-1.10 when only task-1.10 exists', async () => {
+      // Bug: content.includes('- [ ] task-1.1') returns true even for task-1.10
+      // because '- [ ] task-1.1' is a substring of '- [ ] task-1.10'.
+      // Without the word-boundary fix, the replace corrupts task-1.10.
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(checkPhaseGate).mockReturnValue({ canAdvance: true, reason: 'ok' });
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(
+        makeResult({ task: 'implement task-1.1', exitCode: 0 }),
+      );
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      // Only task-1.10 exists — task-1.1 is NOT present
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        '- [ ] task-1.10\n- [ ] task-1.2\n' as unknown as Buffer,
+      );
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement task-1.1',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      // task-1.1 is absent → writeFileSync should NOT be called (no-op)
+      // If it IS called, the written content must not corrupt task-1.10
+      if (vi.mocked(fs.writeFileSync).mock.calls.length > 0) {
+        const writtenContent = vi.mocked(fs.writeFileSync).mock.calls[0][1] as string;
+        expect(writtenContent).not.toContain('- [x] task-1.10');
+        expect(writtenContent).toContain('- [ ] task-1.10');
+      } else {
+        // Preferred: no write at all (correct no-op behaviour)
+        expect(fs.writeFileSync).not.toHaveBeenCalled();
+      }
+    });
+
+    it('marking task-1.1 complete does not affect task-1.10 when both exist', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(checkPhaseGate).mockReturnValue({ canAdvance: true, reason: 'ok' });
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(
+        makeResult({ task: 'implement task-1.1', exitCode: 0 }),
+      );
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        '- [ ] task-1.1\n- [ ] task-1.10\n' as unknown as Buffer,
+      );
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement task-1.1',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(fs.writeFileSync).toHaveBeenCalled();
+      const writtenContent = vi.mocked(fs.writeFileSync).mock.calls[0][1] as string;
+      expect(writtenContent).toContain('- [x] task-1.1\n');
+      expect(writtenContent).toContain('- [ ] task-1.10');
+    });
+  });
+
+  // ─── WARN-2: Init writeStateFile not try-caught ──────────────────────────
+
+  describe('state init error resilience (WARN-2)', () => {
+    it('first dispatch: writeStateFile throwing during init does not propagate as isError', async () => {
+      vi.mocked(readStateFile).mockReturnValue(null);
+      vi.mocked(writeStateFile).mockImplementationOnce(() => {
+        throw new Error('disk full on init');
+      });
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult());
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement task-1.1',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toBeTruthy();
+    });
+  });
 });

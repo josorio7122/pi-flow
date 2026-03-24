@@ -812,7 +812,7 @@ export default function piFlow(pi: any) {
     updateFooterStatus(state, ctx.ui);
 
     // If there is a checkpoint, remind the coordinator to resume
-    const checkpoint = readCheckpoint ? readCheckpoint(featureDir) : null;
+    const checkpoint = readCheckpoint(featureDir);
     if (checkpoint) {
       // Use sendMessage to inject the resume snapshot into the next turn
       pi.sendMessage(
