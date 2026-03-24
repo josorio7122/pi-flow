@@ -390,6 +390,51 @@ describe('agent_end hook', () => {
     expect(pi.sendMessage).toHaveBeenCalledTimes(1);
   });
 
+  it('does not nudge when the last assistant message was aborted', async () => {
+    const pi = makePiMock();
+    piFlow(pi);
+
+    vi.mocked(findFlowDir).mockReturnValue('/project/.flow');
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readdirSync).mockReturnValue(['my-feature'] as any);
+    vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as any);
+    vi.mocked(readStateFile).mockReturnValue(makeFlowState() as any);
+
+    // Simulate agent_end with an aborted assistant message
+    const event = {
+      messages: [
+        { role: 'user', content: 'do something' },
+        { role: 'assistant', stopReason: 'aborted', content: [] },
+      ],
+    };
+
+    await pi.trigger('agent_end', event, makeCtx());
+
+    expect(pi.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('nudges normally when the last assistant message has stopReason=stop', async () => {
+    const pi = makePiMock();
+    piFlow(pi);
+
+    vi.mocked(findFlowDir).mockReturnValue('/project/.flow');
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readdirSync).mockReturnValue(['my-feature'] as any);
+    vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as any);
+    vi.mocked(readStateFile).mockReturnValue(makeFlowState() as any);
+
+    const event = {
+      messages: [
+        { role: 'user', content: 'do something' },
+        { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'done' }] },
+      ],
+    };
+
+    await pi.trigger('agent_end', event, makeCtx());
+
+    expect(pi.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
   it('passes state to buildNudgeMessage', async () => {
     const pi = makePiMock();
     piFlow(pi);

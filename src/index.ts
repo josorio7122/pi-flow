@@ -536,7 +536,16 @@ export default function piFlow(pi: ExtensionAPI) {
   });
 
   // agent_end — nudge coordinator to continue if a workflow is in progress
-  pi.on('agent_end', async (_event: AgentEndEvent, ctx: ExtensionContext) => {
+  pi.on('agent_end', async (event: AgentEndEvent, ctx: ExtensionContext) => {
+    // Don't nudge if the agent was aborted (user pressed Escape/Ctrl+C).
+    // Without this guard, the nudge re-triggers the LLM and forces a double-abort.
+    const messages = event.messages ?? [];
+    const lastAssistant = [...messages]
+      .reverse()
+      .find((m: Record<string, unknown>) => m.role === 'assistant');
+    if (lastAssistant && (lastAssistant as Record<string, unknown>).stopReason === 'aborted')
+      return;
+
     const active = findActiveFeature(ctx.cwd);
     if (!active) return;
     if (active.state.current_phase === 'ship') return;
