@@ -92,8 +92,8 @@ Each agent writes its own artifacts. The coordinator NEVER writes these files.
 
 | Phase | Agent | Writes |
 |-------|-------|--------|
-| intent | clarifier | intent.md |
-| spec | specifier | spec.md (approved: false) |
+| intent | clarifier | brief.md |
+| spec | clarifier | spec.md (approved: false) |
 | analyze | scout(s) | analysis.md |
 | plan | strategist | design.md (approved: false) |
 | plan | planner | tasks.md (full checklist) |

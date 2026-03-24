@@ -38,6 +38,7 @@ expertise:
   - deviation-detection
   - atomic-commits
 writes:
+  - tasks.md (updates: checks off completed tasks after each commit)
   - build-log.md (appends per wave)
   - builder-scratch.md (ephemeral mid-session notes)
 ---
@@ -94,6 +95,13 @@ For the task's `test_criteria`:
 - Commit message body: what changed and why (one line each)
 
 The commit is your unit of work. Sentinel reviews at the commit level.
+
+### 4. UPDATE tasks.md — Mark the task as done
+
+After each successful commit, update `.flow/features/{{FEATURE_NAME}}/tasks.md`:
+- Change `- [ ]` to `- [x]` for the completed task
+- This is the source of truth for progress. The reviewer and coordinator
+  check tasks.md to know what's done vs. pending.
 
 ## Investigate iron law (3-strike rule)
 
