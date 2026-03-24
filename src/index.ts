@@ -152,7 +152,7 @@ export default function piFlow(pi: ExtensionAPI) {
     }),
 
     async execute(
-      _toolCallId: string,
+      _: string,
       params: {
         agent?: string;
         task?: string;
@@ -213,7 +213,6 @@ export default function piFlow(pi: ExtensionAPI) {
         chain?: Array<{ agent: string; task: string }>;
       },
       theme: Theme,
-      _context: unknown,
     ) {
       const colorize = (color: string, t: string): string => theme.fg(color as ThemeColor, t);
       const bold = (t: string): string => theme.bold(t);
@@ -237,7 +236,6 @@ export default function piFlow(pi: ExtensionAPI) {
       },
       options: ToolRenderResultOptions,
       theme: Theme,
-      _context: unknown,
     ) {
       const details = result.details;
       if (!details || details.results.length === 0) {
@@ -252,7 +250,7 @@ export default function piFlow(pi: ExtensionAPI) {
 
   pi.registerCommand('flow', {
     description: 'Show pi-flow status',
-    handler: async (_args: string, ctx: ExtensionCommandContext) => {
+    handler: async (_: string, ctx: ExtensionCommandContext) => {
       const active = findActiveFeature(ctx.cwd);
       if (!active) {
         pi.sendMessage({
@@ -296,7 +294,7 @@ export default function piFlow(pi: ExtensionAPI) {
   });
 
   // session_start — restore footer status
-  pi.on('session_start', async (_event: SessionStartEvent, ctx: ExtensionContext) => {
+  pi.on('session_start', async (_: SessionStartEvent, ctx: ExtensionContext) => {
     if (!ctx.hasUI) return;
     const active = findActiveFeature(ctx.cwd);
     if (!active) return;
@@ -304,30 +302,27 @@ export default function piFlow(pi: ExtensionAPI) {
   });
 
   // tool_call — enforce coordinator write restrictions + loop detection
-  pi.on(
-    'tool_call',
-    async (event: ToolCallEvent, _ctx: ExtensionContext): Promise<ToolCallEventResult> => {
-      const name = event.toolName;
-      const input = event.input as Record<string, unknown>;
+  pi.on('tool_call', async (event: ToolCallEvent): Promise<ToolCallEventResult> => {
+    const name = event.toolName;
+    const input = event.input as Record<string, unknown>;
 
-      // Tool blocking: coordinator can't write outside .flow/
-      const blockResult = shouldBlockToolCall(name, input);
-      if (blockResult.block) return blockResult;
+    // Tool blocking: coordinator can't write outside .flow/
+    const blockResult = shouldBlockToolCall(name, input);
+    if (blockResult.block) return blockResult;
 
-      // Loop detection
-      const hash = hashToolCall(name, input);
-      loopHistory.push({ tool: name, argsHash: hash });
-      if (loopHistory.length > LOOP_WINDOW) loopHistory.shift();
+    // Loop detection
+    const hash = hashToolCall(name, input);
+    loopHistory.push({ tool: name, argsHash: hash });
+    if (loopHistory.length > LOOP_WINDOW) loopHistory.shift();
 
-      const loop = detectLoop(loopHistory, LOOP_WINDOW, LOOP_THRESHOLD);
-      if (loop.tripped) {
-        return {
-          block: true,
-          reason: `Loop detected: '${loop.tool}' called ${loop.count} times with identical args. Try a different approach.`,
-        };
-      }
+    const loop = detectLoop(loopHistory, LOOP_WINDOW, LOOP_THRESHOLD);
+    if (loop.tripped) {
+      return {
+        block: true,
+        reason: `Loop detected: '${loop.tool}' called ${loop.count} times with identical args. Try a different approach.`,
+      };
+    }
 
-      return {};
-    },
-  );
+    return {};
+  });
 }

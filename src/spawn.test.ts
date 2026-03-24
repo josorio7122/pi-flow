@@ -587,7 +587,7 @@ describe('mapWithConcurrencyLimit', () => {
   it('passes the index to the callback', async () => {
     const items = ['a', 'b', 'c'];
     const indices: number[] = [];
-    await mapWithConcurrencyLimit(items, 2, async (_item, idx) => {
+    await mapWithConcurrencyLimit(items, 2, async (_, idx) => {
       indices.push(idx);
       return idx;
     });

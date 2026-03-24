@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as os from 'node:os';
+import type { Theme, ThemeColor } from '@mariozechner/pi-coding-agent';
 import type { SingleAgentResult } from './types.js';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -847,10 +848,9 @@ describe('exported constants', () => {
 
 // Minimal theme stub for Component tests.
 // Theme is a class we can't construct without color maps, so we create
-// a plain object with the same method signatures and cast via the
-// structural type that rendering.ts actually consumes.
-const stubTheme = Object.create(null) as import('@mariozechner/pi-coding-agent').Theme;
-stubTheme.fg = (_color: import('@mariozechner/pi-coding-agent').ThemeColor, text: string) => text;
+// a plain object with the method signatures that rendering.ts consumes.
+const stubTheme = Object.create(null) as Theme;
+stubTheme.fg = (_: ThemeColor, text: string) => text;
 stubTheme.bold = (text: string) => text;
 stubTheme.italic = (text: string) => text;
 stubTheme.strikethrough = (text: string) => text;
