@@ -1,5 +1,23 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { EventEmitter } from 'node:events';
 import type { SingleAgentResult, UsageStats } from './types.js';
+
+// ─── module-level mocks (hoisted by vitest) ──────────────────────────────────
+
+vi.mock('node:child_process', () => ({
+  spawn: vi.fn(),
+}));
+
+vi.mock('node:fs', () => {
+  const unlinkSync = vi.fn();
+  const rmdirSync = vi.fn();
+  const existsSync = vi.fn().mockReturnValue(false);
+  const promises = {
+    mkdtemp: vi.fn().mockResolvedValue('/tmp/pi-flow-test-dir'),
+    writeFile: vi.fn().mockResolvedValue(undefined),
+  };
+  return { default: { unlinkSync, rmdirSync, existsSync, promises }, unlinkSync, rmdirSync, existsSync, promises };
+});
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -62,7 +80,10 @@ import {
   getDisplayItems,
   mapWithConcurrencyLimit,
   getPiInvocation,
+  spawnAgent,
 } from './spawn.js';
+
+import { spawn as mockSpawn } from 'node:child_process';
 
 import type { FlowAgentConfig } from './types.js';
 
@@ -540,5 +561,107 @@ describe('mapWithConcurrencyLimit', () => {
       return x;
     });
     expect(order).toEqual([1, 2, 3]);
+  });
+});
+
+// ─── spawnAgent ───────────────────────────────────────────────────────────────
+
+/** Polls until the mock has been called at least once, then resolves. */
+async function untilCalled(mockFn: ReturnType<typeof vi.fn>, timeoutMs = 1000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (mockFn.mock.calls.length === 0) {
+    if (Date.now() > deadline) throw new Error('untilCalled: timeout waiting for mock');
+    await new Promise<void>((r) => setTimeout(r, 5));
+  }
+}
+
+/**
+ * Builds a minimal fake child process backed by EventEmitter so tests can
+ * control stdout/stderr data and the close/error events without actually
+ * spawning a subprocess.
+ */
+function makeFakeProc() {
+  const stdout = new EventEmitter() as EventEmitter & { pipe?: unknown };
+  const stderr = new EventEmitter() as EventEmitter & { pipe?: unknown };
+
+  const proc = new EventEmitter() as EventEmitter & {
+    stdout: typeof stdout;
+    stderr: typeof stderr;
+    kill: ReturnType<typeof vi.fn>;
+    killed: boolean;
+  };
+
+  proc.stdout = stdout;
+  proc.stderr = stderr;
+  proc.kill = vi.fn();
+  proc.killed = false;
+
+  return proc;
+}
+
+describe('spawnAgent', () => {
+  let fakeProc: ReturnType<typeof makeFakeProc>;
+
+  beforeEach(() => {
+    fakeProc = makeFakeProc();
+    vi.mocked(mockSpawn).mockReturnValue(fakeProc as any);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('passes exitCode: -1 in onUpdate callbacks while the process is still running', async () => {
+    const capturedUpdates: number[] = [];
+
+    // Start spawnAgent but do NOT await — we need to interact with the process mid-flight
+    const resultPromise = spawnAgent(
+      '/fake/cwd',
+      makeAgent(),
+      'test task',
+      {},
+      undefined,
+      (update) => capturedUpdates.push(update.exitCode),
+    );
+
+    // Wait for spawn() to be called (writeAgentPrompt is async, so spawn is called after
+    // its promises resolve — we must not emit events before the listeners are registered)
+    await untilCalled(vi.mocked(mockSpawn));
+
+    // Emit a message_end line on stdout to trigger emitUpdate()
+    const assistantMsg = {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'Working...' }],
+      usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, cost: { total: 0 }, totalTokens: 15 },
+      model: 'claude-sonnet-4-6',
+      stopReason: 'tool_use',
+    };
+    const ndjsonLine = JSON.stringify({ type: 'message_end', message: assistantMsg }) + '\n';
+    fakeProc.stdout.emit('data', Buffer.from(ndjsonLine));
+
+    // Close the process so spawnAgent can resolve
+    fakeProc.emit('close', 0);
+
+    await resultPromise;
+
+    // The onUpdate fired before close must have seen exitCode: -1
+    expect(capturedUpdates.length).toBeGreaterThanOrEqual(1);
+    expect(capturedUpdates[0]).toBe(-1);
+  });
+
+  it('returns exitCode: 0 when the process closes with code 0', async () => {
+    const resultPromise = spawnAgent('/fake/cwd', makeAgent(), 'test task', {});
+    await untilCalled(vi.mocked(mockSpawn));
+    fakeProc.emit('close', 0);
+    const result = await resultPromise;
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('returns exitCode: 1 when the process closes with code 1', async () => {
+    const resultPromise = spawnAgent('/fake/cwd', makeAgent(), 'test task', {});
+    await untilCalled(vi.mocked(mockSpawn));
+    fakeProc.emit('close', 1);
+    const result = await resultPromise;
+    expect(result.exitCode).toBe(1);
   });
 });

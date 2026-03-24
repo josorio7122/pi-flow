@@ -284,7 +284,7 @@ export async function spawnAgent(
     agent: agent.name,
     agentSource: agent.source,
     task,
-    exitCode: 0,
+    exitCode: -1,  // -1 = running; set to actual exit code when the process closes
     messages: [],
     stderr: '',
     usage: {
