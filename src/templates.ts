@@ -33,6 +33,7 @@ last_reviewed_wave: 0
 
   review: `---
 feature: {{FEATURE_NAME}}
+# verdict must be exactly PASSED or FAILED (case-sensitive)
 verdict: null
 ---`,
 };

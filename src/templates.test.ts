@@ -33,9 +33,11 @@ describe('getArtifactTemplate', () => {
     expect(tpl).toContain('open_warns: 0');
   });
 
-  it('returns a template for review.md', () => {
+  it('returns a template for review.md with valid verdict values', () => {
     const tpl = getArtifactTemplate('review');
-    expect(tpl).toContain('verdict: null');
+    expect(tpl).toContain('verdict:');
+    expect(tpl).toContain('PASSED');
+    expect(tpl).toContain('FAILED');
   });
 
   it('returns null for unknown artifact', () => {
