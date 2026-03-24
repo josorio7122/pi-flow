@@ -667,7 +667,9 @@ describe('spawnAgent', () => {
 
   beforeEach(() => {
     fakeProc = makeFakeProc();
-    vi.mocked(mockSpawn).mockReturnValue(fakeProc as any);
+    // fakeProc implements the subset of ChildProcess used by runChildProcess:
+    // stdout.on('data'), stderr.on('data'), on('close'), on('error'), kill(), killed
+    vi.mocked(mockSpawn).mockReturnValue(fakeProc as never);
   });
 
   afterEach(() => {

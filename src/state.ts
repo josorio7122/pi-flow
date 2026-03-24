@@ -102,10 +102,7 @@ export function appendProgressLog(featureDir: string, message: string): void {
  * Writes a checkpoint JSON file to `<featureDir>/checkpoints/`.
  * Filename: `<timestamp>.json`. Also copies to `latest.json`.
  */
-export function writeCheckpoint(
-  featureDir: string,
-  data: unknown,
-): void {
+export function writeCheckpoint(featureDir: string, data: unknown): void {
   const checkpointsDir = path.join(featureDir, 'checkpoints');
   fs.mkdirSync(checkpointsDir, { recursive: true });
 
@@ -124,12 +121,16 @@ export function writeCheckpoint(
  * Creates the `dispatches/` directory if it does not exist.
  * Colons in the ISO timestamp are replaced with dashes for filesystem safety.
  */
-export function writeDispatchLog(flowDir: string, feature: string, entry: object): void {
+export function writeDispatchLog(
+  flowDir: string,
+  feature: string,
+  entry: Record<string, unknown>,
+): void {
   const dispatchesDir = path.join(flowDir, 'dispatches');
   fs.mkdirSync(dispatchesDir, { recursive: true });
 
   const ts = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-');
-  const agent = String((entry as Record<string, unknown>).agent ?? 'unknown');
+  const agent = String(entry.agent ?? 'unknown');
   const filename = `${ts}-${agent}-${feature}.md`;
   const filePath = path.join(dispatchesDir, filename);
 

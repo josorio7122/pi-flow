@@ -487,9 +487,11 @@ export async function spawnAgentWithRetry(
     }
   }
 
-  return lastResult ?? {
-    ...emptyResult(agent, task),
-    exitCode: 1,
-    stderr: 'Spawn failed after retries',
-  };
+  return (
+    lastResult ?? {
+      ...emptyResult(agent, task),
+      exitCode: 1,
+      stderr: 'Spawn failed after retries',
+    }
+  );
 }

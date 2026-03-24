@@ -69,7 +69,6 @@ import {
   renderSingleResult,
   renderParallelResult,
   renderChainResult,
-
   buildAgentCardComponent,
   buildFlowResult,
 } from './rendering.js';
@@ -824,8 +823,6 @@ describe('renderChainResult', () => {
   });
 });
 
-
-
 // ─── constants ────────────────────────────────────────────────────────────────
 
 describe('exported constants', () => {
@@ -848,86 +845,78 @@ describe('exported constants', () => {
 
 // ─── buildAgentCardComponent ──────────────────────────────────────────────────
 
-// Minimal theme stub for Component tests
-const stubTheme = {
-  fg: (_color: string, text: string) => text,
-  bold: (text: string) => text,
-};
+// Minimal theme stub for Component tests.
+// Theme is a class we can't construct without color maps, so we create
+// a plain object with the same method signatures and cast via the
+// structural type that rendering.ts actually consumes.
+const stubTheme = Object.create(null) as import('@mariozechner/pi-coding-agent').Theme;
+stubTheme.fg = (_color: import('@mariozechner/pi-coding-agent').ThemeColor, text: string) => text;
+stubTheme.bold = (text: string) => text;
+stubTheme.italic = (text: string) => text;
+stubTheme.strikethrough = (text: string) => text;
+
+/** Render a component to a flat string via the public render(width) API. */
+function renderToString(component: { render(width: number): string[] }): string {
+  return component.render(120).join('\n');
+}
 
 describe('buildAgentCardComponent', () => {
   it('returns a Container', () => {
     const result = makeResult({ exitCode: 0 });
-    const card = buildAgentCardComponent(result, false, stubTheme as any);
+    const card = buildAgentCardComponent(result, false, stubTheme);
     expect(card).toBeInstanceOf(Container);
   });
 
-  it('returns a Container for running state (exitCode=-1, ● icon path)', () => {
+  it('running state renders with children', () => {
     const result = makeResult({
       exitCode: -1,
       messages: [makeToolCallMessage('read', { path: '/tmp/file.ts' })],
       usage: { ...zeroUsage, turns: 2 },
     });
-    const card = buildAgentCardComponent(result, false, stubTheme as any);
+    const card = buildAgentCardComponent(result, false, stubTheme);
     expect(card).toBeInstanceOf(Container);
-    // Container has children (header + border at minimum)
-    expect((card as any).children.length).toBeGreaterThan(0);
+    expect(card.children.length).toBeGreaterThan(0);
   });
 
-  it('running state includes ● icon in rendered text', () => {
+  it('running state includes ● icon in rendered output', () => {
     const result = makeResult({
       exitCode: -1,
       messages: [makeToolCallMessage('read', { path: '/tmp/file.ts' })],
       usage: { ...zeroUsage, turns: 1 },
     });
-    const card = buildAgentCardComponent(result, false, stubTheme as any);
-    // Collect all Text children's text
-    const texts = (card as any).children
-      .filter((c: any) => c.constructor?.name === 'Text')
-      .map((c: any) => c.text ?? c.content ?? '');
-    const combined = texts.join('');
-    expect(combined).toContain('●');
+    const card = buildAgentCardComponent(result, false, stubTheme);
+    expect(renderToString(card)).toContain('●');
   });
 
-  it('done state (exitCode=0) includes ✓ icon in rendered text', () => {
+  it('done state (exitCode=0) includes ✓ icon in rendered output', () => {
     const result = makeResult({ exitCode: 0 });
-    const card = buildAgentCardComponent(result, false, stubTheme as any);
-    const texts = (card as any).children
-      .filter((c: any) => c.constructor?.name === 'Text')
-      .map((c: any) => c.text ?? c.content ?? '');
-    expect(texts.join('')).toContain('✓');
+    const card = buildAgentCardComponent(result, false, stubTheme);
+    expect(renderToString(card)).toContain('✓');
   });
 
-  it('error state (exitCode=1) includes ✗ icon in rendered text', () => {
+  it('error state (exitCode=1) includes ✗ icon in rendered output', () => {
     const result = makeResult({ exitCode: 1, errorMessage: 'Build failed' });
-    const card = buildAgentCardComponent(result, false, stubTheme as any);
-    const texts = (card as any).children
-      .filter((c: any) => c.constructor?.name === 'Text')
-      .map((c: any) => c.text ?? c.content ?? '');
-    expect(texts.join('')).toContain('✗');
+    const card = buildAgentCardComponent(result, false, stubTheme);
+    expect(renderToString(card)).toContain('✗');
   });
 
   it('queued state (exitCode=-1, no messages) includes ○ icon', () => {
     const result = makeResult({ exitCode: -1, messages: [] });
-    const card = buildAgentCardComponent(result, false, stubTheme as any);
-    const texts = (card as any).children
-      .filter((c: any) => c.constructor?.name === 'Text')
-      .map((c: any) => c.text ?? c.content ?? '');
-    expect(texts.join('')).toContain('○');
+    const card = buildAgentCardComponent(result, false, stubTheme);
+    expect(renderToString(card)).toContain('○');
   });
 
-  it('has DynamicBorder children as borders', () => {
+  it('has border children', () => {
     const result = makeResult({ exitCode: 0 });
-    const card = buildAgentCardComponent(result, false, stubTheme as any);
-    const borders = (card as any).children.filter(
-      (c: any) => c.constructor?.name === 'DynamicBorder',
-    );
-    expect(borders.length).toBeGreaterThanOrEqual(1);
+    const card = buildAgentCardComponent(result, false, stubTheme);
+    // DynamicBorder renders as horizontal rules — check children count
+    expect(card.children.length).toBeGreaterThanOrEqual(3); // border + header + task + border
   });
 
   it('expanded mode returns a Container without throwing', () => {
     const messages = [makeTextMessage('## Final output\n\nDone.')];
     const result = makeResult({ exitCode: 0, messages });
-    const card = buildAgentCardComponent(result, true, stubTheme as any);
+    const card = buildAgentCardComponent(result, true, stubTheme);
     expect(card).toBeInstanceOf(Container);
   });
 });
@@ -944,15 +933,14 @@ describe('buildFlowResult', () => {
 
   it('returns a Container', () => {
     const details = makeDetails('single', [makeResult({ exitCode: 0 })]);
-    const root = buildFlowResult(details, { expanded: false, isPartial: false }, stubTheme as any);
+    const root = buildFlowResult(details, { expanded: false, isPartial: false }, stubTheme);
     expect(root).toBeInstanceOf(Container);
   });
 
-  it('has one child per agent card for single mode', () => {
+  it('has children for single mode', () => {
     const details = makeDetails('single', [makeResult({ exitCode: 0 })]);
-    const root = buildFlowResult(details, { expanded: false, isPartial: false }, stubTheme as any);
-    // 1 agent card + 1 footer text = 2 children minimum
-    expect((root as any).children.length).toBeGreaterThanOrEqual(1);
+    const root = buildFlowResult(details, { expanded: false, isPartial: false }, stubTheme);
+    expect(root.children.length).toBeGreaterThanOrEqual(1);
   });
 
   it('has N child cards for N agents in parallel mode', () => {
@@ -961,9 +949,8 @@ describe('buildFlowResult', () => {
       makeResult({ agent: 'scout', exitCode: 0 }),
       makeResult({ agent: 'scout', exitCode: 0 }),
     ]);
-    const root = buildFlowResult(details, { expanded: false, isPartial: false }, stubTheme as any);
-    // At least 3 Container children (one per agent card)
-    const containerChildren = (root as any).children.filter((c: any) => c instanceof Container);
+    const root = buildFlowResult(details, { expanded: false, isPartial: false }, stubTheme);
+    const containerChildren = root.children.filter((c) => c instanceof Container);
     expect(containerChildren.length).toBe(3);
   });
 
@@ -972,11 +959,8 @@ describe('buildFlowResult', () => {
       makeResult({ agent: 'scout', exitCode: 0, usage: { ...zeroUsage, turns: 2, cost: 0.01 } }),
       makeResult({ agent: 'scout', exitCode: 0, usage: { ...zeroUsage, turns: 3, cost: 0.02 } }),
     ]);
-    const root = buildFlowResult(details, { expanded: false, isPartial: false }, stubTheme as any);
-    const texts = (root as any).children
-      .filter((c: any) => c.constructor?.name === 'Text')
-      .map((c: any) => c.text ?? c.content ?? '');
-    expect(texts.join('')).toContain('Total:');
+    const root = buildFlowResult(details, { expanded: false, isPartial: false }, stubTheme);
+    expect(renderToString(root)).toContain('Total:');
   });
 
   it('does not include total footer when isPartial=true', () => {
@@ -984,28 +968,19 @@ describe('buildFlowResult', () => {
       makeResult({ agent: 'scout', exitCode: 0, usage: { ...zeroUsage, turns: 2, cost: 0.01 } }),
       makeResult({ agent: 'scout', exitCode: 0, usage: { ...zeroUsage, turns: 3, cost: 0.02 } }),
     ]);
-    const root = buildFlowResult(details, { expanded: false, isPartial: true }, stubTheme as any);
-    const texts = (root as any).children
-      .filter((c: any) => c.constructor?.name === 'Text')
-      .map((c: any) => c.text ?? c.content ?? '');
-    expect(texts.join('')).not.toContain('Total:');
+    const root = buildFlowResult(details, { expanded: false, isPartial: true }, stubTheme);
+    expect(renderToString(root)).not.toContain('Total:');
   });
 
   it('includes expand hint in footer when collapsed and not partial', () => {
     const details = makeDetails('single', [makeResult({ exitCode: 0 })]);
-    const root = buildFlowResult(details, { expanded: false, isPartial: false }, stubTheme as any);
-    const texts = (root as any).children
-      .filter((c: any) => c.constructor?.name === 'Text')
-      .map((c: any) => c.text ?? c.content ?? '');
-    expect(texts.join('')).toContain('to expand');
+    const root = buildFlowResult(details, { expanded: false, isPartial: false }, stubTheme);
+    expect(renderToString(root)).toContain('to expand');
   });
 
   it('does not include expand hint when expanded=true', () => {
     const details = makeDetails('single', [makeResult({ exitCode: 0 })]);
-    const root = buildFlowResult(details, { expanded: true, isPartial: false }, stubTheme as any);
-    const texts = (root as any).children
-      .filter((c: any) => c.constructor?.name === 'Text')
-      .map((c: any) => c.text ?? c.content ?? '');
-    expect(texts.join('')).not.toContain('to expand');
+    const root = buildFlowResult(details, { expanded: true, isPartial: false }, stubTheme);
+    expect(renderToString(root)).not.toContain('to expand');
   });
 });

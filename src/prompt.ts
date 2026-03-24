@@ -15,11 +15,9 @@ export function buildCoordinatorPrompt(
     const desc = a.description.split('.')[0].trim().slice(0, DESCRIPTION_MAX_CHARS);
     return `| ${a.name} | ${a.model} | ${desc} |`;
   });
-  const agentTable = [
-    '| Agent | Model | Role |',
-    '|-------|-------|------|',
-    ...agentRows,
-  ].join('\n');
+  const agentTable = ['| Agent | Model | Role |', '|-------|-------|------|', ...agentRows].join(
+    '\n',
+  );
 
   const skillSections = skills.map((s) => s.body).join('\n\n');
 

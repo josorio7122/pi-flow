@@ -10,7 +10,12 @@ import type {
 } from './types.js';
 import { loadConfig } from './config.js';
 import { discoverAgents, buildVariableMap } from './agents.js';
-import { spawnAgentWithRetry, mapWithConcurrencyLimit, getFinalOutput, emptyResult } from './spawn.js';
+import {
+  spawnAgentWithRetry,
+  mapWithConcurrencyLimit,
+  getFinalOutput,
+  emptyResult,
+} from './spawn.js';
 import {
   readStateFile,
   writeDispatchLog,
@@ -118,7 +123,9 @@ async function executeParallel(
 ): Promise<SingleAgentResult[]> {
   const buildDetailsForUpdate = makeDetails('parallel', feature);
 
-  const results: SingleAgentResult[] = agentTasks.map(({ agent, task }) => emptyResult(agent, task));
+  const results: SingleAgentResult[] = agentTasks.map(({ agent, task }) =>
+    emptyResult(agent, task),
+  );
 
   if (onUpdate) {
     onUpdate({
@@ -127,34 +134,33 @@ async function executeParallel(
     });
   }
 
-  await mapWithConcurrencyLimit(
-    agentTasks,
-    maxWorkers,
-    async ({ agent, task }, index) => {
-      const onAgentUpdate = onUpdate
-        ? (result: SingleAgentResult) => {
-            results[index] = result;
-            onUpdate({
-              content: results.map((r) => ({ type: 'text' as const, text: getFinalOutput(r.messages) })),
-              details: buildDetailsForUpdate([...results]),
-            });
-          }
-        : undefined;
+  await mapWithConcurrencyLimit(agentTasks, maxWorkers, async ({ agent, task }, index) => {
+    const onAgentUpdate = onUpdate
+      ? (result: SingleAgentResult) => {
+          results[index] = result;
+          onUpdate({
+            content: results.map((r) => ({
+              type: 'text' as const,
+              text: getFinalOutput(r.messages),
+            })),
+            details: buildDetailsForUpdate([...results]),
+          });
+        }
+      : undefined;
 
-      const result = await spawnAgentWithRetry(cwd, agent, task, variableMap, signal, onAgentUpdate);
-      results[index] = result;
+    const result = await spawnAgentWithRetry(cwd, agent, task, variableMap, signal, onAgentUpdate);
+    results[index] = result;
 
-      const flowDir = path.join(cwd, '.flow');
-      writeDispatchLog(flowDir, feature, {
-        agent: agent.name,
-        task,
-        exitCode: result.exitCode,
-        usage: result.usage,
-      });
+    const flowDir = path.join(cwd, '.flow');
+    writeDispatchLog(flowDir, feature, {
+      agent: agent.name,
+      task,
+      exitCode: result.exitCode,
+      usage: result.usage,
+    });
 
-      return result;
-    },
-  );
+    return result;
+  });
 
   return results;
 }
@@ -196,7 +202,10 @@ async function executeChain(
       ? (result: SingleAgentResult) => {
           allResults[i] = result;
           onUpdate({
-            content: allResults.map((r) => ({ type: 'text' as const, text: getFinalOutput(r.messages) })),
+            content: allResults.map((r) => ({
+              type: 'text' as const,
+              text: getFinalOutput(r.messages),
+            })),
             details: buildDetailsForUpdate([...allResults]),
           });
         }
@@ -216,7 +225,10 @@ async function executeChain(
 
     if (onUpdate) {
       onUpdate({
-        content: allResults.map((r) => ({ type: 'text' as const, text: getFinalOutput(r.messages) })),
+        content: allResults.map((r) => ({
+          type: 'text' as const,
+          text: getFinalOutput(r.messages),
+        })),
         details: buildDetailsForUpdate([...allResults]),
       });
     }
@@ -367,7 +379,13 @@ export async function executeDispatch(
       if ('error' in resolved) return errorResult(resolved.error, params);
 
       const results = await executeParallel(
-        resolved.resolved, cwd, variableMap, config.concurrency.max_workers, feature, signal, onUpdate,
+        resolved.resolved,
+        cwd,
+        variableMap,
+        config.concurrency.max_workers,
+        feature,
+        signal,
+        onUpdate,
       );
       const details = makeDetails('parallel', feature)(results);
       updateBudget(featureDir, currentState, results);
@@ -380,7 +398,12 @@ export async function executeDispatch(
       if ('error' in resolved) return errorResult(resolved.error, params);
 
       const results = await executeChain(
-        resolved.resolved, cwd, variableMap, feature, signal, onUpdate,
+        resolved.resolved,
+        cwd,
+        variableMap,
+        feature,
+        signal,
+        onUpdate,
       );
       const details = makeDetails('chain', feature)(results);
       updateBudget(featureDir, currentState, results);
@@ -398,9 +421,7 @@ export async function executeDispatch(
     }
 
     const task = params.task!;
-    const result = await executeSingle(
-      agent, task, cwd, variableMap, feature, signal, onUpdate,
-    );
+    const result = await executeSingle(agent, task, cwd, variableMap, feature, signal, onUpdate);
     const details = makeDetails('single', feature)([result]);
     updateBudget(featureDir, currentState, [result]);
     writeArtifacts(featureDir, agents, [result], [{ agent, task }]);

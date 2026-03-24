@@ -47,9 +47,7 @@ const LOOP_THRESHOLD = 3;
 
 // ─── Active feature finder ───────────────────────────────────────────────────
 
-function findActiveFeature(
-  cwd: string,
-): { state: FlowState; featureDir: string } | null {
+function findActiveFeature(cwd: string): { state: FlowState; featureDir: string } | null {
   const flowDir = findFlowDir(cwd);
   if (!flowDir) return null;
 
@@ -171,7 +169,9 @@ export default function piFlow(pi: ExtensionAPI) {
       const feature = params.feature ?? activeFeature?.state.feature;
       if (!feature) {
         return {
-          content: [{ type: 'text' as const, text: 'No active feature. Provide a feature name to start.' }],
+          content: [
+            { type: 'text' as const, text: 'No active feature. Provide a feature name to start.' },
+          ],
           details: { mode: 'single' as const, feature: 'unknown', results: [] },
           isError: true,
         };
@@ -183,7 +183,10 @@ export default function piFlow(pi: ExtensionAPI) {
         rootDir,
         signal,
         onUpdate
-          ? (partial: { content: Array<{ type: 'text'; text: string }>; details: FlowDispatchDetails }) => {
+          ? (partial: {
+              content: Array<{ type: 'text'; text: string }>;
+              details: FlowDispatchDetails;
+            }) => {
               onUpdate({ content: partial.content, details: partial.details });
             }
           : undefined,
@@ -210,6 +213,7 @@ export default function piFlow(pi: ExtensionAPI) {
         chain?: Array<{ agent: string; task: string }>;
       },
       theme: Theme,
+      _context: unknown,
     ) {
       const colorize = (color: string, t: string): string => theme.fg(color as ThemeColor, t);
       const bold = (t: string): string => theme.bold(t);
@@ -233,6 +237,7 @@ export default function piFlow(pi: ExtensionAPI) {
       },
       options: ToolRenderResultOptions,
       theme: Theme,
+      _context: unknown,
     ) {
       const details = result.details;
       if (!details || details.results.length === 0) {
@@ -250,11 +255,19 @@ export default function piFlow(pi: ExtensionAPI) {
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
       const active = findActiveFeature(ctx.cwd);
       if (!active) {
-        pi.sendMessage({ customType: 'pi-flow-status', content: 'No active pi-flow feature.', display: true });
+        pi.sendMessage({
+          customType: 'pi-flow-status',
+          content: 'No active pi-flow feature.',
+          display: true,
+        });
         return;
       }
       const summary = formatStatus(active.state);
-      pi.sendMessage({ customType: 'pi-flow-status', content: `[Flow Status]\n\n${summary}`, display: true });
+      pi.sendMessage({
+        customType: 'pi-flow-status',
+        content: `[Flow Status]\n\n${summary}`,
+        display: true,
+      });
     },
   });
 

@@ -166,7 +166,7 @@ function extractBody(content: string): string {
 // Handles both YAML list (already an array) and comma-separated string.
 
 function toStringArray(val: unknown): string[] {
-  if (Array.isArray(val)) return (val as unknown[]).map(String);
+  if (Array.isArray(val)) return val.map(String);
   if (typeof val === 'string' && val.includes(',')) {
     return val
       .split(',')
@@ -396,10 +396,7 @@ export function readAgentsMd(cwd: string): string {
  *
  * Per §13 B8 (canonical variable table) and §14 S3 (AGENTS_MD variable).
  */
-export function buildVariableMap(
-  cwd: string,
-  featureDir: string,
-): Record<string, string> {
+export function buildVariableMap(cwd: string, featureDir: string): Record<string, string> {
   const featureName = path.basename(featureDir);
   const memoryDir = path.join(cwd, '.flow', 'memory');
 

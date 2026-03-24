@@ -88,7 +88,10 @@ describe('buildCoordinatorPrompt', () => {
   });
 
   it('renders agent table with name, model, and description', () => {
-    const agents = [makeAgent(), makeAgent({ name: 'builder', model: 'claude-sonnet-4-6', description: 'TDD practitioner.' })];
+    const agents = [
+      makeAgent(),
+      makeAgent({ name: 'builder', model: 'claude-sonnet-4-6', description: 'TDD practitioner.' }),
+    ];
     const prompt = buildCoordinatorPrompt(agents, [], null);
     expect(prompt).toContain('| scout |');
     expect(prompt).toContain('| builder |');
@@ -130,7 +133,10 @@ describe('buildCoordinatorPrompt', () => {
       last_updated: '2026-03-24T01:00:00Z',
       budget: { total_tokens: 50000, total_cost_usd: 1.23 },
     };
-    const prompt = buildCoordinatorPrompt([], [], { state, featureDir: '/tmp/.flow/features/auth-refresh' });
+    const prompt = buildCoordinatorPrompt([], [], {
+      state,
+      featureDir: '/tmp/.flow/features/auth-refresh',
+    });
     expect(prompt).toContain('auth-refresh');
     expect(prompt).toContain('$1.23');
     expect(prompt).toContain('/tmp/.flow/features/auth-refresh');

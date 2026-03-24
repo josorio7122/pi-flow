@@ -19,10 +19,7 @@ import type { FlowSkillConfig } from './types.js';
  * Parses a skill .md file into a FlowSkillConfig.
  * Returns null if the file has no valid frontmatter or no name field.
  */
-export function parseSkillFrontmatter(
-  content: string,
-  filePath: string,
-): FlowSkillConfig | null {
+export function parseSkillFrontmatter(content: string, filePath: string): FlowSkillConfig | null {
   const match = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(content);
   if (!match) return null;
 
@@ -88,8 +85,7 @@ function loadSkillsFromDir(
       const content = fs.readFileSync(filePath, 'utf8');
       const skill = parseSkillFrontmatter(content, filePath);
       if (skill) {
-        skill.source = source;
-        map.set(skill.name, skill);
+        map.set(skill.name, { ...skill, source });
       }
     } catch {
       // Skip unreadable files
