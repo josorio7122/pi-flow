@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import type { FlowAgentConfig, Phase } from './types.js';
+import { renderArtifactTemplate } from './templates.js';
 
 // ─── Scalar parser ────────────────────────────────────────────────────────────
 
@@ -498,6 +499,12 @@ export function buildVariableMap(
     MEMORY_DECISIONS: safeRead(path.join(memoryDir, 'decisions.md')),
     MEMORY_PATTERNS: safeRead(path.join(memoryDir, 'patterns.md')),
     MEMORY_LESSONS: safeRead(path.join(memoryDir, 'lessons.md')),
+
+    // Artifact frontmatter templates (guides agents to produce correct format)
+    SPEC_TEMPLATE: renderArtifactTemplate('spec', featureName) ?? '',
+    DESIGN_TEMPLATE: renderArtifactTemplate('design', featureName) ?? '',
+    TASKS_TEMPLATE: renderArtifactTemplate('tasks', featureName) ?? '',
+    REVIEW_TEMPLATE: renderArtifactTemplate('review', featureName) ?? '',
   };
 }
 

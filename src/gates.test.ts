@@ -87,6 +87,14 @@ describe('gateAnalyze', () => {
     expect(result.reason).toMatch(/approved/i);
   });
 
+  it('includes expected frontmatter format in approval failure reason', () => {
+    writeFrontmatter(path.join(featureDir, 'spec.md'), { approved: false });
+    const result = gateAnalyze(featureDir);
+    expect(result.canAdvance).toBe(false);
+    expect(result.reason).toContain('---');
+    expect(result.reason).toContain('approved: true');
+  });
+
   it('passes when spec.md exists and approved is true', () => {
     writeFrontmatter(path.join(featureDir, 'spec.md'), { approved: true });
     const result = gateAnalyze(featureDir);
@@ -124,6 +132,14 @@ describe('gateExecute', () => {
     const result = gateExecute(featureDir);
     expect(result.canAdvance).toBe(false);
     expect(result.reason).toMatch(/approved/i);
+  });
+
+  it('includes expected frontmatter format in design approval failure reason', () => {
+    writeFrontmatter(path.join(featureDir, 'design.md'), { approved: false });
+    const result = gateExecute(featureDir);
+    expect(result.canAdvance).toBe(false);
+    expect(result.reason).toContain('---');
+    expect(result.reason).toContain('approved: true');
   });
 
   it('fails when design.md approved but tasks.md missing', () => {

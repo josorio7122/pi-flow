@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { Phase, GateResult } from './types.js';
+import { getApprovalFrontmatterExample } from './templates.js';
 
 // ─── Frontmatter parser ───────────────────────────────────────────────────────
 
@@ -98,9 +99,12 @@ export function gateAnalyze(featureDir: string): GateResult {
   }
   const fm = readFrontmatter(specPath);
   if (fm.approved !== true) {
+    const example = getApprovalFrontmatterExample();
     return {
       canAdvance: false,
-      reason: `spec.md is not approved (approved=${String(fm.approved ?? 'missing')}) — human approval required`,
+      reason:
+        `spec.md is not approved (approved=${String(fm.approved ?? 'missing')}) — human approval required.\n` +
+        `Expected frontmatter format:\n${example}`,
     };
   }
   return { canAdvance: true, reason: 'spec.md approved — ready for ANALYZE' };
@@ -128,9 +132,12 @@ export function gateExecute(featureDir: string): GateResult {
   }
   const fm = readFrontmatter(designPath);
   if (fm.approved !== true) {
+    const example = getApprovalFrontmatterExample();
     return {
       canAdvance: false,
-      reason: `design.md is not approved (approved=${String(fm.approved ?? 'missing')}) — human approval required`,
+      reason:
+        `design.md is not approved (approved=${String(fm.approved ?? 'missing')}) — human approval required.\n` +
+        `Expected frontmatter format:\n${example}`,
     };
   }
   const tasksPath = path.join(featureDir, 'tasks.md');

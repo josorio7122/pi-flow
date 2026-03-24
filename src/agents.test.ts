@@ -1077,6 +1077,32 @@ open_warns: 1
     expect(map.MEMORY_LESSONS).toBe('');
   });
 
+  it('includes SPEC_TEMPLATE with spec frontmatter template', () => {
+    const map = buildVariableMap(cwd, featureDir, null);
+    expect(map.SPEC_TEMPLATE).toContain('---');
+    expect(map.SPEC_TEMPLATE).toContain('approved: false');
+    expect(map.SPEC_TEMPLATE).toContain('auth-refresh'); // feature name rendered
+  });
+
+  it('includes DESIGN_TEMPLATE with design frontmatter template', () => {
+    const map = buildVariableMap(cwd, featureDir, null);
+    expect(map.DESIGN_TEMPLATE).toContain('---');
+    expect(map.DESIGN_TEMPLATE).toContain('approved: false');
+    expect(map.DESIGN_TEMPLATE).toContain('auth-refresh');
+  });
+
+  it('includes TASKS_TEMPLATE with tasks frontmatter template', () => {
+    const map = buildVariableMap(cwd, featureDir, null);
+    expect(map.TASKS_TEMPLATE).toContain('---');
+    expect(map.TASKS_TEMPLATE).toContain('wave_count');
+  });
+
+  it('includes REVIEW_TEMPLATE with review frontmatter template', () => {
+    const map = buildVariableMap(cwd, featureDir, null);
+    expect(map.REVIEW_TEMPLATE).toContain('---');
+    expect(map.REVIEW_TEMPLATE).toContain('verdict');
+  });
+
   it('returns all string values (no undefined)', () => {
     const map = buildVariableMap(cwd, featureDir, null);
     for (const [key, value] of Object.entries(map)) {
