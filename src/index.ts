@@ -16,6 +16,8 @@ import { Container, Markdown, Spacer, Text } from '@mariozechner/pi-tui';
 
 import { executeDispatch } from './dispatch.js';
 import { findFlowDir, readStateFile, writeCheckpoint } from './state.js';
+import { discoverAgents } from './agents.js';
+import { buildCoordinatorPrompt, buildNudgeMessage } from './prompt.js';
 import {
   renderSingleCall,
   renderParallelCall,
@@ -37,6 +39,9 @@ import type { FlowDispatchDetails, FlowState } from './types.js';
 const loopHistory: Array<{ tool: string; argsHash: string }> = [];
 const LOOP_WINDOW = 10;
 const LOOP_THRESHOLD = 3;
+
+// Nudge guard — prevents sending more than one nudge per user input cycle.
+let nudgedThisCycle = false;
 
 // ─── Coordinator write whitelist ──────────────────────────────────────────────
 //
@@ -742,6 +747,44 @@ export default function piFlow(pi: any) {
   });
 
   // ─── 3. Event hooks ─────────────────────────────────────────────────────────
+
+  // input — reset nudge guard at the start of each user input cycle
+  pi.on('input', async () => {
+    nudgedThisCycle = false;
+  });
+
+  // before_agent_start — inject coordinator prompt into system prompt
+  pi.on('before_agent_start', async (event: any, ctx: any) => {
+    try {
+      const agents = discoverAgents(rootDir, ctx.cwd);
+      const active = findActiveFeature(ctx.cwd);
+      const prompt = buildCoordinatorPrompt(agents, active);
+      return { systemPrompt: event.systemPrompt + '\n\n' + prompt };
+    } catch {
+      return {
+        systemPrompt:
+          event.systemPrompt +
+          '\n\n## Coordinator\n\nYou have `dispatch_flow` available for orchestrating development. Use /flow for status.',
+      };
+    }
+  });
+
+  // agent_end — nudge coordinator to continue if a workflow is in progress
+  pi.on('agent_end', async (_event: any, ctx: any) => {
+    const active = findActiveFeature(ctx.cwd);
+    if (!active) return;
+    if (active.state.current_phase === 'ship') return;
+    if (nudgedThisCycle) return;
+    nudgedThisCycle = true;
+    pi.sendMessage(
+      {
+        customType: 'pi-flow-nudge',
+        content: buildNudgeMessage(active.state),
+        display: true,
+      },
+      { triggerTurn: true },
+    );
+  });
 
   // session_start — restore footer status for any in-progress feature
   pi.on('session_start', async (_event: any, ctx: any) => {
