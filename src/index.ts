@@ -32,6 +32,7 @@ import { executeDispatch } from './dispatch.js';
 import { findFlowDir, readStateFile, writeCheckpoint, readCheckpoint } from './state.js';
 import { discoverAgents } from './agents.js';
 import { buildCoordinatorPrompt, buildNudgeMessage } from './prompt.js';
+import { isTerminalPhase } from './transitions.js';
 import {
   renderSingleCall,
   renderParallelCall,
@@ -205,7 +206,8 @@ function updateFooterStatus(state: FlowState, ui: ExtensionContext['ui']): void 
 // ─── Active feature resolver ──────────────────────────────────────────────────
 //
 // Finds the first in-progress feature under .flow/features/.
-// "In-progress" means state.md exists and current_phase is not 'ship' complete.
+// "In-progress" means state.md exists and current_phase is not terminal
+// for the feature's change_type (e.g. ship for feature, analyze for research).
 
 function findActiveFeature(cwd: string): { state: FlowState; featureDir: string } | null {
   const flowDir = findFlowDir(cwd);
@@ -230,6 +232,8 @@ function findActiveFeature(cwd: string): { state: FlowState; featureDir: string 
     }
     const state = readStateFile(featureDir);
     if (!state) continue;
+    // Skip completed features — terminal phase depends on change_type
+    if (isTerminalPhase(state.change_type, state.skipped_phases, state.current_phase)) continue;
     return { state, featureDir };
   }
 
@@ -552,7 +556,8 @@ export default function piFlow(pi: ExtensionAPI) {
 
     const active = findActiveFeature(ctx.cwd);
     if (!active) return;
-    if (active.state.current_phase === 'ship') return;
+    // No need to check for terminal phase here — findActiveFeature already
+    // filters out features at their terminal phase (ship, analyze for research, etc.)
     if (nudgedThisCycle) return;
     nudgedThisCycle = true;
     pi.sendMessage(

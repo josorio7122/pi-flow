@@ -334,7 +334,7 @@ describe('agent_end hook', () => {
     expect(pi.sendMessage).not.toHaveBeenCalled();
   });
 
-  it('does nothing when current_phase is ship', async () => {
+  it('does nothing when current_phase is ship (terminal for feature)', async () => {
     const pi = makePiMock();
     piFlow(pi);
 
@@ -343,6 +343,23 @@ describe('agent_end hook', () => {
     vi.mocked(fs.readdirSync).mockReturnValue(['my-feature'] as any);
     vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as any);
     vi.mocked(readStateFile).mockReturnValue(makeFlowState({ current_phase: 'ship' }) as any);
+
+    await pi.trigger('agent_end', {}, makeCtx());
+
+    expect(pi.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when current_phase is terminal for the change_type (e.g. analyze for research)', async () => {
+    const pi = makePiMock();
+    piFlow(pi);
+
+    vi.mocked(findFlowDir).mockReturnValue('/project/.flow');
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readdirSync).mockReturnValue(['my-feature'] as any);
+    vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as any);
+    vi.mocked(readStateFile).mockReturnValue(
+      makeFlowState({ change_type: 'research', current_phase: 'analyze' }) as any,
+    );
 
     await pi.trigger('agent_end', {}, makeCtx());
 
