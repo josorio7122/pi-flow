@@ -968,7 +968,7 @@ describe('executeDispatch', () => {
         featureDir,
         expect.objectContaining({
           budget: { total_tokens: 150, total_cost_usd: 0.001 },
-          current_phase: 'execute',
+          current_phase: 'review', // auto-advanced from execute on success
         }),
       );
     });
@@ -2340,6 +2340,161 @@ describe('integration: full lifecycle sequence', () => {
 
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toBeTruthy();
+    });
+  });
+
+  // ─── Phase auto-advance ───────────────────────────────────────────────────
+
+  describe('phase auto-advance', () => {
+    const featureDir = path.join(CWD, '.flow', 'features', 'auth');
+
+    beforeEach(() => {
+      vi.mocked(discoverAgents).mockReturnValue([makeAgent({ name: 'builder' })]);
+      vi.mocked(buildVariableMap).mockReturnValue({});
+      vi.mocked(loadConfig).mockReturnValue(makeConfig());
+      vi.mocked(checkPhaseGate).mockReturnValue({ canAdvance: true, reason: 'ok' });
+    });
+
+    it('advances current_phase to the next phase after successful dispatch', async () => {
+      vi.mocked(readStateFile).mockReturnValue(
+        makeFlowState({ change_type: 'feature', current_phase: 'execute' }),
+      );
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult({ exitCode: 0 }));
+
+      await executeDispatch(
+        { agent: 'builder', task: 'build', phase: 'execute', feature: 'auth' },
+        CWD,
+        EXTENSION_DIR,
+      );
+
+      const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(lastCall[1].current_phase).toBe('review');
+    });
+
+    it('does NOT advance phase when agent fails (exitCode !== 0)', async () => {
+      vi.mocked(readStateFile).mockReturnValue(
+        makeFlowState({ change_type: 'feature', current_phase: 'execute' }),
+      );
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult({ exitCode: 1 }));
+
+      await executeDispatch(
+        { agent: 'builder', task: 'build', phase: 'execute', feature: 'auth' },
+        CWD,
+        EXTENSION_DIR,
+      );
+
+      const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(lastCall[1].current_phase).toBe('execute');
+    });
+
+    it('advances from execute to ship for docs change type (skips review)', async () => {
+      vi.mocked(readStateFile).mockReturnValue(
+        makeFlowState({ change_type: 'docs', current_phase: 'execute' }),
+      );
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult({ exitCode: 0 }));
+
+      await executeDispatch(
+        { agent: 'builder', task: 'build', phase: 'execute', feature: 'auth' },
+        CWD,
+        EXTENSION_DIR,
+      );
+
+      const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(lastCall[1].current_phase).toBe('ship');
+    });
+
+    it('stays on terminal phase (ship)', async () => {
+      vi.mocked(readStateFile).mockReturnValue(
+        makeFlowState({ change_type: 'feature', current_phase: 'ship' }),
+      );
+      vi.mocked(discoverAgents).mockReturnValue([
+        makeAgent({ name: 'builder', phases: ['ship'] as any }),
+      ]);
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult({ exitCode: 0 }));
+
+      await executeDispatch(
+        { agent: 'builder', task: 'ship it', phase: 'ship', feature: 'auth' },
+        CWD,
+        EXTENSION_DIR,
+      );
+
+      const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(lastCall[1].current_phase).toBe('ship');
+    });
+
+    it('respects skipped_phases when advancing', async () => {
+      vi.mocked(readStateFile).mockReturnValue(
+        makeFlowState({
+          change_type: 'feature',
+          current_phase: 'execute',
+          skipped_phases: ['review'],
+        }),
+      );
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult({ exitCode: 0 }));
+
+      await executeDispatch(
+        { agent: 'builder', task: 'build', phase: 'execute', feature: 'auth' },
+        CWD,
+        EXTENSION_DIR,
+      );
+
+      const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(lastCall[1].current_phase).toBe('ship');
+    });
+
+    it('advances phase in parallel mode when all agents succeed', async () => {
+      vi.mocked(readStateFile).mockReturnValue(
+        makeFlowState({ change_type: 'feature', current_phase: 'analyze' }),
+      );
+      vi.mocked(discoverAgents).mockReturnValue([
+        makeAgent({ name: 'scout', phases: ['analyze'] as any }),
+      ]);
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult({ exitCode: 0 }));
+
+      await executeDispatch(
+        {
+          parallel: [
+            { agent: 'scout', task: 'scan models' },
+            { agent: 'scout', task: 'scan routes' },
+          ],
+          phase: 'analyze',
+          feature: 'auth',
+        },
+        CWD,
+        EXTENSION_DIR,
+      );
+
+      const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(lastCall[1].current_phase).toBe('plan');
+    });
+
+    it('does NOT advance in parallel mode when any agent fails', async () => {
+      vi.mocked(readStateFile).mockReturnValue(
+        makeFlowState({ change_type: 'feature', current_phase: 'analyze' }),
+      );
+      vi.mocked(discoverAgents).mockReturnValue([
+        makeAgent({ name: 'scout', phases: ['analyze'] as any }),
+      ]);
+      // First succeeds, second fails
+      vi.mocked(spawnAgentWithRetry)
+        .mockResolvedValueOnce(makeResult({ exitCode: 0 }))
+        .mockResolvedValueOnce(makeResult({ exitCode: 1 }));
+
+      await executeDispatch(
+        {
+          parallel: [
+            { agent: 'scout', task: 'scan models' },
+            { agent: 'scout', task: 'scan routes' },
+          ],
+          phase: 'analyze',
+          feature: 'auth',
+        },
+        CWD,
+        EXTENSION_DIR,
+      );
+
+      const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(lastCall[1].current_phase).toBe('analyze');
     });
   });
 });

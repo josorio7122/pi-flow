@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
+import { getNextPhase } from './transitions.js';
 import type {
   FlowAgentConfig,
   FlowConfig,
@@ -545,6 +546,19 @@ function accumulateBudget(
   if (!currentState) return;
   try {
     const usage = sumBudget(results);
+    const allSucceeded = results.every((r) => r.exitCode === 0);
+
+    // Determine the next phase: auto-advance on success, stay on current on failure
+    let nextPhase = params.phase;
+    if (allSucceeded) {
+      const advanced = getNextPhase(
+        currentState.change_type,
+        currentState.skipped_phases,
+        params.phase,
+      );
+      if (advanced) nextPhase = advanced;
+    }
+
     const updatedState: FlowState = {
       ...currentState,
       budget: {
@@ -552,7 +566,7 @@ function accumulateBudget(
         total_cost_usd: currentState.budget.total_cost_usd + usage.cost,
       },
       last_updated: new Date().toISOString(),
-      current_phase: params.phase,
+      current_phase: nextPhase,
       ...(params.wave !== undefined ? { current_wave: params.wave } : {}),
     };
     writeStateFile(featureDir, updatedState);
