@@ -3,13 +3,14 @@ import type {
   FlowAgentConfig,
   FlowConfig,
   FlowDispatchDetails,
+  FlowState,
   Phase,
   SingleAgentResult,
 } from './types.js';
 import { loadConfig } from './config.js';
 import { discoverAgents, buildVariableMap } from './agents.js';
 import { spawnAgentWithRetry, mapWithConcurrencyLimit, getFinalOutput } from './spawn.js';
-import { readStateFile, writeDispatchLog } from './state.js';
+import { readStateFile, writeDispatchLog, writeStateFile, ensureFeatureDir, appendProgressLog } from './state.js';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -80,6 +81,19 @@ export function makeDetails(
   feature: string,
 ): (results: SingleAgentResult[]) => FlowDispatchDetails {
   return (results) => ({ mode, phase, feature, results });
+}
+
+/**
+ * Sums input+output tokens and cost across an array of SingleAgentResults.
+ */
+export function aggregateUsage(results: SingleAgentResult[]): { tokens: number; cost: number } {
+  return results.reduce(
+    (acc, r) => ({
+      tokens: acc.tokens + r.usage.input + r.usage.output,
+      cost: acc.cost + r.usage.cost,
+    }),
+    { tokens: 0, cost: 0 },
+  );
 }
 
 // ─── Internal executors ───────────────────────────────────────────────────────
@@ -304,8 +318,28 @@ export async function executeDispatch(
 
     // e. Build variable map (done once, shared across all agents)
     const featureDir = path.join(cwd, '.flow', 'features', params.feature);
-    const state = readStateFile(featureDir);
-    const variableMap = buildVariableMap(cwd, featureDir, state);
+
+    // State initialization: create state.md if this is the first dispatch for this feature
+    let currentState = readStateFile(featureDir);
+    if (!currentState) {
+      ensureFeatureDir(cwd, params.feature);
+      currentState = {
+        feature: params.feature,
+        change_type: 'feature',
+        current_phase: params.phase,
+        current_wave: params.wave ?? null,
+        wave_count: null,
+        skipped_phases: [],
+        started_at: new Date().toISOString(),
+        last_updated: new Date().toISOString(),
+        budget: { total_tokens: 0, total_cost_usd: 0 },
+        gates: { spec_approved: false, design_approved: false, review_verdict: null },
+        sentinel: { open_halts: 0, open_warns: 0 },
+      } satisfies FlowState;
+      writeStateFile(featureDir, currentState);
+    }
+
+    const variableMap = buildVariableMap(cwd, featureDir, currentState);
 
     // f. Route to the appropriate executor
 
@@ -338,6 +372,8 @@ export async function executeDispatch(
         onUpdate,
       );
       const details = makeDetails('parallel', params.phase, params.feature)(results);
+
+      accumulateBudget(featureDir, currentState, results, params);
 
       return {
         content: buildContent(results),
@@ -374,6 +410,8 @@ export async function executeDispatch(
         onUpdate,
       );
       const details = makeDetails('chain', params.phase, params.feature)(results);
+
+      accumulateBudget(featureDir, currentState, results, params);
 
       return {
         content: buildContent(results),
@@ -420,6 +458,8 @@ export async function executeDispatch(
     );
     const details = makeDetails('single', params.phase, params.feature)([result]);
 
+    accumulateBudget(featureDir, currentState, [result], params);
+
     return {
       content: buildContent([result]),
       details,
@@ -431,6 +471,37 @@ export async function executeDispatch(
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Updates state budget from execution results, writes state file, and appends
+ * a progress log entry. All failures are swallowed — budget/log loss is acceptable.
+ */
+function accumulateBudget(
+  featureDir: string,
+  currentState: FlowState,
+  results: SingleAgentResult[],
+  params: DispatchParams,
+): void {
+  try {
+    const usage = aggregateUsage(results);
+    const updatedState: FlowState = {
+      ...currentState,
+      budget: {
+        total_tokens: currentState.budget.total_tokens + usage.tokens,
+        total_cost_usd: currentState.budget.total_cost_usd + usage.cost,
+      },
+      last_updated: new Date().toISOString(),
+      current_phase: params.phase,
+      ...(params.wave !== undefined ? { current_wave: params.wave } : {}),
+    };
+    writeStateFile(featureDir, updatedState);
+  } catch { /* budget loss acceptable */ }
+
+  try {
+    const agentNames = results.map((r) => r.agent).join(', ') || 'unknown';
+    appendProgressLog(featureDir, params.phase, `Dispatched ${agentNames}`);
+  } catch { /* log loss acceptable */ }
+}
 
 function errorResult(message: string, params: DispatchParams): DispatchResult {
   const mode: 'single' | 'parallel' | 'chain' = params.parallel

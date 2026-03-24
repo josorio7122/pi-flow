@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { FlowAgentConfig, FlowConfig, Phase, SingleAgentResult } from './types.js';
+import * as path from 'node:path';
+import type { FlowAgentConfig, FlowConfig, FlowState, Phase, SingleAgentResult } from './types.js';
 
 // ─── module mocks ─────────────────────────────────────────────────────────────
 
@@ -25,6 +26,8 @@ vi.mock('./state.js', () => ({
   readStateFile: vi.fn(),
   writeDispatchLog: vi.fn(),
   appendProgressLog: vi.fn(),
+  writeStateFile: vi.fn(),
+  ensureFeatureDir: vi.fn(),
 }));
 
 // ─── imports (after mocks) ────────────────────────────────────────────────────
@@ -40,7 +43,7 @@ import {
 import { spawnAgentWithRetry } from './spawn.js';
 import { discoverAgents, buildVariableMap } from './agents.js';
 import { loadConfig } from './config.js';
-import { writeDispatchLog } from './state.js';
+import { writeDispatchLog, writeStateFile, ensureFeatureDir, appendProgressLog, readStateFile } from './state.js';
 
 // ─── test helpers ─────────────────────────────────────────────────────────────
 
@@ -106,6 +109,23 @@ function makeConfig(): FlowConfig {
     },
     memory: { enabled: true },
     git: { branch_prefix: 'feature/', commit_style: 'conventional', auto_pr: true },
+  };
+}
+
+function makeFlowState(overrides: Partial<FlowState> = {}): FlowState {
+  return {
+    feature: 'auth',
+    change_type: 'feature',
+    current_phase: 'execute',
+    current_wave: null,
+    wave_count: null,
+    skipped_phases: [],
+    started_at: '2026-01-01T00:00:00.000Z',
+    last_updated: '2026-01-01T00:00:00.000Z',
+    budget: { total_tokens: 0, total_cost_usd: 0 },
+    gates: { spec_approved: false, design_approved: false, review_verdict: null },
+    sentinel: { open_halts: 0, open_warns: 0 },
+    ...overrides,
   };
 }
 
@@ -795,6 +815,371 @@ describe('executeDispatch', () => {
 
       expect(loadConfig).toHaveBeenCalledWith(CWD);
       expect(discoverAgents).toHaveBeenCalledWith(EXTENSION_DIR, CWD);
+    });
+  });
+
+  // ─── state initialization ────────────────────────────────────────────────
+
+  describe('state initialization', () => {
+    const featureDir = path.join(CWD, '.flow', 'features', 'auth');
+
+    it('(a) first dispatch: calls ensureFeatureDir and writeStateFile with initial state', async () => {
+      vi.mocked(readStateFile).mockReturnValue(null);
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult());
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement feature',
+        phase: 'execute',
+        feature: 'auth',
+        wave: 1,
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(ensureFeatureDir).toHaveBeenCalledWith(CWD, 'auth');
+      // Init write has budget = 0
+      expect(writeStateFile).toHaveBeenCalledWith(
+        featureDir,
+        expect.objectContaining({
+          feature: 'auth',
+          current_phase: 'execute',
+          current_wave: 1,
+          budget: { total_tokens: 0, total_cost_usd: 0 },
+        }),
+      );
+    });
+
+    it('(a) first dispatch: started_at is a non-empty ISO timestamp', async () => {
+      vi.mocked(readStateFile).mockReturnValue(null);
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult());
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      const calls = vi.mocked(writeStateFile).mock.calls;
+      const initCall = calls.find((c) => c[1].budget.total_tokens === 0);
+      expect(initCall).toBeDefined();
+      expect(initCall![1].started_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+
+    it('(a) first dispatch: current_wave is null when wave not provided', async () => {
+      vi.mocked(readStateFile).mockReturnValue(null);
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult());
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(writeStateFile).toHaveBeenCalledWith(
+        featureDir,
+        expect.objectContaining({ current_wave: null }),
+      );
+    });
+
+    it('(b) subsequent dispatch: does NOT call ensureFeatureDir', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult());
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(ensureFeatureDir).not.toHaveBeenCalled();
+    });
+
+    it('(b) subsequent dispatch: writeStateFile called exactly once (budget update only)', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult());
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(writeStateFile).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ─── budget accumulation ─────────────────────────────────────────────────
+
+  describe('budget accumulation', () => {
+    const featureDir = path.join(CWD, '.flow', 'features', 'auth');
+
+    it('(c) single: writeStateFile called with correct budget after execution', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState({ budget: { total_tokens: 0, total_cost_usd: 0 } }));
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(
+        makeResult({ usage: { input: 100, output: 50, cacheRead: 0, cacheWrite: 0, cost: 0.001, contextTokens: 150, turns: 1 } }),
+      );
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(writeStateFile).toHaveBeenCalledWith(
+        featureDir,
+        expect.objectContaining({
+          budget: { total_tokens: 150, total_cost_usd: 0.001 },
+          current_phase: 'execute',
+        }),
+      );
+    });
+
+    it('(c) single: last_updated is a non-empty ISO timestamp', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult());
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      const call = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(call[1].last_updated).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+
+    it('(c) single: budget accumulates on top of existing state tokens', async () => {
+      vi.mocked(readStateFile).mockReturnValue(
+        makeFlowState({ budget: { total_tokens: 500, total_cost_usd: 0.01 } }),
+      );
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(
+        makeResult({ usage: { input: 100, output: 50, cacheRead: 0, cacheWrite: 0, cost: 0.001, contextTokens: 150, turns: 1 } }),
+      );
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(writeStateFile).toHaveBeenCalledWith(
+        featureDir,
+        expect.objectContaining({
+          budget: { total_tokens: 650, total_cost_usd: 0.011 },
+        }),
+      );
+    });
+
+    it('(d) parallel: writeStateFile called with budgets summed across all results', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState({ budget: { total_tokens: 0, total_cost_usd: 0 } }));
+      vi.mocked(spawnAgentWithRetry)
+        .mockResolvedValueOnce(makeResult({ agent: 'builder', usage: { input: 100, output: 50, cacheRead: 0, cacheWrite: 0, cost: 0.001, contextTokens: 150, turns: 1 } }))
+        .mockResolvedValueOnce(makeResult({ agent: 'scout', usage: { input: 200, output: 100, cacheRead: 0, cacheWrite: 0, cost: 0.002, contextTokens: 300, turns: 1 } }));
+
+      const params: DispatchParams = {
+        parallel: [
+          { agent: 'builder', task: 'task 1' },
+          { agent: 'scout', task: 'task 2' },
+        ],
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(writeStateFile).toHaveBeenCalledWith(
+        featureDir,
+        expect.objectContaining({
+          budget: { total_tokens: 450, total_cost_usd: 0.003 },
+        }),
+      );
+    });
+
+    it('(e) chain: writeStateFile called with budgets summed across all completed steps', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState({ budget: { total_tokens: 0, total_cost_usd: 0 } }));
+      vi.mocked(spawnAgentWithRetry)
+        .mockResolvedValueOnce(makeResult({ agent: 'scout', usage: { input: 80, output: 40, cacheRead: 0, cacheWrite: 0, cost: 0.0005, contextTokens: 120, turns: 1 } }))
+        .mockResolvedValueOnce(makeResult({ agent: 'builder', usage: { input: 120, output: 60, cacheRead: 0, cacheWrite: 0, cost: 0.0015, contextTokens: 180, turns: 1 } }));
+
+      const params: DispatchParams = {
+        chain: [
+          { agent: 'scout', task: 'analyze' },
+          { agent: 'builder', task: 'implement' },
+        ],
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(writeStateFile).toHaveBeenCalledWith(
+        featureDir,
+        expect.objectContaining({
+          budget: { total_tokens: 300, total_cost_usd: 0.002 },
+        }),
+      );
+    });
+
+    it('(e) chain: wave is updated in state when provided', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult());
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+        wave: 3,
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(lastCall[1].current_wave).toBe(3);
+    });
+  });
+
+  // ─── appendProgressLog ───────────────────────────────────────────────────
+
+  describe('appendProgressLog', () => {
+    const featureDir = path.join(CWD, '.flow', 'features', 'auth');
+
+    it('(f) called exactly once per single dispatch', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult({ agent: 'builder' }));
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(appendProgressLog).toHaveBeenCalledTimes(1);
+    });
+
+    it('(f) called with featureDir, phase, and message containing agent name', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult({ agent: 'builder' }));
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(appendProgressLog).toHaveBeenCalledWith(
+        featureDir,
+        'execute',
+        expect.stringMatching(/builder/i),
+      );
+    });
+
+    it('(f) called once for parallel dispatch', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(spawnAgentWithRetry)
+        .mockResolvedValueOnce(makeResult({ agent: 'builder' }))
+        .mockResolvedValueOnce(makeResult({ agent: 'scout' }));
+
+      const params: DispatchParams = {
+        parallel: [
+          { agent: 'builder', task: 'task 1' },
+          { agent: 'scout', task: 'task 2' },
+        ],
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(appendProgressLog).toHaveBeenCalledTimes(1);
+    });
+
+    it('(f) called once for chain dispatch', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(spawnAgentWithRetry)
+        .mockResolvedValueOnce(makeResult({ agent: 'scout' }))
+        .mockResolvedValueOnce(makeResult({ agent: 'builder' }));
+
+      const params: DispatchParams = {
+        chain: [
+          { agent: 'scout', task: 'step 1' },
+          { agent: 'builder', task: 'step 2' },
+        ],
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(appendProgressLog).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ─── error resilience ────────────────────────────────────────────────────
+
+  describe('error resilience', () => {
+    it('writeStateFile throws: executeDispatch still returns a result', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(writeStateFile).mockImplementation(() => { throw new Error('disk full'); });
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult());
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toBeTruthy();
+    });
+
+    it('appendProgressLog throws: executeDispatch still returns a result', async () => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(appendProgressLog).mockImplementation(() => { throw new Error('log write failed'); });
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult());
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toBeTruthy();
     });
   });
 });
