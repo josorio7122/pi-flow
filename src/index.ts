@@ -20,7 +20,6 @@ import type {
   ToolCallEvent,
   ToolCallEventResult,
   ToolRenderResultOptions,
-  AgentToolResult,
   AgentToolUpdateCallback,
 } from '@mariozechner/pi-coding-agent';
 import type { Theme, ThemeColor } from '@mariozechner/pi-coding-agent';
@@ -97,12 +96,7 @@ function formatStatus(state: FlowState): string {
 
 function updateFooterStatus(state: FlowState, ui: ExtensionContext['ui']): void {
   const cost = `$${state.budget.total_cost_usd.toFixed(2)}`;
-  const status = `● ${state.feature}  |  ${cost}`;
-  try {
-    (ui as unknown as { setStatus: (...args: unknown[]) => void }).setStatus('pi-flow', status);
-  } catch {
-    // setStatus may not be available in all pi versions
-  }
+  ui.setStatus('pi-flow', `● ${state.feature}  |  ${cost}`);
 }
 
 // ─── Extension entry point ────────────────────────────────────────────────────
@@ -168,7 +162,7 @@ export default function piFlow(pi: ExtensionAPI) {
         chain?: Array<{ agent: string; task: string }>;
         feature?: string;
       },
-      signal: AbortSignal,
+      signal: AbortSignal | undefined,
       onUpdate: AgentToolUpdateCallback<FlowDispatchDetails> | undefined,
       ctx: ExtensionContext,
     ) {
@@ -178,7 +172,7 @@ export default function piFlow(pi: ExtensionAPI) {
       if (!feature) {
         return {
           content: [{ type: 'text' as const, text: 'No active feature. Provide a feature name to start.' }],
-          details: undefined as unknown as FlowDispatchDetails,
+          details: { mode: 'single' as const, feature: 'unknown', results: [] },
           isError: true,
         };
       }
@@ -233,11 +227,14 @@ export default function piFlow(pi: ExtensionAPI) {
     },
 
     renderResult(
-      result: AgentToolResult<FlowDispatchDetails>,
+      result: {
+        content: Array<{ type: string; text?: string }>;
+        details: FlowDispatchDetails | undefined;
+      },
       options: ToolRenderResultOptions,
       theme: Theme,
     ) {
-      const details = result.details as FlowDispatchDetails | undefined;
+      const details = result.details;
       if (!details || details.results.length === 0) {
         const first = result.content[0];
         return new Text(first?.type === 'text' ? first.text : '(no output)', 0, 0);
@@ -280,9 +277,13 @@ export default function piFlow(pi: ExtensionAPI) {
     }
   });
 
+  // input — reset loop detection per turn
+  pi.on('input', async () => {
+    loopHistory.length = 0;
+  });
+
   // session_start — restore footer status
   pi.on('session_start', async (_event: SessionStartEvent, ctx: ExtensionContext) => {
-    loopHistory.length = 0;
     if (!ctx.hasUI) return;
     const active = findActiveFeature(ctx.cwd);
     if (!active) return;

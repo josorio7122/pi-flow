@@ -18,7 +18,7 @@ function parseScalar(raw: string): string | number | boolean {
   const s = raw.trim();
   if (s === 'true') return true;
   if (s === 'false') return false;
-  if (s === 'null' || s === '~') return '' as unknown as string; // treat null as empty
+  if (s === 'null' || s === '~') return '';
   const n = Number(s);
   if (!Number.isNaN(n) && s !== '') return n;
   // Strip surrounding quotes (single or double)
