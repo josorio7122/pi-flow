@@ -27,6 +27,10 @@ describe('isFlowPath', () => {
     expect(isFlowPath('.flow-utils/file.ts')).toBe(false);
   });
 
+  it('rejects src/.flow/exploit.ts (nested .flow dir)', () => {
+    expect(isFlowPath('src/.flow/exploit.ts')).toBe(false);
+  });
+
   it('allows absolute path with .flow segment', () => {
     expect(isFlowPath('/Users/dev/project/.flow/state.md')).toBe(true);
   });

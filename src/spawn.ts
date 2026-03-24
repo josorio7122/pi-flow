@@ -374,21 +374,7 @@ export async function spawnAgent(
   onUpdate?: (result: SingleAgentResult) => void,
 ): Promise<SingleAgentResult> {
   const currentResult: SingleAgentResult = {
-    agent: agent.name,
-    agentSource: agent.source,
-    task,
-    exitCode: -1, // -1 = running; set to actual exit code when the process closes
-    messages: [],
-    stderr: '',
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      cost: 0,
-      contextTokens: 0,
-      turns: 0,
-    },
+    ...emptyResult(agent, task),
     model: agent.model || undefined,
   };
 
@@ -490,21 +476,9 @@ export async function spawnAgentWithRetry(
       return result;
     } catch (err) {
       lastResult = {
-        agent: agent.name,
-        agentSource: agent.source,
-        task,
+        ...emptyResult(agent, task),
         exitCode: 1,
-        messages: [],
         stderr: err instanceof Error ? err.message : String(err),
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          cost: 0,
-          contextTokens: 0,
-          turns: 0,
-        },
       };
 
       if (attempt < delays.length) {
@@ -513,24 +487,9 @@ export async function spawnAgentWithRetry(
     }
   }
 
-  // All retries exhausted — return the last known result
-  return (
-    lastResult ?? {
-      agent: agent.name,
-      agentSource: agent.source,
-      task,
-      exitCode: 1,
-      messages: [],
-      stderr: 'Spawn failed after retries',
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        cost: 0,
-        contextTokens: 0,
-        turns: 0,
-      },
-    }
-  );
+  return lastResult ?? {
+    ...emptyResult(agent, task),
+    exitCode: 1,
+    stderr: 'Spawn failed after retries',
+  };
 }

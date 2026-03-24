@@ -342,6 +342,19 @@ export async function executeDispatch(
   onUpdate?: OnUpdateCallback,
 ): Promise<DispatchResult> {
   try {
+    // Validate exactly one mode
+    const hasParallel = (params.parallel?.length ?? 0) > 0;
+    const hasChain = (params.chain?.length ?? 0) > 0;
+    const hasSingle = Boolean(params.agent && params.task);
+    const modeCount = Number(hasParallel) + Number(hasChain) + Number(hasSingle);
+
+    if (modeCount !== 1) {
+      return errorResult(
+        'Specify exactly one mode: agent+task (single), parallel array, or chain array.',
+        params,
+      );
+    }
+
     const config = loadConfig(cwd);
     const feature = params.feature ?? 'default';
     const featureDir = path.join(cwd, '.flow', 'features', feature);
@@ -349,8 +362,8 @@ export async function executeDispatch(
     const agents = discoverAgents(extensionDir, cwd);
     const variableMap = buildVariableMap(cwd, featureDir);
 
-    if (params.parallel) {
-      const resolved = resolveAgentTasks(params.parallel, agents);
+    if (hasParallel) {
+      const resolved = resolveAgentTasks(params.parallel!, agents);
       if ('error' in resolved) return errorResult(resolved.error, params);
 
       const results = await executeParallel(
@@ -362,8 +375,8 @@ export async function executeDispatch(
       return { content: buildContent(results), details };
     }
 
-    if (params.chain) {
-      const resolved = resolveAgentTasks(params.chain, agents);
+    if (hasChain) {
+      const resolved = resolveAgentTasks(params.chain!, agents);
       if ('error' in resolved) return errorResult(resolved.error, params);
 
       const results = await executeChain(
@@ -375,12 +388,8 @@ export async function executeDispatch(
       return { content: buildContent(results), details };
     }
 
-    // Single mode
-    if (!params.agent || !params.task) {
-      return errorResult('dispatch_flow requires one of: agent+task, parallel, or chain.', params);
-    }
-
-    const agent = findAgent(agents, params.agent);
+    // Single mode (guaranteed by modeCount check above)
+    const agent = findAgent(agents, params.agent!);
     if (!agent) {
       return errorResult(
         `Agent '${params.agent}' not found. Available: ${agents.map((a) => a.name).join(', ')}`,
@@ -388,12 +397,13 @@ export async function executeDispatch(
       );
     }
 
+    const task = params.task!;
     const result = await executeSingle(
-      agent, params.task, cwd, variableMap, feature, signal, onUpdate,
+      agent, task, cwd, variableMap, feature, signal, onUpdate,
     );
     const details = makeDetails('single', feature)([result]);
     updateBudget(featureDir, currentState, [result]);
-    writeArtifacts(featureDir, agents, [result], [{ agent, task: params.task }]);
+    writeArtifacts(featureDir, agents, [result], [{ agent, task }]);
     return { content: buildContent([result]), details };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

@@ -25,14 +25,19 @@ const BLOCK_MESSAGE =
 export function isFlowPath(filePath: string): boolean {
   const normalized = path.normalize(filePath);
 
+  // Relative path: must start with .flow/ after normalization.
+  // path.normalize("../.flow/x") → "../.flow/x" — does NOT start with ".flow/", so blocked.
+  // path.normalize("src/.flow/x") → "src/.flow/x" — does NOT start with ".flow/", so blocked.
   if (normalized.startsWith(`.flow${path.sep}`) || normalized === '.flow') {
     return true;
   }
 
+  // Absolute path: must contain /.flow/ as a directory segment
+  // and no remaining ".." after normalization.
   if (path.isAbsolute(normalized)) {
     const segments = normalized.split(path.sep);
     const flowIdx = segments.indexOf('.flow');
-    if (flowIdx >= 0 && !segments.includes('..')) {
+    if (flowIdx >= 0 && flowIdx < segments.length - 1 && !segments.includes('..')) {
       return true;
     }
   }
