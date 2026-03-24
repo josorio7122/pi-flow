@@ -1385,7 +1385,12 @@ describe('executeDispatch', () => {
       await executeDispatch(params, CWD, EXTENSION_DIR);
 
       const expectedFeatureDir = path.join(CWD, '.flow', 'features', 'my-feature');
-      expect(checkPhaseGate).toHaveBeenCalledWith('execute', expectedFeatureDir);
+      expect(checkPhaseGate).toHaveBeenCalledWith(
+        'execute',
+        expectedFeatureDir,
+        'feature',
+        [],
+      );
     });
 
     it('(e) gate blocks even for intent phase if checkPhaseGate returns canAdvance: false', async () => {

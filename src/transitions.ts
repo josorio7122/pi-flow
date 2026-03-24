@@ -5,9 +5,9 @@ import type { ChangeType, Phase } from './types.js';
 const SKIP_PATHS: Record<ChangeType, Phase[]> = {
   feature: ['intent', 'spec', 'analyze', 'plan', 'execute', 'review', 'ship'],
   refactor: ['intent', 'analyze', 'plan', 'execute', 'review', 'ship'],
-  hotfix: ['intent', 'analyze', 'execute', 'review', 'ship'],
-  docs: ['intent', 'execute', 'ship'],
-  config: ['intent', 'analyze', 'execute', 'ship'],
+  hotfix: ['intent', 'analyze', 'plan', 'execute', 'review', 'ship'],
+  docs: ['intent', 'plan', 'execute', 'ship'],
+  config: ['intent', 'analyze', 'plan', 'execute', 'ship'],
   research: ['intent', 'analyze'],
 };
 
@@ -58,8 +58,21 @@ export function isTerminalPhase(
 }
 
 /**
+ * Returns true if `phase` is present in the effective pipeline for the given
+ * change type and skipped phases. Used by gates to determine whether the
+ * phase that produces a required artifact is active.
+ */
+export function phaseInPipeline(
+  changeType: ChangeType,
+  skippedPhases: Phase[],
+  phase: Phase,
+): boolean {
+  return getEffectivePipeline(changeType, skippedPhases).includes(phase);
+}
+
+/**
  * Returns true if entering this phase requires human approval of a prior artifact.
- * - `analyze` requires spec.md approval
+ * - `analyze` requires spec.md approval (only when spec is in the pipeline)
  * - `execute` requires design.md approval
  */
 export function phaseRequiresApproval(phase: Phase): boolean {

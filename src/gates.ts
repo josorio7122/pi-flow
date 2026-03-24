@@ -1,7 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Phase, GateResult } from './types.js';
+import type { ChangeType, Phase, GateResult } from './types.js';
 import { getApprovalFrontmatterExample } from './templates.js';
+import { phaseInPipeline } from './transitions.js';
 
 // ─── Frontmatter parser ───────────────────────────────────────────────────────
 
@@ -91,8 +92,17 @@ export function gateSpec(featureDir: string): GateResult {
 
 /**
  * ANALYZE gate (SPEC → ANALYZE): spec.md must exist and be approved.
+ * Auto-passes when spec phase is not in the effective pipeline.
  */
-export function gateAnalyze(featureDir: string): GateResult {
+export function gateAnalyze(
+  featureDir: string,
+  changeType?: ChangeType,
+  skippedPhases?: Phase[],
+): GateResult {
+  // If spec phase is not in the pipeline, its artifact isn't required
+  if (changeType && !phaseInPipeline(changeType, skippedPhases ?? [], 'spec')) {
+    return { canAdvance: true, reason: 'spec phase skipped — analyze gate auto-passes' };
+  }
   const specPath = path.join(featureDir, 'spec.md');
   if (!fileExists(specPath)) {
     return { canAdvance: false, reason: 'spec.md does not exist — run SPEC phase first' };
@@ -112,8 +122,16 @@ export function gateAnalyze(featureDir: string): GateResult {
 
 /**
  * PLAN gate (ANALYZE → PLAN): analysis.md must exist.
+ * Auto-passes when analyze phase is not in the effective pipeline.
  */
-export function gatePlan(featureDir: string): GateResult {
+export function gatePlan(
+  featureDir: string,
+  changeType?: ChangeType,
+  skippedPhases?: Phase[],
+): GateResult {
+  if (changeType && !phaseInPipeline(changeType, skippedPhases ?? [], 'analyze')) {
+    return { canAdvance: true, reason: 'analyze phase skipped — plan gate auto-passes' };
+  }
   const analysisPath = path.join(featureDir, 'analysis.md');
   if (!fileExists(analysisPath)) {
     return { canAdvance: false, reason: 'analysis.md does not exist — run ANALYZE phase first' };
@@ -175,8 +193,16 @@ export function gateReview(featureDir: string): GateResult {
 
 /**
  * SHIP gate (REVIEW → SHIP): review.md must exist with verdict === 'PASSED'.
+ * Auto-passes when review phase is not in the effective pipeline.
  */
-export function gateShip(featureDir: string): GateResult {
+export function gateShip(
+  featureDir: string,
+  changeType?: ChangeType,
+  skippedPhases?: Phase[],
+): GateResult {
+  if (changeType && !phaseInPipeline(changeType, skippedPhases ?? [], 'review')) {
+    return { canAdvance: true, reason: 'review phase skipped — ship gate auto-passes' };
+  }
   const reviewPath = path.join(featureDir, 'review.md');
   if (!fileExists(reviewPath)) {
     return { canAdvance: false, reason: 'review.md does not exist — run REVIEW phase first' };
@@ -198,24 +224,32 @@ export function gateShip(featureDir: string): GateResult {
  * Each gate reads the handoff file from the prior phase and verifies
  * that all required conditions are met.
  *
+ * When `changeType` and `skippedPhases` are provided, gates auto-pass
+ * checks for artifacts from phases not in the effective pipeline.
+ *
  * All operations are synchronous and side-effect-free
  * (read-only: fs.existsSync + fs.readFileSync).
  */
-export function checkPhaseGate(targetPhase: Phase, featureDir: string): GateResult {
+export function checkPhaseGate(
+  targetPhase: Phase,
+  featureDir: string,
+  changeType?: ChangeType,
+  skippedPhases?: Phase[],
+): GateResult {
   switch (targetPhase) {
     case 'intent':
       return gateIntent(featureDir);
     case 'spec':
       return gateSpec(featureDir);
     case 'analyze':
-      return gateAnalyze(featureDir);
+      return gateAnalyze(featureDir, changeType, skippedPhases);
     case 'plan':
-      return gatePlan(featureDir);
+      return gatePlan(featureDir, changeType, skippedPhases);
     case 'execute':
       return gateExecute(featureDir);
     case 'review':
       return gateReview(featureDir);
     case 'ship':
-      return gateShip(featureDir);
+      return gateShip(featureDir, changeType, skippedPhases);
   }
 }

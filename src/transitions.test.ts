@@ -32,24 +32,31 @@ describe('getEffectivePipeline', () => {
     ]);
   });
 
-  it('returns pipeline for hotfix (no spec, no plan)', () => {
+  it('returns pipeline for hotfix (no spec)', () => {
     expect(getEffectivePipeline('hotfix', [])).toEqual([
       'intent',
       'analyze',
+      'plan',
       'execute',
       'review',
       'ship',
     ]);
   });
 
-  it('returns pipeline for docs (intent → execute → ship)', () => {
-    expect(getEffectivePipeline('docs', [])).toEqual(['intent', 'execute', 'ship']);
+  it('returns pipeline for docs (no spec, no analyze, no review)', () => {
+    expect(getEffectivePipeline('docs', [])).toEqual([
+      'intent',
+      'plan',
+      'execute',
+      'ship',
+    ]);
   });
 
-  it('returns pipeline for config (no spec, no plan, no review)', () => {
+  it('returns pipeline for config (no spec, no review)', () => {
     expect(getEffectivePipeline('config', [])).toEqual([
       'intent',
       'analyze',
+      'plan',
       'execute',
       'ship',
     ]);
@@ -70,15 +77,16 @@ describe('getEffectivePipeline', () => {
   });
 
   it('skipping a phase not in the base pipeline is a no-op', () => {
-    expect(getEffectivePipeline('docs', ['analyze', 'plan'])).toEqual([
+    expect(getEffectivePipeline('docs', ['analyze', 'review'])).toEqual([
       'intent',
+      'plan',
       'execute',
       'ship',
     ]);
   });
 
   it('returns empty array when all phases are skipped', () => {
-    expect(getEffectivePipeline('docs', ['intent', 'execute', 'ship'])).toEqual([]);
+    expect(getEffectivePipeline('docs', ['intent', 'plan', 'execute', 'ship'])).toEqual([]);
   });
 
   it('returns the base array by reference when no phases are skipped', () => {
@@ -119,12 +127,12 @@ describe('getNextPhase', () => {
     expect(getNextPhase('hotfix', [], 'intent')).toBe('analyze');
   });
 
-  it('advances from analyze to execute for hotfix (skips plan)', () => {
-    expect(getNextPhase('hotfix', [], 'analyze')).toBe('execute');
+  it('advances from analyze to plan for hotfix', () => {
+    expect(getNextPhase('hotfix', [], 'analyze')).toBe('plan');
   });
 
-  it('advances from intent to execute for docs', () => {
-    expect(getNextPhase('docs', [], 'intent')).toBe('execute');
+  it('advances from intent to plan for docs', () => {
+    expect(getNextPhase('docs', [], 'intent')).toBe('plan');
   });
 
   it('advances from execute to ship for docs (skips review)', () => {
@@ -151,7 +159,8 @@ describe('getNextPhase', () => {
 
   it('advances through each phase of config pipeline', () => {
     expect(getNextPhase('config', [], 'intent')).toBe('analyze');
-    expect(getNextPhase('config', [], 'analyze')).toBe('execute');
+    expect(getNextPhase('config', [], 'analyze')).toBe('plan');
+    expect(getNextPhase('config', [], 'plan')).toBe('execute');
     expect(getNextPhase('config', [], 'execute')).toBe('ship');
     expect(getNextPhase('config', [], 'ship')).toBeNull();
   });
@@ -185,7 +194,7 @@ describe('isTerminalPhase', () => {
   });
 
   it('returns false when all phases are skipped (empty pipeline)', () => {
-    expect(isTerminalPhase('docs', ['intent', 'execute', 'ship'], 'ship')).toBe(false);
+    expect(isTerminalPhase('docs', ['intent', 'plan', 'execute', 'ship'], 'ship')).toBe(false);
   });
 });
 

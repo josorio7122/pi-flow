@@ -275,4 +275,57 @@ describe('checkPhaseGate', () => {
     const result = checkPhaseGate('ship', featureDir);
     expect(result.canAdvance).toBe(true);
   });
+
+  // ─── Skip-path aware gates ──────────────────────────────────────────────
+
+  it('analyze auto-passes spec check when spec phase is not in pipeline (hotfix)', () => {
+    // No spec.md exists — but hotfix skips spec phase
+    const result = checkPhaseGate('analyze', featureDir, 'hotfix', []);
+    expect(result.canAdvance).toBe(true);
+    expect(result.reason).toContain('skipped');
+  });
+
+  it('analyze auto-passes spec check when spec phase is not in pipeline (config)', () => {
+    const result = checkPhaseGate('analyze', featureDir, 'config', []);
+    expect(result.canAdvance).toBe(true);
+  });
+
+  it('analyze still requires spec.md for feature type', () => {
+    const result = checkPhaseGate('analyze', featureDir, 'feature', []);
+    expect(result.canAdvance).toBe(false);
+  });
+
+  it('analyze auto-passes when spec is in skipped_phases override', () => {
+    const result = checkPhaseGate('analyze', featureDir, 'feature', ['spec']);
+    expect(result.canAdvance).toBe(true);
+  });
+
+  it('plan auto-passes analysis check when analyze phase is not in pipeline (docs)', () => {
+    // No analysis.md — but docs skips analyze phase
+    const result = checkPhaseGate('plan', featureDir, 'docs', []);
+    expect(result.canAdvance).toBe(true);
+    expect(result.reason).toContain('skipped');
+  });
+
+  it('plan still requires analysis.md for feature type', () => {
+    const result = checkPhaseGate('plan', featureDir, 'feature', []);
+    expect(result.canAdvance).toBe(false);
+  });
+
+  it('ship auto-passes review check when review phase is not in pipeline (docs)', () => {
+    // No review.md — but docs skips review phase
+    const result = checkPhaseGate('ship', featureDir, 'docs', []);
+    expect(result.canAdvance).toBe(true);
+    expect(result.reason).toContain('skipped');
+  });
+
+  it('ship auto-passes review check when review phase is not in pipeline (config)', () => {
+    const result = checkPhaseGate('ship', featureDir, 'config', []);
+    expect(result.canAdvance).toBe(true);
+  });
+
+  it('ship still requires review.md for feature type', () => {
+    const result = checkPhaseGate('ship', featureDir, 'feature', []);
+    expect(result.canAdvance).toBe(false);
+  });
 });

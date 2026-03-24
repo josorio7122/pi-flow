@@ -411,7 +411,12 @@ export async function executeDispatch(
 
     // Gate enforcement: check if the workflow can advance to this phase
     try {
-      const gate = checkPhaseGate(params.phase, featureDir);
+      const gate = checkPhaseGate(
+        params.phase,
+        featureDir,
+        currentState?.change_type,
+        currentState?.skipped_phases,
+      );
       if (!gate.canAdvance) {
         return errorResult(`Gate blocked for phase '${params.phase}': ${gate.reason}`, params);
       }
