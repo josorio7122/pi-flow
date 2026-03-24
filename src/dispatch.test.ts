@@ -35,6 +35,12 @@ vi.mock('./gates.js', () => ({
   checkPhaseGate: vi.fn().mockReturnValue({ canAdvance: true, reason: 'ok' }),
 }));
 
+vi.mock('node:fs', () => ({
+  existsSync: vi.fn(),
+  readFileSync: vi.fn(),
+  writeFileSync: vi.fn(),
+}));
+
 // ─── imports (after mocks) ────────────────────────────────────────────────────
 
 import {
@@ -50,6 +56,7 @@ import { discoverAgents, buildVariableMap } from './agents.js';
 import { loadConfig } from './config.js';
 import { writeDispatchLog, writeStateFile, ensureFeatureDir, appendProgressLog, readStateFile, writeCheckpoint } from './state.js';
 import { checkPhaseGate } from './gates.js';
+import * as fs from 'node:fs';
 
 // ─── test helpers ─────────────────────────────────────────────────────────────
 
@@ -1639,6 +1646,206 @@ describe('executeDispatch', () => {
 
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toBeTruthy();
+    });
+  });
+
+  // ─── task-4.1: markTaskComplete wiring ──────────────────────────────────
+
+  describe('markTaskComplete wiring (task-4.1)', () => {
+    const featureDir = path.join(CWD, '.flow', 'features', 'auth');
+    const tasksPath = path.join(featureDir, 'tasks.md');
+    const tasksContent = '- [ ] task-1.1\n- [ ] task-1.2\nSome other line\n';
+
+    beforeEach(() => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(checkPhaseGate).mockReturnValue({ canAdvance: true, reason: 'ok' });
+    });
+
+    it('(a) single dispatch with task-1.1 in task string: writeFileSync called with [x] and other lines unchanged', async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(tasksContent);
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(
+        makeResult({ task: 'implement task-1.1', exitCode: 0 }),
+      );
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement task-1.1',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        tasksPath,
+        expect.stringContaining('- [x] task-1.1'),
+        'utf8',
+      );
+      const written = vi.mocked(fs.writeFileSync).mock.calls[0][1] as string;
+      expect(written).toContain('- [ ] task-1.2');
+      expect(written).toContain('Some other line');
+      expect(written).not.toContain('- [ ] task-1.1');
+    });
+
+    it('(b) tasks.md does not exist: no error, dispatch succeeds, writeFileSync not called', async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(
+        makeResult({ task: 'implement task-1.1', exitCode: 0 }),
+      );
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement task-1.1',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(result.isError).toBeUndefined();
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+    });
+
+    it('(c) task string has no task-N.M pattern: tasks.md not modified', async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(tasksContent);
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(
+        makeResult({ task: 'implement the feature', exitCode: 0 }),
+      );
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement the feature',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+    });
+
+    it('(d) non-builder agent: task still marked when task string matches (not agent-gated)', async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(tasksContent);
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(
+        makeResult({ agent: 'scout', task: 'analyze task-1.1', exitCode: 0 }),
+      );
+
+      const params: DispatchParams = {
+        agent: 'scout',
+        task: 'analyze task-1.1',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        tasksPath,
+        expect.stringContaining('- [x] task-1.1'),
+        'utf8',
+      );
+    });
+
+    it('(e) parallel dispatch: each successful step task marked individually', async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(tasksContent);
+      vi.mocked(spawnAgentWithRetry)
+        .mockResolvedValueOnce(makeResult({ agent: 'builder', task: 'implement task-1.1', exitCode: 0 }))
+        .mockResolvedValueOnce(makeResult({ agent: 'scout', task: 'analyze task-1.2', exitCode: 0 }));
+
+      const params: DispatchParams = {
+        parallel: [
+          { agent: 'builder', task: 'implement task-1.1' },
+          { agent: 'scout', task: 'analyze task-1.2' },
+        ],
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
+    });
+
+    it('(f) agent exits non-zero: task NOT marked', async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(tasksContent);
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(
+        makeResult({ task: 'implement task-1.1', exitCode: 1 }),
+      );
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement task-1.1',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+    });
+
+    it('(g) dispatch returns isError (gate blocked): tasks.md not touched', async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(tasksContent);
+      vi.mocked(checkPhaseGate).mockReturnValue({ canAdvance: false, reason: 'blocked' });
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement task-1.1',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(result.isError).toBe(true);
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+    });
+
+    it('markTaskComplete throws (writeFileSync errors): dispatch still returns normally', async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(tasksContent);
+      vi.mocked(fs.writeFileSync).mockImplementation(() => { throw new Error('permission denied'); });
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(
+        makeResult({ task: 'implement task-1.1', exitCode: 0 }),
+      );
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement task-1.1',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toBeTruthy();
+    });
+
+    it('tasks.md has no matching line: no crash, writeFileSync not called', async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue('- [ ] task-2.1\nSome other line\n');
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(
+        makeResult({ task: 'implement task-1.1', exitCode: 0 }),
+      );
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement task-1.1',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(result.isError).toBeUndefined();
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
     });
   });
 });

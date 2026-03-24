@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import type {
   FlowAgentConfig,
   FlowConfig,
@@ -538,10 +539,37 @@ function accumulateBudget(
     } catch { /* checkpoint loss acceptable */ }
   }
 
+  for (const r of results) {
+    if (r.exitCode === 0) {
+      try { markTaskComplete(featureDir, r.task); } catch { /* non-fatal */ }
+    }
+  }
+
   try {
     const agentNames = results.map((r) => r.agent).join(', ') || 'unknown';
     appendProgressLog(featureDir, params.phase, `Dispatched ${agentNames}`);
   } catch { /* log loss acceptable */ }
+}
+
+/**
+ * Marks a task as complete in tasks.md by replacing '- [ ] <id>' with '- [x] <id>'.
+ * No-ops silently when the task ID cannot be extracted, the file doesn't exist,
+ * or the pattern is not found.
+ */
+function markTaskComplete(featureDir: string, taskString: string): void {
+  const taskIdMatch = taskString.match(/\btask-\d+\.\d+\b/i);
+  if (!taskIdMatch) return;
+  const taskId = taskIdMatch[0];
+
+  const tasksPath = path.join(featureDir, 'tasks.md');
+  if (!fs.existsSync(tasksPath)) return;
+
+  const content = fs.readFileSync(tasksPath, 'utf8') as string;
+  const pattern = `- [ ] ${taskId}`;
+  if (!content.includes(pattern)) return;
+
+  const updated = content.replace(pattern, `- [x] ${taskId}`);
+  fs.writeFileSync(tasksPath, updated, 'utf8');
 }
 
 function errorResult(message: string, params: DispatchParams): DispatchResult {
