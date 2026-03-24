@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { FlowState, Phase } from './types.js';
+import type { FlowState } from './types.js';
 
 // ─── readFrontmatter ──────────────────────────────────────────────────────────
 
@@ -127,12 +127,12 @@ export function writeStateFile(featureDir: string, state: FlowState): void {
  * Appends a timestamped entry to the `## Progress Log` section of
  * `<featureDir>/state.md`.  Creates state.md (with empty frontmatter) if absent.
  */
-export function appendProgressLog(featureDir: string, phase: Phase, message: string): void {
+export function appendProgressLog(featureDir: string, message: string): void {
   const statePath = path.join(featureDir, 'state.md');
 
   const now = new Date();
   const ts = now.toISOString().replace('T', ' ').slice(0, 16);
-  const entry = `\n### ${ts} — ${phase.toUpperCase()}\n${message}\n`;
+  const entry = `\n### ${ts}\n${message}\n`;
 
   if (!fs.existsSync(statePath)) {
     fs.writeFileSync(statePath, `---\n---\n\n## Progress Log\n${entry}`);
@@ -252,19 +252,16 @@ export function updateFrontmatter(
  */
 export function writeCheckpoint(
   featureDir: string,
-  phase: Phase,
-  wave: number | null,
-  data: string,
+  data: unknown,
 ): void {
   const checkpointsDir = path.join(featureDir, 'checkpoints');
   fs.mkdirSync(checkpointsDir, { recursive: true });
 
-  const filename = wave !== null ? `${phase}-wave-${wave}.xml` : `${phase}.xml`;
-  const checkpointPath = path.join(checkpointsDir, filename);
-  fs.writeFileSync(checkpointPath, data);
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  const checkpointPath = path.join(checkpointsDir, `${ts}.json`);
+  fs.writeFileSync(checkpointPath, JSON.stringify(data, null, 2));
 
-  // Copy to latest.xml — not a symlink (fragile on Windows).
-  const latestPath = path.join(checkpointsDir, 'latest.xml');
+  const latestPath = path.join(checkpointsDir, 'latest.json');
   fs.copyFileSync(checkpointPath, latestPath);
 }
 
@@ -336,25 +333,13 @@ function extractBody(content: string): string {
  * output is parseable with the simple single-level readFrontmatter.
  */
 function serializeFlowState(state: FlowState): string {
-  const skipped = state.skipped_phases.length > 0 ? `[${state.skipped_phases.join(', ')}]` : '[]';
-
   const lines = [
     '---',
     `feature: ${state.feature}`,
-    `change_type: ${state.change_type}`,
-    `current_phase: ${state.current_phase}`,
-    `current_wave: ${state.current_wave ?? 'null'}`,
-    `wave_count: ${state.wave_count ?? 'null'}`,
-    `skipped_phases: ${skipped}`,
     `started_at: ${state.started_at}`,
     `last_updated: ${state.last_updated}`,
     `budget_total_tokens: ${state.budget.total_tokens}`,
     `budget_total_cost_usd: ${state.budget.total_cost_usd}`,
-    `gates_spec_approved: ${state.gates.spec_approved}`,
-    `gates_design_approved: ${state.gates.design_approved}`,
-    `gates_review_verdict: ${state.gates.review_verdict ?? 'null'}`,
-    `sentinel_open_halts: ${state.sentinel.open_halts}`,
-    `sentinel_open_warns: ${state.sentinel.open_warns}`,
     '---',
     '',
   ];
@@ -389,51 +374,15 @@ function parseStateContent(content: string): FlowState | null {
     if (key) fields[key] = val;
   }
 
-  // Require the minimum fields.
-  if (!fields['feature'] || !fields['current_phase']) return null;
-
-  // Parse skipped_phases from inline array notation: [] or [spec, plan]
-  let skipped_phases: Phase[] = [];
-  const skippedRaw = fields['skipped_phases'] ?? '[]';
-  if (skippedRaw !== '[]') {
-    const inner = skippedRaw.replace(/^\[/, '').replace(/\]$/, '').trim();
-    if (inner) {
-      skipped_phases = inner.split(',').map((s) => s.trim() as Phase);
-    }
-  }
-
-  // Parse nullable numbers.
-  const toNullableInt = (v: string | undefined): number | null => {
-    if (!v || v === 'null') return null;
-    const n = Number(v);
-    return Number.isNaN(n) ? null : n;
-  };
-
-  // Parse review_verdict (null or a string like "PASSED").
-  const rawVerdict = fields['gates_review_verdict'];
-  const review_verdict: string | null = !rawVerdict || rawVerdict === 'null' ? null : rawVerdict;
+  if (!fields['feature']) return null;
 
   return {
     feature: fields['feature'],
-    change_type: (fields['change_type'] as FlowState['change_type']) ?? 'feature',
-    current_phase: fields['current_phase'] as Phase,
-    current_wave: toNullableInt(fields['current_wave']),
-    wave_count: toNullableInt(fields['wave_count']),
-    skipped_phases,
     started_at: fields['started_at'] ?? '',
     last_updated: fields['last_updated'] ?? '',
     budget: {
       total_tokens: Number(fields['budget_total_tokens'] ?? 0),
       total_cost_usd: Number(fields['budget_total_cost_usd'] ?? 0),
-    },
-    gates: {
-      spec_approved: fields['gates_spec_approved'] === 'true',
-      design_approved: fields['gates_design_approved'] === 'true',
-      review_verdict,
-    },
-    sentinel: {
-      open_halts: Number(fields['sentinel_open_halts'] ?? 0),
-      open_warns: Number(fields['sentinel_open_warns'] ?? 0),
     },
   };
 }

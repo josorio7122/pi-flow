@@ -28,11 +28,10 @@ function makeAgent(overrides: Partial<FlowAgentConfig> = {}): FlowAgentConfig {
     model: 'claude-sonnet-4-6',
     thinking: 'medium',
     tools: ['read', 'write', 'edit', 'bash'],
-    phases: ['execute'],
     writable: true,
-    temperament: 'disciplined',
     limits: { max_tokens: 100000, max_steps: 120 },
     variables: ['FEATURE_NAME'],
+    writes: ['tasks.md'],
     systemPrompt: '# Builder\n\nYou build things.',
     source: 'builtin',
     filePath: '/fake/path/builder.md',
@@ -128,11 +127,9 @@ label: Scout
 model: claude-sonnet-4-6
 thinking: low
 writable: false
-temperament: curious
 tools:
   - read
   - bash
-phases:
   - analyze
 limits:
   max_tokens: 60000
@@ -153,7 +150,6 @@ You map codebases.
     expect(agent.model).toBe('claude-sonnet-4-6');
     expect(agent.thinking).toBe('low');
     expect(agent.writable).toBe(false);
-    expect(agent.temperament).toBe('curious');
   });
 
   it('parses tools as YAML list', () => {
@@ -168,8 +164,6 @@ tools:
   - write
   - edit
   - bash
-phases:
-  - execute
 limits:
   max_tokens: 100000
   max_steps: 120
@@ -191,7 +185,6 @@ Body.
 name: planner
 model: claude-sonnet-4-6
 tools: read, grep, find
-phases: plan
 limits:
   max_tokens: 15000
   max_steps: 20
@@ -205,21 +198,20 @@ Body.
     expect(agent.tools).toEqual(['read', 'grep', 'find']);
   });
 
-  it('parses phases as YAML list', () => {
-    const filePath = path.join(tmpDir, 'clarifier.md');
+  it('parses writes as YAML list', () => {
+    const filePath = path.join(tmpDir, 'scout.md');
     writeMd(
       filePath,
       `---
-name: clarifier
-model: claude-opus-4-6
+name: scout
+model: claude-sonnet-4-6
 tools:
   - read
-phases:
-  - intent
-  - spec
+writes:
+  - analysis.md
 limits:
-  max_tokens: 20000
-  max_steps: 30
+  max_tokens: 60000
+  max_steps: 80
 ---
 
 Body.
@@ -227,29 +219,7 @@ Body.
     );
 
     const agent = parseAgentFile(filePath, 'builtin');
-    expect(agent.phases).toEqual(['intent', 'spec']);
-  });
-
-  it('parses phases as comma-separated string', () => {
-    const filePath = path.join(tmpDir, 'sentinel.md');
-    writeMd(
-      filePath,
-      `---
-name: sentinel
-model: claude-opus-4-6
-tools: read, bash
-phases: execute, review
-limits:
-  max_tokens: 30000
-  max_steps: 40
----
-
-Body.
-`,
-    );
-
-    const agent = parseAgentFile(filePath, 'builtin');
-    expect(agent.phases).toEqual(['execute', 'review']);
+    expect(agent.writes).toEqual(['analysis.md']);
   });
 
   it('parses nested limits field', () => {
@@ -261,7 +231,6 @@ name: agent
 model: claude-sonnet-4-6
 tools:
   - read
-phases:
   - execute
 limits:
   max_tokens: 75000
@@ -286,7 +255,6 @@ name: agent
 model: claude-sonnet-4-6
 tools:
   - read
-phases:
   - execute
 limits:
   max_tokens: 10000
@@ -313,7 +281,6 @@ Body.
 name: agent
 model: claude-sonnet-4-6
 tools: read
-phases: execute
 variables: FEATURE_NAME, SPEC_GOAL
 limits:
   max_tokens: 10000
@@ -337,7 +304,6 @@ name: agent
 model: claude-sonnet-4-6
 tools:
   - read
-phases:
   - execute
 limits:
   max_tokens: 10000
@@ -366,7 +332,6 @@ name: agent
 model: claude-sonnet-4-6
 tools:
   - read
-phases:
   - execute
 limits:
   max_tokens: 10000
@@ -394,7 +359,6 @@ name: myagent
 model: claude-sonnet-4-6
 tools:
   - read
-phases:
   - execute
 limits:
   max_tokens: 10000
@@ -421,7 +385,6 @@ description: >
   that spans multiple lines.
 tools:
   - read
-phases:
   - execute
 limits:
   max_tokens: 10000
@@ -446,7 +409,6 @@ name: agent
 model: claude-sonnet-4-6
 tools:
   - write
-phases:
   - execute
 writable: true
 limits:
@@ -471,7 +433,6 @@ name: agent
 model: claude-sonnet-4-6
 tools:
   - read
-phases:
   - execute
 limits:
   max_tokens: 10000
@@ -508,11 +469,6 @@ describe('validateAgent', () => {
   it('returns error for empty tools array', () => {
     const errors = validateAgent(makeAgent({ tools: [] }));
     expect(errors.some((e) => /tools/i.test(e))).toBe(true);
-  });
-
-  it('returns error for empty phases array', () => {
-    const errors = validateAgent(makeAgent({ phases: [] }));
-    expect(errors.some((e) => /phases/i.test(e))).toBe(true);
   });
 
   it('returns error when model does not contain "claude"', () => {
@@ -598,7 +554,6 @@ name: scout
 model: claude-sonnet-4-6
 tools:
   - read
-phases:
   - analyze
 limits:
   max_tokens: 60000
@@ -626,7 +581,6 @@ name: ${name}
 model: claude-sonnet-4-6
 tools:
   - read
-phases:
   - execute
 limits:
   max_tokens: 10000
@@ -653,7 +607,6 @@ name: specialist
 model: claude-sonnet-4-6
 tools:
   - read
-phases:
   - execute
 limits:
   max_tokens: 10000
@@ -680,7 +633,6 @@ name: builder
 model: claude-sonnet-4-6
 tools:
   - read
-phases:
   - execute
 limits:
   max_tokens: 100000
@@ -702,7 +654,6 @@ tools:
   - read
   - write
   - edit
-phases:
   - execute
 writable: true
 limits:
@@ -733,7 +684,6 @@ name: ${name}
 model: claude-sonnet-4-6
 tools:
   - read
-phases:
   - execute
 limits:
   max_tokens: 10000
@@ -754,7 +704,6 @@ name: builder
 model: claude-opus-4-6
 tools:
   - read
-phases:
   - execute
 writable: false
 limits:
@@ -787,7 +736,6 @@ name: specialist
 model: claude-sonnet-4-6
 tools:
   - read
-phases:
   - execute
 limits:
   max_tokens: 10000
@@ -987,74 +935,9 @@ wave_count: 2
 `,
     );
 
-    const map = buildVariableMap(cwd, featureDir, { current_wave: 2 });
-    expect(map.WAVE_TASKS).toContain('task-2.1');
-    expect(map.WAVE_TASKS).not.toContain('task-1.1');
-  });
-
-  it('defaults to wave 1 for WAVE_TASKS when state is null', () => {
-    writeMd(
-      path.join(featureDir, 'tasks.md'),
-      `## Wave 1
-
-- [ ] task-1.1: Do something
-
-## Wave 2
-
-- [ ] task-2.1: Do something else
-`,
-    );
-
     const map = buildVariableMap(cwd, featureDir, null);
     expect(map.WAVE_TASKS).toContain('task-1.1');
-  });
-
-  it('sets CURRENT_WAVE from state.current_wave', () => {
-    const map = buildVariableMap(cwd, featureDir, { current_wave: 3 });
-    expect(map.CURRENT_WAVE).toBe('3');
-  });
-
-  it('defaults CURRENT_WAVE to "1" when state is null', () => {
-    const map = buildVariableMap(cwd, featureDir, null);
-    expect(map.CURRENT_WAVE).toBe('1');
-  });
-
-  it('reads TOTAL_WAVES from tasks.md frontmatter wave_count', () => {
-    writeMd(
-      path.join(featureDir, 'tasks.md'),
-      `---
-wave_count: 4
----
-
-## Wave 1
-
-tasks...
-`,
-    );
-
-    const map = buildVariableMap(cwd, featureDir, null);
-    expect(map.TOTAL_WAVES).toBe('4');
-  });
-
-  it('reads OPEN_HALTS from sentinel-log.md frontmatter', () => {
-    writeMd(
-      path.join(featureDir, 'sentinel-log.md'),
-      `---
-open_halts: 2
-open_warns: 1
----
-
-## Wave 1 findings...
-`,
-    );
-
-    const map = buildVariableMap(cwd, featureDir, null);
-    expect(map.OPEN_HALTS).toBe('2');
-  });
-
-  it('defaults OPEN_HALTS to "0" when sentinel-log.md is missing', () => {
-    const map = buildVariableMap(cwd, featureDir, null);
-    expect(map.OPEN_HALTS).toBe('0');
+    expect(map.WAVE_TASKS).toContain('task-2.1');
   });
 
   it('reads memory files from .flow/memory/', () => {
@@ -1075,38 +958,6 @@ open_warns: 1
     expect(map.MEMORY_DECISIONS).toBe('');
     expect(map.MEMORY_PATTERNS).toBe('');
     expect(map.MEMORY_LESSONS).toBe('');
-  });
-
-  it('includes SPEC_TEMPLATE with spec frontmatter template', () => {
-    const map = buildVariableMap(cwd, featureDir, null);
-    expect(map.SPEC_TEMPLATE).toContain('---');
-    expect(map.SPEC_TEMPLATE).toContain('approved: false');
-    expect(map.SPEC_TEMPLATE).toContain('auth-refresh'); // feature name rendered
-  });
-
-  it('includes DESIGN_TEMPLATE with design frontmatter template', () => {
-    const map = buildVariableMap(cwd, featureDir, null);
-    expect(map.DESIGN_TEMPLATE).toContain('---');
-    expect(map.DESIGN_TEMPLATE).toContain('approved: false');
-    expect(map.DESIGN_TEMPLATE).toContain('auth-refresh');
-  });
-
-  it('includes TASKS_TEMPLATE with tasks frontmatter template', () => {
-    const map = buildVariableMap(cwd, featureDir, null);
-    expect(map.TASKS_TEMPLATE).toContain('---');
-    expect(map.TASKS_TEMPLATE).toContain('wave_count');
-  });
-
-  it('includes SENTINEL_LOG_TEMPLATE with sentinel-log frontmatter template', () => {
-    const map = buildVariableMap(cwd, featureDir, null);
-    expect(map.SENTINEL_LOG_TEMPLATE).toContain('---');
-    expect(map.SENTINEL_LOG_TEMPLATE).toContain('open_halts: 0');
-  });
-
-  it('includes REVIEW_TEMPLATE with review frontmatter template', () => {
-    const map = buildVariableMap(cwd, featureDir, null);
-    expect(map.REVIEW_TEMPLATE).toContain('---');
-    expect(map.REVIEW_TEMPLATE).toContain('verdict');
   });
 
   it('returns all string values (no undefined)', () => {

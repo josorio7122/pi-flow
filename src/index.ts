@@ -1,10 +1,9 @@
 /**
- * pi-flow — Extension entry point.
+ * pi-flow v2 — Extension entry point.
  *
- * Wires together the dispatch_flow tool, /flow commands, and event hooks.
- * All business logic lives in the other modules; this file is pure wiring.
- *
- * Loaded by pi at runtime via: pi -e ./src/index.ts
+ * Simplified: no state machine, no gates, no nudges.
+ * The coordinator decides the workflow. The extension provides tools,
+ * enforces tool blocking, tracks budget, and writes artifacts.
  */
 
 import { fileURLToPath } from 'node:url';
@@ -17,9 +16,7 @@ import type {
   ExtensionContext,
   ExtensionCommandContext,
   BeforeAgentStartEvent,
-  AgentEndEvent,
   SessionStartEvent,
-  SessionBeforeCompactEvent,
   ToolCallEvent,
   ToolCallEventResult,
   ToolRenderResultOptions,
@@ -29,38 +26,26 @@ import type {
 import type { Theme, ThemeColor } from '@mariozechner/pi-coding-agent';
 
 import { executeDispatch } from './dispatch.js';
-import { findFlowDir, readStateFile, writeCheckpoint, readCheckpoint } from './state.js';
+import { findFlowDir, readStateFile } from './state.js';
 import { discoverAgents } from './agents.js';
-import { buildCoordinatorPrompt, buildNudgeMessage } from './prompt.js';
-import { isTerminalPhase } from './transitions.js';
-import { inferPhase, inferFeature } from './inference.js';
+import { discoverSkills } from './skills.js';
+import { buildCoordinatorPrompt } from './prompt.js';
 import {
   renderSingleCall,
   renderParallelCall,
   renderChainCall,
-  renderFlowStatus,
   buildFlowResult,
 } from './rendering.js';
 import { hashToolCall, detectLoop } from './guardrails.js';
-import { writeBackMemory } from './memory.js';
 import type { FlowDispatchDetails, FlowState } from './types.js';
 
 // ─── Module-level state ───────────────────────────────────────────────────────
 
-// Loop detection ring buffer — reset on session_start.
 const loopHistory: Array<{ tool: string; argsHash: string }> = [];
 const LOOP_WINDOW = 10;
 const LOOP_THRESHOLD = 3;
 
-// Nudge guard — prevents sending more than one nudge per user input cycle.
-let nudgedThisCycle = false;
-
-
-
 // ─── Coordinator write whitelist ──────────────────────────────────────────────
-//
-// Per §14 S2: the coordinator may write anything inside .flow/.
-// All production code files must be delegated to dispatch_flow(agent="builder").
 
 function isAllowedCoordinatorWrite(filePath: string, cwd: string): boolean {
   const flowDir = findFlowDir(cwd);
@@ -69,162 +54,25 @@ function isAllowedCoordinatorWrite(filePath: string, cwd: string): boolean {
   return normalized.startsWith(flowDir + path.sep) || normalized === flowDir;
 }
 
-// ─── Resume snapshot helpers ──────────────────────────────────────────────────
+// ─── Active feature finder ───────────────────────────────────────────────────
 
-/** Extracts the ## Goal section body from spec.md content (capped at 400 chars). */
-function extractGoalFromSpec(specContent: string): string {
-  const match = /^## Goal\s*\n([\s\S]*?)(?=^## |\s*$)/m.exec(specContent);
-  return match ? match[1].trim().slice(0, 400) : '(no spec goal)';
-}
-
-/** Extracts the tasks for a given wave from tasks.md content (capped at 800 chars). */
-function extractWaveTasks(tasksContent: string, waveNum: number): string {
-  const match = new RegExp(`^## Wave ${waveNum}\\s*\\n([\\s\\S]*?)(?=^## |\\s*$)`, 'm').exec(
-    tasksContent,
-  );
-  return match ? match[1].trim().slice(0, 800) : '(no tasks for this wave)';
-}
-
-/** Extracts the ## Decision section body from design.md content (capped at 400 chars). */
-function extractChosenApproach(designContent: string): string {
-  const match = /^## Decision\s*\n([\s\S]*?)(?=^## |\s*$)/m.exec(designContent);
-  return match ? match[1].trim().slice(0, 400) : '(no design decision)';
-}
-
-// ─── Resume snapshot builder ──────────────────────────────────────────────────
-//
-// Builds a compact XML snapshot (<2KB) for injection after compaction.
-// Priority-weighted: P1 data always survives budget pressure.
-
-function buildResumeSnapshot(state: FlowState, featureDir: string): string {
-  const safeRead = (name: string): string => {
-    try {
-      return fs.readFileSync(path.join(featureDir, name), 'utf8');
-    } catch {
-      return '';
-    }
-  };
-
-  const specContent = safeRead('spec.md');
-  const tasksContent = safeRead('tasks.md');
-  const sentinelContent = safeRead('sentinel-log.md');
-  const designContent = safeRead('design.md');
-
-  const specGoal = extractGoalFromSpec(specContent);
-  const waveTasks = extractWaveTasks(tasksContent, state.current_wave ?? 1);
-  const chosenApproach = extractChosenApproach(designContent);
-
-  // Sentinel issues excerpt (capped at 500 chars)
-  const haltExcerpt = state.sentinel.open_halts > 0 ? sentinelContent.slice(0, 500) : '';
-
-  return `<flow_resume
-  feature="${state.feature}"
-  phase="${state.current_phase}"
-  wave="${state.current_wave ?? ''}"
-  wave_count="${state.wave_count ?? ''}"
-  timestamp="${new Date().toISOString()}"
-  schema_version="1.0">
-
-  <!-- P1: Always survives -->
-  <spec_goal>${specGoal}</spec_goal>
-
-  <current_wave_tasks><![CDATA[${waveTasks}]]></current_wave_tasks>
-
-  <open_halts count="${state.sentinel.open_halts}">${haltExcerpt ? `<![CDATA[${haltExcerpt}]]>` : ''}</open_halts>
-
-  <open_warns count="${state.sentinel.open_warns}" />
-
-  <!-- P2: Important context -->
-  <chosen_approach><![CDATA[${chosenApproach}]]></chosen_approach>
-
-  <budget tokens_used="${state.budget.total_tokens}" cost_usd="${state.budget.total_cost_usd.toFixed(2)}" />
-
-</flow_resume>`;
-}
-
-// ─── Status/budget formatters (used by commands) ──────────────────────────────
-
-function formatStatusSummary(state: FlowState): string {
-  const wave =
-    state.current_wave !== null ? ` wave ${state.current_wave}/${state.wave_count ?? '?'}` : '';
-
-  const lines: string[] = [
-    `Feature: ${state.feature}`,
-    `Phase:   ${state.current_phase.toUpperCase()}${wave}`,
-    `Type:    ${state.change_type}`,
-    '',
-    'Budget',
-    `  Tokens: ${state.budget.total_tokens.toLocaleString()}`,
-    `  Cost:   $${state.budget.total_cost_usd.toFixed(4)}`,
-    '',
-    'Gates',
-    `  Spec approved:   ${state.gates.spec_approved ? '✓' : '✗'}`,
-    `  Design approved: ${state.gates.design_approved ? '✓' : '✗'}`,
-    `  Review verdict:  ${state.gates.review_verdict ?? '(pending)'}`,
-    '',
-    'Sentinel',
-    `  Open HALTs: ${state.sentinel.open_halts}`,
-    `  Open WARNs: ${state.sentinel.open_warns}`,
-  ];
-
-  if (state.skipped_phases.length > 0) {
-    lines.push('', `Skipped phases: ${state.skipped_phases.join(', ')}`);
-  }
-
-  return lines.join('\n');
-}
-
-function formatBudgetTable(state: FlowState): string {
-  const lines: string[] = [
-    `Feature: ${state.feature}`,
-    `Phase:   ${state.current_phase.toUpperCase()}`,
-    '',
-    'Budget',
-    `  Total tokens: ${state.budget.total_tokens.toLocaleString()}`,
-    `  Total cost:   $${state.budget.total_cost_usd.toFixed(4)}`,
-    '',
-    'Sentinel Issues',
-    `  Open HALTs: ${state.sentinel.open_halts}`,
-    `  Open WARNs: ${state.sentinel.open_warns}`,
-  ];
-  return lines.join('\n');
-}
-
-// ─── Footer status helper ─────────────────────────────────────────────────────
-
-function updateFooterStatus(state: FlowState, ui: ExtensionContext['ui']): void {
-  const statusText = renderFlowStatus(
-    state.feature,
-    state.current_phase,
-    state.current_wave,
-    state.wave_count,
-    state.budget.total_cost_usd,
-    state.sentinel.open_halts,
-    (color: string, t: string) => ui.theme.fg(color as ThemeColor, t),
-    (t: string) => ui.theme.bold(t),
-  );
-  ui.setStatus('pi-flow', statusText);
-}
-
-// ─── Active feature resolver ──────────────────────────────────────────────────
-//
-// Finds the first in-progress feature under .flow/features/.
-// "In-progress" means state.md exists and current_phase is not terminal
-// for the feature's change_type (e.g. ship for feature, analyze for research).
-
-function findActiveFeature(cwd: string): { state: FlowState; featureDir: string } | null {
+function findActiveFeature(
+  cwd: string,
+): { state: FlowState; featureDir: string } | null {
   const flowDir = findFlowDir(cwd);
   if (!flowDir) return null;
 
   const featuresDir = path.join(flowDir, 'features');
-  if (!fs.existsSync(featuresDir)) return null;
-
   let entries: string[];
   try {
     entries = fs.readdirSync(featuresDir);
   } catch {
     return null;
   }
+
+  // Return the most recently updated feature
+  let latest: { state: FlowState; featureDir: string } | null = null;
+  let latestTime = 0;
 
   for (const entry of entries) {
     const featureDir = path.join(featuresDir, entry);
@@ -235,19 +83,51 @@ function findActiveFeature(cwd: string): { state: FlowState; featureDir: string 
     }
     const state = readStateFile(featureDir);
     if (!state) continue;
-    // Skip completed features — terminal phase depends on change_type
-    if (isTerminalPhase(state.change_type, state.skipped_phases, state.current_phase)) continue;
-    return { state, featureDir };
+    const time = new Date(state.last_updated).getTime();
+    if (time > latestTime) {
+      latestTime = time;
+      latest = { state, featureDir };
+    }
   }
 
-  return null;
+  return latest;
+}
+
+// ─── Status helpers ──────────────────────────────────────────────────────────
+
+function formatStatusSummary(state: FlowState): string {
+  return [
+    `Feature: ${state.feature}`,
+    '',
+    'Budget',
+    `  Tokens: ${state.budget.total_tokens.toLocaleString()}`,
+    `  Cost:   $${state.budget.total_cost_usd.toFixed(4)}`,
+  ].join('\n');
+}
+
+function formatBudgetTable(state: FlowState): string {
+  return [
+    `Feature: ${state.feature}`,
+    '',
+    `Tokens: ${state.budget.total_tokens.toLocaleString()}`,
+    `Cost:   $${state.budget.total_cost_usd.toFixed(4)}`,
+  ].join('\n');
+}
+
+function updateFooterStatus(state: FlowState, ui: ExtensionContext['ui']): void {
+  const cost = `$${state.budget.total_cost_usd.toFixed(2)}`;
+  const status = `● ${state.feature}  |  ${cost}`;
+  try {
+    (ui as unknown as { setStatus: (...args: unknown[]) => void }).setStatus('pi-flow', status);
+  } catch {
+    // setStatus may not be available in all pi versions
+  }
 }
 
 // ─── Extension entry point ────────────────────────────────────────────────────
 
 export default function piFlow(pi: ExtensionAPI) {
   const extensionDir = path.dirname(fileURLToPath(import.meta.url));
-  // rootDir is one level up from src/ — needed for agents/ directory
   const rootDir = path.resolve(extensionDir, '..');
 
   // ─── 1. Tool: dispatch_flow ─────────────────────────────────────────────────
@@ -256,36 +136,25 @@ export default function piFlow(pi: ExtensionAPI) {
     name: 'dispatch_flow',
     label: 'Dispatch Flow Agent',
     description:
-      'Dispatch specialized agents for pi-flow workflow phases. ' +
-      'Modes: single (agent+task), parallel (all start simultaneously, good for Scouts), ' +
-      'chain (sequential with {previous} substitution for prior output). ' +
-      'Phase and feature are auto-inferred — only provide feature when starting a new one.',
+      'Dispatch specialized agents. Modes: single (agent+task), ' +
+      'parallel (concurrent scouts), chain (sequential with {previous}).',
     promptSnippet:
-      'Orchestrate software development via specialized subagents. ' +
-      'Agents: clarifier (extract intent/spec), scout (read-only codebase analysis), ' +
-      'strategist (design options), planner (wave task breakdown), ' +
-      'builder (TDD implementation), sentinel (adversarial per-wave review), ' +
-      'reviewer (final spec compliance), shipper (git/PR/docs). ' +
-      'Phase is auto-inferred from the agent type. Feature is auto-inferred from active feature. ' +
-      'Use single for one agent, parallel for concurrent scouts, chain for sequential with {previous}.',
+      'Dispatch specialized subagents: scout (read-only analysis), ' +
+      'planner (wave task breakdown), builder (TDD implementation), ' +
+      'reviewer (spec compliance + security). ' +
+      'Feature is auto-inferred from active feature.',
     parameters: Type.Object({
       agent: Type.Optional(
-        Type.String({
-          description:
-            'Agent name for single dispatch (clarifier/scout/strategist/planner/builder/sentinel/reviewer/shipper)',
-        }),
+        Type.String({ description: 'Agent name (scout/planner/builder/reviewer)' }),
       ),
-      task: Type.Optional(Type.String({ description: 'Task description for single dispatch' })),
+      task: Type.Optional(Type.String({ description: 'Task description' })),
       parallel: Type.Optional(
         Type.Array(
           Type.Object({
             agent: Type.String({ description: 'Agent name' }),
             task: Type.String({ description: 'Task for this agent' }),
           }),
-          {
-            description: 'Parallel dispatch — all agents start simultaneously',
-            maxItems: 8,
-          },
+          { description: 'Parallel dispatch — all agents start simultaneously', maxItems: 8 },
         ),
       ),
       chain: Type.Optional(
@@ -293,33 +162,17 @@ export default function piFlow(pi: ExtensionAPI) {
           Type.Object({
             agent: Type.String({ description: 'Agent name' }),
             task: Type.String({
-              description: "Task. Use {previous} to reference the prior agent's output.",
+              description: "Task. Use {previous} to reference prior agent's output.",
             }),
           }),
-          {
-            description:
-              'Chain dispatch — sequential, each step receives prior output via {previous}',
-          },
+          { description: 'Chain dispatch — sequential with {previous} substitution' },
         ),
-      ),
-      phase: Type.Optional(
-        Type.String({
-          description:
-            'Workflow phase — auto-inferred from agent type + state. Only provide to override.',
-        }),
       ),
       feature: Type.Optional(
         Type.String({
-          description:
-            'Feature name (kebab-case). Auto-inferred from active feature. Provide when starting a NEW feature.',
+          description: 'Feature name (kebab-case). Only needed for first dispatch.',
           minLength: 1,
           maxLength: 64,
-        }),
-      ),
-      wave: Type.Optional(
-        Type.Number({
-          description: 'Current wave number within execute phase',
-          minimum: 1,
         }),
       ),
     }),
@@ -331,109 +184,42 @@ export default function piFlow(pi: ExtensionAPI) {
         task?: string;
         parallel?: Array<{ agent: string; task: string }>;
         chain?: Array<{ agent: string; task: string }>;
-        phase?: string;
         feature?: string;
-        wave?: number;
       },
       signal: AbortSignal,
       onUpdate: AgentToolUpdateCallback<FlowDispatchDetails> | undefined,
       ctx: ExtensionContext,
     ) {
-      // ── Infer feature ──────────────────────────────────────────────────
+      // Infer feature from active state if not provided
       const activeFeature = findActiveFeature(ctx.cwd);
-      const feature = inferFeature(activeFeature, params.feature);
+      const feature = params.feature ?? activeFeature?.state.feature;
       if (!feature) {
         return {
-          content: [
-            {
-              type: 'text' as const,
-              text: 'No active feature and no feature name provided. Provide a feature name to start a new workflow.',
-            },
-          ],
+          content: [{ type: 'text' as const, text: 'No active feature. Provide a feature name to start.' }],
           details: undefined as unknown as FlowDispatchDetails,
           isError: true,
         };
       }
 
-      // ── Infer phase from agent + state ─────────────────────────────────
-      let phase: import('./types.js').Phase;
-      if (params.phase) {
-        // Explicit phase provided — use it (escape hatch)
-        phase = params.phase as import('./types.js').Phase;
-      } else {
-        // Determine the primary agent name for inference
-        const primaryAgent =
-          params.agent ?? params.parallel?.[0]?.agent ?? params.chain?.[0]?.agent;
-        if (!primaryAgent) {
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: 'Cannot infer phase: no agent specified. Provide agent+task, parallel, or chain.',
-              },
-            ],
-            details: undefined as unknown as FlowDispatchDetails,
-            isError: true,
-          };
-        }
-        const activeState = activeFeature?.state ?? null;
-        const inferred = inferPhase(primaryAgent, activeState);
-        if (!inferred) {
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: `Cannot infer phase for agent '${primaryAgent}' at current phase '${activeState?.current_phase ?? 'none'}'. The agent has no valid phase ahead in the pipeline.`,
-              },
-            ],
-            details: undefined as unknown as FlowDispatchDetails,
-            isError: true,
-          };
-        }
-        phase = inferred;
-      }
-
       const result = await executeDispatch(
-        { ...params, phase, feature },
+        { ...params, feature },
         ctx.cwd,
         rootDir,
         signal,
         onUpdate
-          ? (partial: {
-              content: Array<{ type: 'text'; text: string }>;
-              details: FlowDispatchDetails;
-            }) => {
-              onUpdate({
-                content: partial.content,
-                details: partial.details,
-              });
+          ? (partial: { content: Array<{ type: 'text'; text: string }>; details: FlowDispatchDetails }) => {
+              onUpdate({ content: partial.content, details: partial.details });
             }
           : undefined,
       );
 
-      // Memory write-back after Shipper completes successfully (per §13 C5)
-      const lastAgent = params.chain ? params.chain[params.chain.length - 1]?.agent : params.agent;
-      if (lastAgent === 'shipper' && !result.isError) {
-        const flowDir = findFlowDir(ctx.cwd);
-        if (flowDir) {
-          const resolvedDir = path.join(flowDir, 'features', feature);
-          try {
-            writeBackMemory(flowDir, resolvedDir);
-          } catch {
-            // Best-effort — memory write-back is non-fatal
-          }
-        }
-      }
-
-      // Update footer status from state.md after each dispatch
+      // Update footer status
       if (ctx.hasUI) {
         const flowDir = findFlowDir(ctx.cwd);
         if (flowDir) {
-          const resolvedDir = path.join(flowDir, 'features', feature);
-          const state = readStateFile(resolvedDir);
-          if (state) {
-            updateFooterStatus(state, ctx.ui);
-          }
+          const featureDir = path.join(flowDir, 'features', feature);
+          const state = readStateFile(featureDir);
+          if (state) updateFooterStatus(state, ctx.ui);
         }
       }
 
@@ -480,270 +266,94 @@ export default function piFlow(pi: ExtensionAPI) {
 
   // ─── 2. Commands ────────────────────────────────────────────────────────────
 
-  // /flow — one-liner status
   pi.registerCommand('flow', {
-    description: 'Show current workflow status (one-liner)',
+    description: 'Show pi-flow status',
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
       const active = findActiveFeature(ctx.cwd);
       if (!active) {
-        ctx.ui.notify('pi-flow: no active feature', 'info');
-        return;
-      }
-      const { state } = active;
-      const wave =
-        state.current_wave !== null ? ` wave ${state.current_wave}/${state.wave_count ?? '?'}` : '';
-      const halts = state.sentinel.open_halts > 0 ? ` | ${state.sentinel.open_halts} HALT` : '';
-      const cost = `$${state.budget.total_cost_usd.toFixed(2)}`;
-      ctx.ui.notify(
-        `${state.feature} | ${state.current_phase.toUpperCase()}${wave} | ${cost}${halts}`,
-        'info',
-      );
-    },
-  });
-
-  // /flow:status — detailed status
-  pi.registerCommand('flow:status', {
-    description: 'Detailed workflow status with budget breakdown and gate conditions',
-    handler: async (_args: string, ctx: ExtensionCommandContext) => {
-      const active = findActiveFeature(ctx.cwd);
-      if (!active) {
-        ctx.ui.notify('pi-flow: no active feature. Start one by describing what to build.', 'info');
+        pi.sendMessage({ customType: 'pi-flow-status', content: 'No active pi-flow feature.', display: true });
         return;
       }
       const summary = formatStatusSummary(active.state);
-      pi.sendMessage(
-        { customType: 'pi-flow-status', content: `[Flow Status]\n\n${summary}`, display: true },
-        { triggerTurn: false },
-      );
+      pi.sendMessage({ customType: 'pi-flow-status', content: `[Flow Status]\n\n${summary}`, display: true });
     },
   });
 
-  // /flow:budget — cost breakdown
   pi.registerCommand('flow:budget', {
-    description: 'Show token and cost breakdown for the current feature',
+    description: 'Show pi-flow budget details',
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
       const active = findActiveFeature(ctx.cwd);
       if (!active) {
-        ctx.ui.notify('pi-flow: no active feature', 'info');
+        pi.sendMessage({ customType: 'pi-flow-budget', content: 'No active pi-flow feature.', display: true });
         return;
       }
       const table = formatBudgetTable(active.state);
-      pi.sendMessage(
-        { customType: 'pi-flow-budget', content: `[Flow Budget]\n\n${table}`, display: true },
-        { triggerTurn: false },
-      );
-    },
-  });
-
-  // /flow:reset [feature] — delete all state for a feature
-  pi.registerCommand('flow:reset', {
-    description:
-      'Reset workflow state for a feature (deletes phase files and checkpoints). ' +
-      'Usage: /flow:reset  or  /flow:reset <feature-name>',
-    handler: async (args: string, ctx: ExtensionCommandContext) => {
-      const flowDir = findFlowDir(ctx.cwd);
-      if (!flowDir) {
-        ctx.ui.notify('pi-flow: no .flow/ directory found', 'warning');
-        return;
-      }
-
-      // Resolve target feature: arg > active feature
-      const active = findActiveFeature(ctx.cwd);
-      const target = args.trim() || active?.state.feature;
-      if (!target) {
-        ctx.ui.notify('pi-flow: no feature to reset. Usage: /flow:reset <feature-name>', 'warning');
-        return;
-      }
-
-      const featureDir = path.join(flowDir, 'features', target);
-      if (!fs.existsSync(featureDir)) {
-        ctx.ui.notify(`pi-flow: feature '${target}' not found`, 'warning');
-        return;
-      }
-
-      const confirmed = await ctx.ui.confirm(
-        `Reset '${target}'?`,
-        `This will permanently delete:\n` +
-          `  • .flow/features/${target}/  (spec, design, tasks, logs, checkpoints)\n\n` +
-          `Memory files (.flow/memory/) are NOT deleted.`,
-      );
-      if (!confirmed) return;
-
-      try {
-        fs.rmSync(featureDir, { recursive: true, force: true });
-        ctx.ui.setStatus('pi-flow', undefined);
-        ctx.ui.notify(`pi-flow: '${target}' reset — all phase files deleted`, 'info');
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        ctx.ui.notify(`pi-flow: reset failed — ${msg}`, 'error');
-      }
+      pi.sendMessage({ customType: 'pi-flow-budget', content: `[Flow Budget]\n\n${table}`, display: true });
     },
   });
 
   // ─── 3. Event hooks ─────────────────────────────────────────────────────────
 
-  // input — reset nudge guard at the start of each user input cycle
-  pi.on('input', async () => {
-    nudgedThisCycle = false;
-  });
-
-  // before_agent_start — inject coordinator prompt into system prompt
+  // before_agent_start — inject coordinator prompt
   pi.on('before_agent_start', async (event: BeforeAgentStartEvent, ctx: ExtensionContext) => {
     try {
       const agents = discoverAgents(rootDir, ctx.cwd);
+      const skills = discoverSkills(rootDir, ctx.cwd);
       const active = findActiveFeature(ctx.cwd);
-      const prompt = buildCoordinatorPrompt(agents, active);
+      const prompt = buildCoordinatorPrompt(agents, skills, active);
       return { systemPrompt: event.systemPrompt + '\n\n' + prompt };
     } catch {
       return {
         systemPrompt:
           event.systemPrompt +
-          '\n\n## Coordinator\n\nYou have `dispatch_flow` available for orchestrating development. Use /flow for status.',
+          '\n\n## Coordinator\n\nYou have `dispatch_flow` available. Use /flow for status.',
       };
     }
   });
 
-  // agent_end — nudge coordinator to continue if a workflow is in progress
-  pi.on('agent_end', async (event: AgentEndEvent, ctx: ExtensionContext) => {
-    // Don't nudge if the agent was aborted (user pressed Escape/Ctrl+C).
-    // Without this guard, the nudge re-triggers the LLM and forces a double-abort.
-    const messages = event.messages ?? [];
-    const lastAssistant = [...messages]
-      .reverse()
-      .find((m) => 'role' in m && m.role === 'assistant');
-    if (
-      lastAssistant &&
-      'stopReason' in lastAssistant &&
-      lastAssistant.stopReason === 'aborted'
-    )
-      return;
-
-    // Only nudge if the coordinator dispatched an agent this turn.
-    // If the coordinator just talked (no dispatch), don't nudge — the user is in conversation.
-    // This prevents the "dispatch analyze" loop when the coordinator says "analyze already completed".
-    const hadDispatch = messages.some((m) => {
-      const msg = m as unknown as Record<string, unknown>;
-      if (!Array.isArray(msg.content)) return false;
-      return (msg.content as Array<Record<string, unknown>>).some(
-        (c) => c.type === 'tool_use' && c.name === 'dispatch_flow',
-      );
-    });
-    if (!hadDispatch) return;
-
-    const active = findActiveFeature(ctx.cwd);
-    if (!active) return;
-    // No need to check for terminal phase here — findActiveFeature already
-    // filters out features at their terminal phase (ship, analyze for research, etc.)
-    if (nudgedThisCycle) return;
-    nudgedThisCycle = true;
-    pi.sendMessage(
-      {
-        customType: 'pi-flow-nudge',
-        content: buildNudgeMessage(active.state),
-        display: true,
-      },
-      { triggerTurn: true },
-    );
-  });
-
-  // session_start — restore footer status for any in-progress feature
+  // session_start — restore footer status
   pi.on('session_start', async (_event: SessionStartEvent, ctx: ExtensionContext) => {
-    // Reset loop detection history for this session
     loopHistory.length = 0;
-
     if (!ctx.hasUI) return;
-
     const active = findActiveFeature(ctx.cwd);
     if (!active) return;
-
-    const { state, featureDir } = active;
-
-    // Notify user of the in-progress feature
-    const wave =
-      state.current_wave !== null ? ` wave ${state.current_wave}/${state.wave_count ?? '?'}` : '';
-    ctx.ui.notify(
-      `pi-flow: resuming '${state.feature}' — ${state.current_phase.toUpperCase()}${wave}`,
-      'info',
-    );
-
-    // Restore footer status
-    updateFooterStatus(state, ctx.ui);
-
-    // If there is a checkpoint, remind the coordinator to resume
-    const checkpoint = readCheckpoint(featureDir);
-    if (checkpoint) {
-      // Use sendMessage to inject the resume snapshot into the next turn
-      pi.sendMessage(
-        {
-          customType: 'pi-flow-resume',
-          content:
-            `You have an in-progress pi-flow feature: '${state.feature}' at phase ${state.current_phase.toUpperCase()}${wave}.\n\n` +
-            `Resume checkpoint:\n\n${checkpoint}\n\n` +
-            `Type /flow for a one-line status or /flow:status for full details.`,
-          display: false,
-        },
-        { deliverAs: 'nextTurn' },
-      );
-    }
+    updateFooterStatus(active.state, ctx.ui);
   });
 
-  // tool_call — block coordinator writes outside .flow/ and detect loops
+  // tool_call — enforce coordinator write restrictions + loop detection
   pi.on(
     'tool_call',
-    async (event: ToolCallEvent, ctx: ExtensionContext): Promise<ToolCallEventResult | void> => {
-      const toolName: string = event.toolName;
-      const args: Record<string, unknown> =
-        (event as { toolName: string; input: Record<string, unknown> }).input ?? {};
+    async (event: ToolCallEvent, ctx: ExtensionContext): Promise<ToolCallEventResult> => {
+      const name = event.toolName;
+      const input = event.input as Record<string, unknown>;
 
-      // Loop detection (runs for all tools)
-      const argsHash = hashToolCall(toolName, args);
-      loopHistory.push({ tool: toolName, argsHash });
-      // Keep the ring buffer bounded
-      if (loopHistory.length > LOOP_WINDOW * 2) {
-        loopHistory.splice(0, loopHistory.length - LOOP_WINDOW * 2);
-      }
-      const loopResult = detectLoop(loopHistory, LOOP_WINDOW, LOOP_THRESHOLD);
-      if (loopResult.tripped) {
-        return {
-          block: true,
-          reason:
-            `CIRCUIT BREAKER: '${loopResult.tool}' has been called with identical ` +
-            `arguments ${loopResult.count} times in the last ${LOOP_WINDOW} tool calls. ` +
-            `This is a loop. Stop immediately. In one sentence, state what you are trying ` +
-            `to accomplish. Then either write code or report a blocker.`,
-        };
-      }
-
-      // Write/edit isolation: coordinator may only write inside .flow/
-      if (toolName === 'write' || toolName === 'edit') {
-        const filePath = (args.path ?? args.file_path ?? args.filePath ?? '') as string;
+      // Tool blocking: coordinator can't write outside .flow/
+      if (name === 'Write' || name === 'Edit') {
+        const filePath = input.path as string | undefined;
         if (filePath && !isAllowedCoordinatorWrite(filePath, ctx.cwd)) {
           return {
             block: true,
             reason:
-              `Coordinator cannot write to '${filePath}' directly. ` +
-              `All production code changes must be delegated via dispatch_flow(agent="builder"). ` +
-              `Only paths inside .flow/ may be written by the coordinator.`,
+              `Coordinator cannot write to '${filePath}'. ` +
+              'Dispatch builder for code changes. You may only write inside .flow/.',
           };
         }
       }
-    },
-  );
 
-  // session_before_compact — write a resume snapshot before context is lost
-  pi.on(
-    'session_before_compact',
-    async (_event: SessionBeforeCompactEvent, ctx: ExtensionContext) => {
-      const active = findActiveFeature(ctx.cwd);
-      if (!active) return;
+      // Loop detection
+      const hash = hashToolCall(name, input);
+      loopHistory.push({ tool: name, argsHash: hash });
+      if (loopHistory.length > LOOP_WINDOW) loopHistory.shift();
 
-      const { state, featureDir } = active;
-      try {
-        const snapshot = buildResumeSnapshot(state, featureDir);
-        writeCheckpoint(featureDir, state.current_phase, state.current_wave, snapshot);
-      } catch {
-        // Checkpoint writing is best-effort — non-fatal during compaction
+      const loop = detectLoop(loopHistory, LOOP_WINDOW, LOOP_THRESHOLD);
+      if (loop) {
+        return {
+          block: true,
+          reason: `Loop detected: '${loop.tool}' called ${loop.count} times with identical args. Try a different approach.`,
+        };
       }
+
+      return {};
     },
   );
 }

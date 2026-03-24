@@ -995,7 +995,7 @@ describe('buildFlowResult', () => {
     mode: FlowDispatchDetails['mode'],
     results: SingleAgentResult[],
   ): FlowDispatchDetails {
-    return { mode, phase: 'execute', feature: 'test-feature', results };
+    return { mode, feature: 'test-feature', results };
   }
 
   it('returns a Container', () => {

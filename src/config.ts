@@ -7,16 +7,10 @@ const DEFAULT_CONFIG: FlowConfig = {
   guardrails: {
     token_cap_per_agent: 100000,
     cost_cap_per_agent_usd: 10.0,
-    scope_creep_warning: 0.2,
-    scope_creep_halt: 0.3,
     loop_detection_window: 10,
     loop_detection_threshold: 3,
-    analysis_paralysis_threshold: 8,
-    git_watchdog_warn_minutes: 15,
-    git_watchdog_halt_minutes: 30,
   },
   memory: { enabled: true },
-  git: { branch_prefix: 'feature/', commit_style: 'conventional', auto_pr: true },
 };
 
 /**
@@ -125,7 +119,6 @@ export function loadConfig(cwd: string): FlowConfig {
         ? mergeSection(defaults.guardrails, parsed.guardrails)
         : defaults.guardrails,
       memory: parsed.memory ? mergeSection(defaults.memory, parsed.memory) : defaults.memory,
-      git: parsed.git ? mergeSection(defaults.git, parsed.git) : defaults.git,
     };
   } catch {
     return getDefaultConfig();

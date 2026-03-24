@@ -1,8 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import type { FlowAgentConfig, Phase } from './types.js';
-import { renderArtifactTemplate } from './templates.js';
+import type { FlowAgentConfig } from './types.js';
 
 // ─── Scalar parser ────────────────────────────────────────────────────────────
 
@@ -178,37 +177,7 @@ function toStringArray(val: unknown): string[] {
 }
 
 // ─── Flat frontmatter parser (for simple state/tasks files) ──────────────────
-//
-// Handles only flat key-value pairs — sufficient for reading wave_count,
-// open_halts, and similar scalar fields from frontmatter.
 
-function parseFlatFrontmatter(content: string): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  const lines = content.split('\n');
-  if (lines[0]?.trim() !== '---') return result;
-
-  let end = -1;
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i]?.trim() === '---') {
-      end = i;
-      break;
-    }
-  }
-  if (end === -1) return result;
-
-  for (let i = 1; i < end; i++) {
-    const line = lines[i];
-    if (!line || line.trimStart().startsWith('#')) continue;
-    const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    const rawValue = line.slice(colonIdx + 1).trim();
-    if (!key || rawValue === '') continue;
-    result[key] = parseScalar(rawValue);
-  }
-
-  return result;
-}
 
 // ─── extractSection ───────────────────────────────────────────────────────────
 
@@ -252,8 +221,8 @@ export function parseAgentFile(filePath: string, source: 'builtin' | 'custom'): 
   const body = extractBody(raw);
 
   const tools = toStringArray(fm.tools);
-  const phases = toStringArray(fm.phases) as Phase[];
   const variables = toStringArray(fm.variables);
+  const writes = toStringArray(fm.writes);
 
   const limitsRaw = fm.limits as Record<string, unknown> | undefined;
 
@@ -264,14 +233,13 @@ export function parseAgentFile(filePath: string, source: 'builtin' | 'custom'): 
     model: String(fm.model ?? ''),
     thinking: String(fm.thinking ?? 'medium'),
     tools,
-    phases,
     writable: fm.writable === true,
-    temperament: String(fm.temperament ?? ''),
     limits: {
       max_tokens: Number(limitsRaw?.max_tokens ?? 0),
       max_steps: Number(limitsRaw?.max_steps ?? 0),
     },
     variables,
+    writes,
     systemPrompt: body.trim(),
     source,
     filePath,
@@ -298,7 +266,6 @@ export function validateAgent(agent: FlowAgentConfig): string[] {
   if (!agent.name) errors.push('missing required field: name');
   if (!agent.model) errors.push('missing required field: model');
   if (!agent.tools || agent.tools.length === 0) errors.push('missing required field: tools');
-  if (!agent.phases || agent.phases.length === 0) errors.push('missing required field: phases');
 
   // Validate model is a Claude model
   if (agent.model && !agent.model.toLowerCase().includes('claude')) {
@@ -434,7 +401,7 @@ export function readAgentsMd(cwd: string): string {
 export function buildVariableMap(
   cwd: string,
   featureDir: string,
-  state: object | null,
+  _state: object | null,
 ): Record<string, string> {
   const featureName = path.basename(featureDir);
   const memoryDir = path.join(cwd, '.flow', 'memory');
@@ -447,67 +414,45 @@ export function buildVariableMap(
     }
   };
 
-  // Read phase files
   const specContent = safeRead(path.join(featureDir, 'spec.md'));
   const designContent = safeRead(path.join(featureDir, 'design.md'));
   const tasksContent = safeRead(path.join(featureDir, 'tasks.md'));
-  const sentinelLogContent = safeRead(path.join(featureDir, 'sentinel-log.md'));
-
-  // Determine current wave from state (default: 1)
-  const stateRecord = state as Record<string, unknown> | null;
-  const currentWave =
-    stateRecord !== null &&
-    typeof stateRecord.current_wave === 'number' &&
-    stateRecord.current_wave !== null
-      ? stateRecord.current_wave
-      : 1;
-
-  // Parse tasks.md frontmatter for TOTAL_WAVES
-  const tasksFm = parseFlatFrontmatter(tasksContent);
-  const totalWaves = String(tasksFm.wave_count ?? tasksFm.waves ?? 0);
-
-  // Parse sentinel-log.md frontmatter for OPEN_HALTS
-  const sentinelFm = parseFlatFrontmatter(sentinelLogContent);
-  const openHalts = String(sentinelFm.open_halts ?? 0);
 
   return {
-    // Identity
     FEATURE_NAME: featureName,
     FEATURE_DIR: featureDir,
-
-    // Project context
     AGENTS_MD: readAgentsMd(cwd),
-
-    // Spec variables
     SPEC_GOAL: extractSection(specContent, '## Goal'),
     SPEC_BEHAVIORS: extractSection(specContent, '## Behaviors'),
-
-    // Design variables
+    SPEC_ERROR_CASES: extractSection(specContent, '## Error Cases'),
     CHOSEN_APPROACH: extractSection(designContent, '## Decision'),
-    DESIGN_APPROACH: extractSection(designContent, '## Decision'),
-
-    // Task/wave variables
-    WAVE_TASKS: extractSection(tasksContent, `## Wave ${currentWave}`),
-    CURRENT_WAVE: String(currentWave),
-    TOTAL_WAVES: totalWaves,
-
-    // Sentinel variables
-    PRIOR_SENTINEL_ISSUES: sentinelLogContent,
-    SENTINEL_SUMMARY: sentinelLogContent,
-    OPEN_HALTS: openHalts,
-
-    // Memory variables
+    DESIGN_SUMMARY: extractSection(designContent, '## Decision'),
+    WAVE_TASKS: tasksContent,
     MEMORY_DECISIONS: safeRead(path.join(memoryDir, 'decisions.md')),
     MEMORY_PATTERNS: safeRead(path.join(memoryDir, 'patterns.md')),
     MEMORY_LESSONS: safeRead(path.join(memoryDir, 'lessons.md')),
-
-    // Artifact frontmatter templates (guides agents to produce correct format)
-    SPEC_TEMPLATE: renderArtifactTemplate('spec', featureName) ?? '',
-    DESIGN_TEMPLATE: renderArtifactTemplate('design', featureName) ?? '',
-    TASKS_TEMPLATE: renderArtifactTemplate('tasks', featureName) ?? '',
-    SENTINEL_LOG_TEMPLATE: renderArtifactTemplate('sentinel-log', featureName) ?? '',
-    REVIEW_TEMPLATE: renderArtifactTemplate('review', featureName) ?? '',
+    BASE_BRANCH: detectBaseBranch(cwd),
   };
+}
+
+function detectBaseBranch(cwd: string): string {
+  try {
+    const { execSync } = require('node:child_process');
+    // Try main, then master
+    try {
+      execSync('git rev-parse --verify main', { cwd, stdio: 'pipe' });
+      return 'main';
+    } catch {
+      try {
+        execSync('git rev-parse --verify master', { cwd, stdio: 'pipe' });
+        return 'master';
+      } catch {
+        return 'main';
+      }
+    }
+  } catch {
+    return 'main';
+  }
 }
 
 // ─── injectVariables ──────────────────────────────────────────────────────────
