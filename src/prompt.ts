@@ -1,6 +1,7 @@
 import type { FlowAgentConfig, FlowState } from './types.js';
 import {
   getEffectivePipeline,
+  getNextPhase,
   isTerminalPhase,
   phaseRequiresApproval,
 } from './transitions.js';
@@ -141,10 +142,10 @@ Keep dispatching until you reach a gate that needs human approval or the pipelin
     if (isTerminalPhase(state.change_type, state.skipped_phases, current_phase)) {
       activeLine += '\nWorkflow complete — no more phases.';
     } else {
-      const needsApproval = phaseRequiresApproval(current_phase);
       activeLine += `\nAction: dispatch ${current_phase} phase.`;
-      if (needsApproval) {
-        activeLine += ' Gate requires human approval — present the artifact and ask.';
+      const nextP = getNextPhase(state.change_type, state.skipped_phases, current_phase);
+      if (nextP && phaseRequiresApproval(nextP)) {
+        activeLine += ` Next phase (${nextP}) requires human approval — present the artifact and ask before advancing.`;
       }
     }
 
@@ -176,9 +177,10 @@ export function buildNudgeMessage(state: FlowState): string {
     return `✅ Feature "${feature}" — all phases complete.`;
   }
 
-  const needsApproval = phaseRequiresApproval(current_phase);
-  const approvalHint = needsApproval
-    ? ' Gate requires human approval — present the artifact and ask.'
+  const nextPhase = getNextPhase(change_type, skipped_phases, current_phase);
+  const nextNeedsApproval = nextPhase && phaseRequiresApproval(nextPhase);
+  const approvalHint = nextNeedsApproval
+    ? ` Next phase (${nextPhase}) requires human approval — present the artifact and ask before advancing.`
     : '';
 
   return `⚠️ Feature "${feature}" — dispatch ${current_phase} phase.${approvalHint}`;

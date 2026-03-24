@@ -567,7 +567,20 @@ function accumulateBudget(
           currentState.skipped_phases,
           params.phase,
         );
-        if (advanced) nextPhase = advanced;
+        if (advanced) {
+          // Only advance if the next phase's gate would pass.
+          // This prevents advancing past phases that need approval
+          // (e.g., staying at plan until design.md is approved).
+          const nextGate = checkPhaseGate(
+            advanced,
+            featureDir,
+            currentState.change_type,
+            currentState.skipped_phases,
+          );
+          if (nextGate.canAdvance) {
+            nextPhase = advanced;
+          }
+        }
       }
     }
 

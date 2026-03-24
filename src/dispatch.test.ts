@@ -1988,7 +1988,7 @@ describe('integration: full lifecycle sequence', () => {
     });
   });
 
-  it('(a) first-dispatch state creation sequence: ensureFeatureDir → writeStateFile(init) → checkPhaseGate → discoverAgents → spawnAgentWithRetry → writeStateFile(budget) → writeCheckpoint → appendProgressLog', async () => {
+  it('(a) first-dispatch state creation sequence: ensureFeatureDir → writeStateFile(init) → checkPhaseGate → discoverAgents → spawnAgentWithRetry → checkPhaseGate(next) → writeStateFile(budget) → writeCheckpoint → appendProgressLog', async () => {
     const params: DispatchParams = {
       agent: 'builder',
       task: 'implement task-1.1',
@@ -2001,9 +2001,10 @@ describe('integration: full lifecycle sequence', () => {
     expect(callOrder).toEqual([
       'ensureFeatureDir',
       'writeStateFile', // init write
-      'checkPhaseGate',
+      'checkPhaseGate', // gate for current phase
       'discoverAgents',
       'spawnAgentWithRetry',
+      'checkPhaseGate', // gate for next phase (auto-advance check)
       'writeStateFile', // budget write
       'writeCheckpoint',
       'appendProgressLog',
@@ -2587,6 +2588,75 @@ describe('integration: full lifecycle sequence', () => {
 
       const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
       expect(lastCall[1].current_phase).toBe('execute');
+    });
+
+    it('does NOT advance when next gate would block (design.md not approved)', async () => {
+      vi.mocked(readStateFile).mockReturnValue(
+        makeFlowState({ change_type: 'feature', current_phase: 'plan' }),
+      );
+      vi.mocked(discoverAgents).mockReturnValue([
+        makeAgent({ name: 'strategist', phases: ['plan'] as any }),
+      ]);
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult({ exitCode: 0 }));
+      // Gate for plan phase passes (we're dispatching plan)
+      // But the NEXT phase (execute) gate would block
+      vi.mocked(checkPhaseGate)
+        .mockReturnValueOnce({ canAdvance: true, reason: 'ok' }) // plan gate
+        .mockReturnValueOnce({ canAdvance: false, reason: 'design.md not approved' }); // execute gate
+
+      await executeDispatch(
+        { agent: 'strategist', task: 'design', phase: 'plan', feature: 'auth' },
+        CWD,
+        EXTENSION_DIR,
+      );
+
+      const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(lastCall[1].current_phase).toBe('plan');
+    });
+
+    it('advances when next gate passes (design.md approved + tasks.md exists)', async () => {
+      vi.mocked(readStateFile).mockReturnValue(
+        makeFlowState({ change_type: 'feature', current_phase: 'plan' }),
+      );
+      vi.mocked(discoverAgents).mockReturnValue([
+        makeAgent({ name: 'planner', phases: ['plan'] as any }),
+      ]);
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult({ exitCode: 0 }));
+      // Both gates pass
+      vi.mocked(checkPhaseGate)
+        .mockReturnValueOnce({ canAdvance: true, reason: 'ok' }) // plan gate
+        .mockReturnValueOnce({ canAdvance: true, reason: 'ok' }); // execute gate
+
+      await executeDispatch(
+        { agent: 'planner', task: 'write tasks', phase: 'plan', feature: 'auth' },
+        CWD,
+        EXTENSION_DIR,
+      );
+
+      const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(lastCall[1].current_phase).toBe('execute');
+    });
+
+    it('does NOT advance when spec.md not approved (spec → analyze)', async () => {
+      vi.mocked(readStateFile).mockReturnValue(
+        makeFlowState({ change_type: 'feature', current_phase: 'spec' }),
+      );
+      vi.mocked(discoverAgents).mockReturnValue([
+        makeAgent({ name: 'clarifier', phases: ['spec'] as any }),
+      ]);
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult({ exitCode: 0 }));
+      vi.mocked(checkPhaseGate)
+        .mockReturnValueOnce({ canAdvance: true, reason: 'ok' }) // spec gate
+        .mockReturnValueOnce({ canAdvance: false, reason: 'spec.md not approved' }); // analyze gate
+
+      await executeDispatch(
+        { agent: 'clarifier', task: 'write spec', phase: 'spec', feature: 'auth' },
+        CWD,
+        EXTENSION_DIR,
+      );
+
+      const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(lastCall[1].current_phase).toBe('spec');
     });
 
     it('does NOT advance in parallel mode when any agent fails', async () => {

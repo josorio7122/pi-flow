@@ -254,15 +254,38 @@ describe('buildNudgeMessage', () => {
     expect(msg).not.toContain('dispatch ship');
   });
 
-  it('mentions approval when current phase requires it', () => {
+  it('mentions approval when next phase requires it (spec → analyze)', () => {
     const state = makeState({
       feature: 'auth-flow',
       change_type: 'feature',
-      current_phase: 'analyze',
+      current_phase: 'spec',
     });
     const msg = buildNudgeMessage(state);
-    // analyze requires spec approval
+    // next phase (analyze) requires spec approval
     expect(msg).toContain('approval');
+    expect(msg).toContain('analyze');
+  });
+
+  it('mentions approval when next phase requires it (plan → execute)', () => {
+    const state = makeState({
+      feature: 'auth-flow',
+      change_type: 'feature',
+      current_phase: 'plan',
+    });
+    const msg = buildNudgeMessage(state);
+    // next phase (execute) requires design approval
+    expect(msg).toContain('approval');
+    expect(msg).toContain('execute');
+  });
+
+  it('does not mention approval when next phase has no gate (execute → review)', () => {
+    const state = makeState({
+      feature: 'auth-flow',
+      change_type: 'feature',
+      current_phase: 'execute',
+    });
+    const msg = buildNudgeMessage(state);
+    expect(msg).not.toContain('approval');
   });
 
   it('shows complete message at terminal phase', () => {
