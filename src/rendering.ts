@@ -1,7 +1,7 @@
 import * as os from 'node:os';
 import { DynamicBorder, getMarkdownTheme, keyHint } from '@mariozechner/pi-coding-agent';
 import { Container, Markdown, Spacer, Text } from '@mariozechner/pi-tui';
-import type { Theme } from '@mariozechner/pi-coding-agent';
+import type { Theme, ThemeColor } from '@mariozechner/pi-coding-agent';
 import type { SingleAgentResult, UsageStats, FlowDispatchDetails } from './types.js';
 import { getDisplayItems, getFinalOutput, aggregateUsage } from './spawn.js';
 
@@ -78,9 +78,8 @@ export function formatToolCall(
     }
     case 'bash': {
       const command = (args.command as string) ?? '...';
-      const preview = command.length > TOOL_DETAIL_CHARS
-        ? `${command.slice(0, TOOL_DETAIL_CHARS)}...`
-        : command;
+      const preview =
+        command.length > TOOL_DETAIL_CHARS ? `${command.slice(0, TOOL_DETAIL_CHARS)}...` : command;
       return colorize('muted', '$ ') + colorize('toolOutput', preview);
     }
     case 'write': {
@@ -121,9 +120,9 @@ export function formatToolCall(
     default: {
       const firstStringArg = Object.values(args).find((v): v is string => typeof v === 'string');
       const preview = firstStringArg
-        ? (firstStringArg.length > TOOL_DETAIL_CHARS
+        ? firstStringArg.length > TOOL_DETAIL_CHARS
           ? `${firstStringArg.slice(0, TOOL_DETAIL_CHARS)}...`
-          : firstStringArg)
+          : firstStringArg
         : '';
       return colorize('accent', toolName) + (preview ? colorize('dim', ` ${preview}`) : '');
     }
@@ -144,7 +143,8 @@ export function formatUsageStats(usage: UsageStats, model?: string): string {
   if (usage.cacheRead) parts.push(`R${formatTokens(usage.cacheRead)}`);
   if (usage.cacheWrite) parts.push(`W${formatTokens(usage.cacheWrite)}`);
   if (usage.cost) parts.push(`$${usage.cost.toFixed(4)}`);
-  if (usage.contextTokens && usage.contextTokens > 0) parts.push(`ctx:${formatTokens(usage.contextTokens)}`);
+  if (usage.contextTokens && usage.contextTokens > 0)
+    parts.push(`ctx:${formatTokens(usage.contextTokens)}`);
   if (model) parts.push(model);
   return parts.join(' ');
 }
@@ -181,9 +181,8 @@ export function renderSingleCall(
   colorize: Colorize,
   bold: Bold,
 ): string {
-  const preview = task.length > TASK_PREVIEW_CHARS
-    ? `${task.slice(0, TASK_PREVIEW_CHARS)}...`
-    : task;
+  const preview =
+    task.length > TASK_PREVIEW_CHARS ? `${task.slice(0, TASK_PREVIEW_CHARS)}...` : task;
   let text =
     colorize('toolTitle', bold('dispatch_flow ')) +
     colorize('accent', agentName) +
@@ -213,9 +212,8 @@ export function renderParallelCall(
     colorize('accent', `parallel (${tasks.length} tasks)`) +
     colorize('muted', ` [${scope}]`);
   for (const t of tasks.slice(0, 3)) {
-    const preview = t.task.length > TASK_PREVIEW_CHARS
-      ? `${t.task.slice(0, TASK_PREVIEW_CHARS)}...`
-      : t.task;
+    const preview =
+      t.task.length > TASK_PREVIEW_CHARS ? `${t.task.slice(0, TASK_PREVIEW_CHARS)}...` : t.task;
     text += `\n  ${colorize('accent', t.agent)}${colorize('dim', ` ${preview}`)}`;
   }
   if (tasks.length > 3) {
@@ -247,9 +245,10 @@ export function renderChainCall(
   for (let i = 0; i < Math.min(steps.length, 3); i++) {
     const step = steps[i];
     const cleanTask = step.task.replace(/\{previous\}/g, '').trim();
-    const preview = cleanTask.length > TASK_PREVIEW_CHARS
-      ? `${cleanTask.slice(0, TASK_PREVIEW_CHARS)}...`
-      : cleanTask;
+    const preview =
+      cleanTask.length > TASK_PREVIEW_CHARS
+        ? `${cleanTask.slice(0, TASK_PREVIEW_CHARS)}...`
+        : cleanTask;
     text +=
       `\n  ${colorize('muted', `${i + 1}.`)} ` +
       colorize('accent', step.agent) +
@@ -311,9 +310,7 @@ export function renderAgentCard(
   const isQueued = isRunning && result.messages.length === 0;
   const isError =
     !isRunning &&
-    (result.exitCode !== 0 ||
-      result.stopReason === 'error' ||
-      result.stopReason === 'aborted');
+    (result.exitCode !== 0 || result.stopReason === 'error' || result.stopReason === 'aborted');
 
   // ── Header line ────────────────────────────────────────────────────────────
   let header: string;
@@ -327,7 +324,10 @@ export function renderAgentCard(
   } else if (isRunning) {
     header = colorize('warning', '●') + ' ' + colorize('accent', bold(result.agent));
     if (result.startedAt) {
-      header += colorize('dim', `  ${formatElapsed(result.startedAt)} · turn ${result.usage.turns}`);
+      header += colorize(
+        'dim',
+        `  ${formatElapsed(result.startedAt)} · turn ${result.usage.turns}`,
+      );
     } else if (result.usage.turns > 0) {
       header += colorize('dim', `  turn ${result.usage.turns}`);
     }
@@ -351,9 +351,10 @@ export function renderAgentCard(
 
   let text = header;
 
-  const taskPreview = result.task.length > TASK_PREVIEW_CHARS
-    ? `${result.task.slice(0, TASK_PREVIEW_CHARS)}...`
-    : result.task;
+  const taskPreview =
+    result.task.length > TASK_PREVIEW_CHARS
+      ? `${result.task.slice(0, TASK_PREVIEW_CHARS)}...`
+      : result.task;
 
   // ── Queued ─────────────────────────────────────────────────────────────────
   if (isQueued) {
@@ -479,24 +480,22 @@ export function renderParallelResult(
   const icon = isRunning
     ? colorize('warning', '⏳')
     : failCount > 0
-    ? colorize('warning', '◐')
-    : colorize('success', '✓');
+      ? colorize('warning', '◐')
+      : colorize('success', '✓');
 
   const status = isRunning
     ? `${successCount + failCount}/${results.length} done, ${running} running`
     : `${successCount}/${results.length} tasks`;
 
-  let text =
-    `${icon} ${colorize('toolTitle', bold('parallel '))}` +
-    colorize('accent', status);
+  let text = `${icon} ${colorize('toolTitle', bold('parallel '))}` + colorize('accent', status);
 
   for (const r of results) {
     const rIcon =
       r.exitCode === -1
         ? colorize('warning', '⏳')
         : r.exitCode === 0
-        ? colorize('success', '✓')
-        : colorize('error', '✗');
+          ? colorize('success', '✓')
+          : colorize('error', '✗');
 
     text += `\n\n${colorize('muted', '─── ')}${colorize('accent', r.agent)} ${rIcon}`;
     // Append card body — skip the first line (icon+name header from renderAgentCard)
@@ -549,23 +548,20 @@ export function renderChainResult(
     runningCount > 0
       ? colorize('warning', '⏳')
       : successCount === results.length
-      ? colorize('success', '✓')
-      : colorize('error', '✗');
+        ? colorize('success', '✓')
+        : colorize('error', '✗');
 
   let status: string;
   if (runningCount > 0) {
     status = `${totalDone}/${results.length} steps, ${runningCount} running`;
   } else if (failedResult) {
-    const failedStep =
-      failedResult.step ?? results.indexOf(failedResult) + 1;
+    const failedStep = failedResult.step ?? results.indexOf(failedResult) + 1;
     status = `stopped at step ${failedStep}`;
   } else {
     status = `${successCount}/${results.length} steps`;
   }
 
-  let text =
-    `${icon} ${colorize('toolTitle', bold('chain '))}` +
-    colorize('accent', status);
+  let text = `${icon} ${colorize('toolTitle', bold('chain '))}` + colorize('accent', status);
 
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
@@ -574,8 +570,8 @@ export function renderChainResult(
       r.exitCode === -1
         ? colorize('warning', '●')
         : r.exitCode === 0
-        ? colorize('success', '✓')
-        : colorize('error', '✗');
+          ? colorize('success', '✓')
+          : colorize('error', '✗');
 
     text +=
       `\n\n${colorize('muted', `─── Step ${stepNum}: `)}` +
@@ -626,9 +622,7 @@ export function buildAgentCardComponent(
   const isQueued = isRunning && result.messages.length === 0;
   const isError =
     !isRunning &&
-    (result.exitCode !== 0 ||
-      result.stopReason === 'error' ||
-      result.stopReason === 'aborted');
+    (result.exitCode !== 0 || result.stopReason === 'error' || result.stopReason === 'aborted');
 
   // Status icon
   const icon = isQueued
@@ -643,12 +637,14 @@ export function buildAgentCardComponent(
   let header: string;
   if (isQueued) {
     header =
-      `${icon} ${theme.fg('accent', result.agent)}` +
-      theme.fg('muted', ` (${result.agentSource})`);
+      `${icon} ${theme.fg('accent', result.agent)}` + theme.fg('muted', ` (${result.agentSource})`);
   } else if (isRunning) {
     header = `${icon} ${theme.fg('accent', theme.bold(result.agent))}`;
     if (result.startedAt) {
-      header += theme.fg('dim', `  ${formatElapsed(result.startedAt)} · turn ${result.usage.turns}`);
+      header += theme.fg(
+        'dim',
+        `  ${formatElapsed(result.startedAt)} · turn ${result.usage.turns}`,
+      );
     } else if (result.usage.turns > 0) {
       header += theme.fg('dim', `  turn ${result.usage.turns}`);
     }
@@ -669,11 +665,12 @@ export function buildAgentCardComponent(
   card.addChild(new Text(header, 0, 0));
 
   // Task preview
-  const taskPreview = result.task.length > TASK_PREVIEW_CHARS
-    ? `${result.task.slice(0, TASK_PREVIEW_CHARS)}...`
-    : result.task;
+  const taskPreview =
+    result.task.length > TASK_PREVIEW_CHARS
+      ? `${result.task.slice(0, TASK_PREVIEW_CHARS)}...`
+      : result.task;
 
-  const colorize: Colorize = (color, t) => theme.fg(color, t);
+  const colorize: Colorize = (color, t) => theme.fg(color as ThemeColor, t);
   const displayItems = getDisplayItems(result.messages);
 
   if (isQueued) {
@@ -783,7 +780,7 @@ export function buildFlowResult(
   // Footer: total usage + expand hint (only when not partial)
   if (!isPartial) {
     const total = aggregateUsage(details.results);
-    let footerParts: string[] = [];
+    const footerParts: string[] = [];
 
     if (details.results.length > 1) {
       const totalStr = formatUsageStats(total);
@@ -828,9 +825,7 @@ export function renderFlowStatus(
   _bold: Bold,
 ): string {
   const sep = colorize('muted', '  |  ');
-  const runIcon = openHalts > 0
-    ? colorize('warning', '●')
-    : colorize('success', '●');
+  const runIcon = openHalts > 0 ? colorize('warning', '●') : colorize('success', '●');
 
   const featurePart = colorize('accent', feature);
 

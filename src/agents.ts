@@ -12,10 +12,7 @@ function parseScalar(raw: string): unknown {
   if (s === 'null' || s === '~') return null;
   const n = Number(s);
   if (!Number.isNaN(n) && s !== '') return n;
-  if (
-    (s.startsWith('"') && s.endsWith('"')) ||
-    (s.startsWith("'") && s.endsWith("'"))
-  ) {
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
     return s.slice(1, -1);
   }
   return s;
@@ -51,23 +48,38 @@ function parseAgentFrontmatterRaw(content: string): Record<string, unknown> {
   let i = 0;
   while (i < fmLines.length) {
     const line = fmLines[i];
-    if (line === undefined) { i++; continue; }
+    if (line === undefined) {
+      i++;
+      continue;
+    }
 
     // Skip empty lines and comment lines at top level
-    if (line.trim() === '' || line.trimStart().startsWith('#')) { i++; continue; }
+    if (line.trim() === '' || line.trimStart().startsWith('#')) {
+      i++;
+      continue;
+    }
 
     const indent = line.length - line.trimStart().length;
 
     // Only process top-level keys (indent === 0)
-    if (indent > 0) { i++; continue; }
+    if (indent > 0) {
+      i++;
+      continue;
+    }
 
     const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) { i++; continue; }
+    if (colonIdx === -1) {
+      i++;
+      continue;
+    }
 
     const key = line.slice(0, colonIdx).trim();
     const rawValue = line.slice(colonIdx + 1).trim();
 
-    if (!key) { i++; continue; }
+    if (!key) {
+      i++;
+      continue;
+    }
 
     if (rawValue === '' || rawValue === '>' || rawValue === '|') {
       // Multi-line value: collect subsequent indented lines
@@ -75,8 +87,14 @@ function parseAgentFrontmatterRaw(content: string): Record<string, unknown> {
       let j = i + 1;
       while (j < fmLines.length) {
         const nextLine = fmLines[j];
-        if (nextLine === undefined) { j++; continue; }
-        if (nextLine.trim() === '') { j++; continue; } // skip blank lines
+        if (nextLine === undefined) {
+          j++;
+          continue;
+        }
+        if (nextLine.trim() === '') {
+          j++;
+          continue;
+        } // skip blank lines
         const nextIndent = nextLine.length - nextLine.trimStart().length;
         if (nextIndent === 0) break; // back to top-level: stop
         nextLines.push({ content: nextLine.trimStart(), indent: nextIndent });
@@ -90,13 +108,16 @@ function parseAgentFrontmatterRaw(content: string): Record<string, unknown> {
       } else if (nextLines[0].content.startsWith('- ')) {
         // YAML list
         result[key] = nextLines
-          .filter(nl => nl.content.startsWith('- '))
-          .map(nl => nl.content.slice(2).trim());
+          .filter((nl) => nl.content.startsWith('- '))
+          .map((nl) => nl.content.slice(2).trim());
         i = j;
       } else if (rawValue === '>' || rawValue === '|') {
         // Folded (>) or literal (|) block scalar
         const joiner = rawValue === '>' ? ' ' : '\n';
-        result[key] = nextLines.map(nl => nl.content).join(joiner).trim();
+        result[key] = nextLines
+          .map((nl) => nl.content)
+          .join(joiner)
+          .trim();
         i = j;
       } else {
         // Nested object (key: value pairs under indentation)
@@ -146,7 +167,10 @@ function extractBody(content: string): string {
 function toStringArray(val: unknown): string[] {
   if (Array.isArray(val)) return (val as unknown[]).map(String);
   if (typeof val === 'string' && val.includes(',')) {
-    return val.split(',').map(s => s.trim()).filter(Boolean);
+    return val
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
   if (typeof val === 'string' && val.trim()) return [val.trim()];
   return [];
@@ -164,7 +188,10 @@ function parseFlatFrontmatter(content: string): Record<string, unknown> {
 
   let end = -1;
   for (let i = 1; i < lines.length; i++) {
-    if (lines[i]?.trim() === '---') { end = i; break; }
+    if (lines[i]?.trim() === '---') {
+      end = i;
+      break;
+    }
   }
   if (end === -1) return result;
 
@@ -275,16 +302,14 @@ export function validateAgent(agent: FlowAgentConfig): string[] {
   // Validate model is a Claude model
   if (agent.model && !agent.model.toLowerCase().includes('claude')) {
     errors.push(
-      `invalid model: "${agent.model}" — must be a valid Claude model (e.g. claude-sonnet-4-6)`
+      `invalid model: "${agent.model}" — must be a valid Claude model (e.g. claude-sonnet-4-6)`,
     );
   }
 
   // Validate each tool is from the allowed set
   for (const tool of agent.tools) {
     if (!ALLOWED_TOOLS.has(tool)) {
-      errors.push(
-        `unknown tool: "${tool}" — allowed tools: ${[...ALLOWED_TOOLS].join(', ')}`
-      );
+      errors.push(`unknown tool: "${tool}" — allowed tools: ${[...ALLOWED_TOOLS].join(', ')}`);
     }
   }
 
@@ -331,7 +356,7 @@ function loadAgentsFromDir(dir: string, source: 'builtin' | 'custom'): FlowAgent
   if (!fs.existsSync(dir)) return [];
   let files: string[];
   try {
-    files = fs.readdirSync(dir).filter(f => f.endsWith('.md'));
+    files = fs.readdirSync(dir).filter((f) => f.endsWith('.md'));
   } catch {
     return [];
   }
@@ -383,10 +408,7 @@ export function readAgentsMd(cwd: string): string {
   }
 
   // 2. Project AGENTS.md (first match wins)
-  const projectPaths = [
-    path.join(cwd, 'AGENTS.md'),
-    path.join(cwd, '.pi', 'agent', 'AGENTS.md'),
-  ];
+  const projectPaths = [path.join(cwd, 'AGENTS.md'), path.join(cwd, '.pi', 'agent', 'AGENTS.md')];
   for (const p of projectPaths) {
     if (fs.existsSync(p)) {
       parts.push(`<!-- Project AGENTS.md -->\n${fs.readFileSync(p, 'utf8')}`);
@@ -417,8 +439,11 @@ export function buildVariableMap(
   const memoryDir = path.join(cwd, '.flow', 'memory');
 
   const safeRead = (filePath: string): string => {
-    try { return fs.readFileSync(filePath, 'utf8'); }
-    catch { return ''; }
+    try {
+      return fs.readFileSync(filePath, 'utf8');
+    } catch {
+      return '';
+    }
   };
 
   // Read phase files
@@ -501,7 +526,7 @@ export function injectVariables(
     } else {
       // Variable declared but missing from map: replace with empty + warn
       console.warn(
-        `[pi-flow] Variable {{${varName}}} declared in agent variables but not found in variable map`
+        `[pi-flow] Variable {{${varName}}} declared in agent variables but not found in variable map`,
       );
       result = result.replaceAll(placeholder, '');
     }

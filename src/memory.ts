@@ -219,34 +219,19 @@ export function writeBackMemory(flowDir: string, featureDir: string): void {
 
   if (decisionsBody) {
     const memDir = ensureMemoryDir(flowDir);
-    const entry = [
-      `\n## ${featureName} — ${today}`,
-      decisionsBody,
-      '---',
-      '',
-    ].join('\n');
+    const entry = [`\n## ${featureName} — ${today}`, decisionsBody, '---', ''].join('\n');
     fs.appendFileSync(path.join(memDir, 'decisions.md'), entry, 'utf8');
   }
 
   if (patternsBody) {
     const memDir = ensureMemoryDir(flowDir);
-    const entry = [
-      `\n## ${featureName} — first seen ${today}`,
-      patternsBody,
-      '---',
-      '',
-    ].join('\n');
+    const entry = [`\n## ${featureName} — first seen ${today}`, patternsBody, '---', ''].join('\n');
     fs.appendFileSync(path.join(memDir, 'patterns.md'), entry, 'utf8');
   }
 
   if (lessonsBody) {
     const memDir = ensureMemoryDir(flowDir);
-    const entry = [
-      `\n## ${featureName} — ${today}`,
-      lessonsBody,
-      '---',
-      '',
-    ].join('\n');
+    const entry = [`\n## ${featureName} — ${today}`, lessonsBody, '---', ''].join('\n');
     fs.appendFileSync(path.join(memDir, 'lessons.md'), entry, 'utf8');
   }
 }

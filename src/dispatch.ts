@@ -11,7 +11,14 @@ import type {
 import { loadConfig } from './config.js';
 import { discoverAgents, buildVariableMap } from './agents.js';
 import { spawnAgentWithRetry, mapWithConcurrencyLimit, getFinalOutput } from './spawn.js';
-import { readStateFile, writeDispatchLog, writeStateFile, ensureFeatureDir, appendProgressLog, writeCheckpoint } from './state.js';
+import {
+  readStateFile,
+  writeDispatchLog,
+  writeStateFile,
+  ensureFeatureDir,
+  appendProgressLog,
+  writeCheckpoint,
+} from './state.js';
 import { checkPhaseGate } from './gates.js';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
@@ -86,7 +93,9 @@ export function resolveAgentTasks(
   for (const { agent: agentName, task } of items) {
     const agent = findAgent(agents, agentName);
     if (!agent) {
-      return { error: `Agent '${agentName}' not found. Available agents: ${agents.map((a) => a.name).join(', ')}` };
+      return {
+        error: `Agent '${agentName}' not found. Available agents: ${agents.map((a) => a.name).join(', ')}`,
+      };
     }
     const check = validateAgentPhase(agent, phase);
     if (!check.allowed) {
@@ -131,7 +140,7 @@ async function executeSingle(
   task: string,
   cwd: string,
   variableMap: Record<string, string>,
-  config: FlowConfig,
+  _config: FlowConfig,
   phase: Phase,
   feature: string,
   signal?: AbortSignal,
@@ -148,14 +157,7 @@ async function executeSingle(
       }
     : undefined;
 
-  const result = await spawnAgentWithRetry(
-    cwd,
-    agent,
-    task,
-    variableMap,
-    signal,
-    onAgentUpdate,
-  );
+  const result = await spawnAgentWithRetry(cwd, agent, task, variableMap, signal, onAgentUpdate);
 
   // Write dispatch log after the agent completes
   const flowDir = path.join(cwd, '.flow');
@@ -250,7 +252,7 @@ async function executeChain(
   steps: Array<{ agent: FlowAgentConfig; task: string }>,
   cwd: string,
   variableMap: Record<string, string>,
-  config: FlowConfig,
+  _config: FlowConfig,
   phase: Phase,
   feature: string,
   signal?: AbortSignal,
@@ -267,20 +269,28 @@ async function executeChain(
     exitCode: -1,
     messages: [],
     stderr: '',
-    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: 0,
+      contextTokens: 0,
+      turns: 0,
+    },
   }));
 
   // Track completed results separately for {previous} substitution
   const completedResults: SingleAgentResult[] = [];
-  let lastAttemptedIndex = -1;
 
   for (let i = 0; i < steps.length; i++) {
     const { agent, task: rawTask } = steps[i];
-    lastAttemptedIndex = i;
 
     // Replace all {previous} occurrences with the prior agent's final output
     const previousOutput =
-      completedResults.length > 0 ? getFinalOutput(completedResults[completedResults.length - 1].messages) : '';
+      completedResults.length > 0
+        ? getFinalOutput(completedResults[completedResults.length - 1].messages)
+        : '';
     const task = rawTask.replace(/\{previous\}/g, previousOutput);
 
     const onAgentUpdate = onUpdate
@@ -296,14 +306,7 @@ async function executeChain(
         }
       : undefined;
 
-    const result = await spawnAgentWithRetry(
-      cwd,
-      agent,
-      task,
-      variableMap,
-      signal,
-      onAgentUpdate,
-    );
+    const result = await spawnAgentWithRetry(cwd, agent, task, variableMap, signal, onAgentUpdate);
 
     // Update the placeholder in-place with the actual result
     allResults[i] = result;
@@ -333,7 +336,7 @@ async function executeChain(
 
     // Stop chain on error — truncate to attempted steps only
     if (result.exitCode !== 0) {
-      return allResults.slice(0, lastAttemptedIndex + 1);
+      return allResults.slice(0, i + 1);
     }
   }
 
@@ -467,7 +470,8 @@ export async function executeDispatch(
       const details = makeDetails('chain', params.phase, params.feature)(results);
 
       // Only checkpoint if all steps succeeded
-      const chainSuccess = results.length === steps.length && results.every((r) => r.exitCode === 0);
+      const chainSuccess =
+        results.length === steps.length && results.every((r) => r.exitCode === 0);
       accumulateBudget(featureDir, currentState, results, params, chainSuccess);
 
       return {
@@ -481,10 +485,7 @@ export async function executeDispatch(
     const task = params.task;
 
     if (!agentName || !task) {
-      return errorResult(
-        'dispatch_flow requires one of: agent+task, parallel, or chain.',
-        params,
-      );
+      return errorResult('dispatch_flow requires one of: agent+task, parallel, or chain.', params);
     }
 
     // c. Find agent
@@ -536,11 +537,12 @@ export async function executeDispatch(
  */
 function accumulateBudget(
   featureDir: string,
-  currentState: FlowState,
+  currentState: FlowState | null,
   results: SingleAgentResult[],
   params: DispatchParams,
   writeCheckpointOnSuccess: boolean,
 ): void {
+  if (!currentState) return;
   try {
     const usage = sumBudget(results);
     const updatedState: FlowState = {
@@ -554,25 +556,35 @@ function accumulateBudget(
       ...(params.wave !== undefined ? { current_wave: params.wave } : {}),
     };
     writeStateFile(featureDir, updatedState);
-  } catch { /* budget loss acceptable */ }
+  } catch {
+    /* budget loss acceptable */
+  }
 
   if (writeCheckpointOnSuccess) {
     try {
       const snapshot = results.map((r) => `${r.agent}: exit=${r.exitCode}`).join(', ');
       writeCheckpoint(featureDir, params.phase, params.wave ?? null, snapshot);
-    } catch { /* checkpoint loss acceptable */ }
+    } catch {
+      /* checkpoint loss acceptable */
+    }
   }
 
   for (const r of results) {
     if (r.exitCode === 0) {
-      try { markTaskComplete(featureDir, r.task); } catch { /* non-fatal */ }
+      try {
+        markTaskComplete(featureDir, r.task);
+      } catch {
+        /* non-fatal */
+      }
     }
   }
 
   try {
     const agentNames = results.map((r) => r.agent).join(', ') || 'unknown';
     appendProgressLog(featureDir, params.phase, `Dispatched ${agentNames}`);
-  } catch { /* log loss acceptable */ }
+  } catch {
+    /* log loss acceptable */
+  }
 }
 
 /**
@@ -615,13 +627,10 @@ function errorResult(message: string, params: DispatchParams): DispatchResult {
   };
 }
 
-function buildContent(
-  results: SingleAgentResult[],
-): Array<{ type: 'text'; text: string }> {
+function buildContent(results: SingleAgentResult[]): Array<{ type: 'text'; text: string }> {
   return results.map((r) => ({
     type: 'text' as const,
     text:
-      getFinalOutput(r.messages) ||
-      `[Agent '${r.agent}' completed with exit code ${r.exitCode}]`,
+      getFinalOutput(r.messages) || `[Agent '${r.agent}' completed with exit code ${r.exitCode}]`,
   }));
 }

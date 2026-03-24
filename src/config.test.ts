@@ -3,7 +3,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { loadConfig, getDefaultConfig } from './config.js';
-import type { FlowConfig } from './types.js';
 
 let tmpDir: string;
 
@@ -27,8 +26,8 @@ describe('getDefaultConfig', () => {
     const cfg = getDefaultConfig();
     expect(cfg.guardrails.token_cap_per_agent).toBe(100000);
     expect(cfg.guardrails.cost_cap_per_agent_usd).toBe(10.0);
-    expect(cfg.guardrails.scope_creep_warning).toBe(0.20);
-    expect(cfg.guardrails.scope_creep_halt).toBe(0.30);
+    expect(cfg.guardrails.scope_creep_warning).toBe(0.2);
+    expect(cfg.guardrails.scope_creep_halt).toBe(0.3);
     expect(cfg.guardrails.loop_detection_window).toBe(10);
     expect(cfg.guardrails.loop_detection_threshold).toBe(3);
     expect(cfg.guardrails.analysis_paralysis_threshold).toBe(8);
@@ -69,12 +68,7 @@ describe('loadConfig — valid config.yaml', () => {
     fs.mkdirSync(flowDir, { recursive: true });
     fs.writeFileSync(
       path.join(flowDir, 'config.yaml'),
-      [
-        'concurrency:',
-        '  max_parallel: 4',
-        '  max_workers: 2',
-        '  stagger_ms: 200',
-      ].join('\n'),
+      ['concurrency:', '  max_parallel: 4', '  max_workers: 2', '  stagger_ms: 200'].join('\n'),
     );
 
     const cfg = loadConfig(tmpDir);
@@ -117,10 +111,7 @@ describe('loadConfig — valid config.yaml', () => {
   it('overrides memory.enabled from yaml', () => {
     const flowDir = path.join(tmpDir, '.flow');
     fs.mkdirSync(flowDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(flowDir, 'config.yaml'),
-      ['memory:', '  enabled: false'].join('\n'),
-    );
+    fs.writeFileSync(path.join(flowDir, 'config.yaml'), ['memory:', '  enabled: false'].join('\n'));
 
     const cfg = loadConfig(tmpDir);
     expect(cfg.memory.enabled).toBe(false);
@@ -131,12 +122,9 @@ describe('loadConfig — valid config.yaml', () => {
     fs.mkdirSync(flowDir, { recursive: true });
     fs.writeFileSync(
       path.join(flowDir, 'config.yaml'),
-      [
-        'git:',
-        '  branch_prefix: "bugfix/"',
-        '  commit_style: simple',
-        '  auto_pr: false',
-      ].join('\n'),
+      ['git:', '  branch_prefix: "bugfix/"', '  commit_style: simple', '  auto_pr: false'].join(
+        '\n',
+      ),
     );
 
     const cfg = loadConfig(tmpDir);
@@ -148,10 +136,7 @@ describe('loadConfig — valid config.yaml', () => {
   it('keeps defaults for sections not present in yaml', () => {
     const flowDir = path.join(tmpDir, '.flow');
     fs.mkdirSync(flowDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(flowDir, 'config.yaml'),
-      ['memory:', '  enabled: false'].join('\n'),
-    );
+    fs.writeFileSync(path.join(flowDir, 'config.yaml'), ['memory:', '  enabled: false'].join('\n'));
 
     const cfg = loadConfig(tmpDir);
     // memory was overridden
@@ -165,10 +150,7 @@ describe('loadConfig — malformed config.yaml', () => {
   it('returns defaults when yaml is invalid', () => {
     const flowDir = path.join(tmpDir, '.flow');
     fs.mkdirSync(flowDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(flowDir, 'config.yaml'),
-      'this is not valid yaml: [[[',
-    );
+    fs.writeFileSync(path.join(flowDir, 'config.yaml'), 'this is not valid yaml: [[[');
 
     const cfg = loadConfig(tmpDir);
     expect(cfg).toEqual(getDefaultConfig());

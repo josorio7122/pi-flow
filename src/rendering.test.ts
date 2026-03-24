@@ -34,16 +34,17 @@ function makeResult(overrides: Partial<SingleAgentResult> = {}): SingleAgentResu
 }
 
 /** Build an assistant message with tool calls and optional text. */
-function makeToolCallMessage(toolName: string, toolArgs: Record<string, unknown>): object {
+function makeToolCallMessage(
+  toolName: string,
+  toolArgs: Record<string, unknown>,
+): Record<string, unknown> {
   return {
     role: 'assistant',
-    content: [
-      { type: 'toolCall', name: toolName, arguments: toolArgs },
-    ],
+    content: [{ type: 'toolCall', name: toolName, arguments: toolArgs }],
   };
 }
 
-function makeTextMessage(text: string): object {
+function makeTextMessage(text: string): Record<string, unknown> {
   return {
     role: 'assistant',
     content: [{ type: 'text', text }],
@@ -114,7 +115,11 @@ describe('formatToolCall', () => {
   });
 
   it('formats read with path and offset+limit', () => {
-    const result = formatToolCall('read', { path: `${home}/src/file.ts`, offset: 1, limit: 80 }, noColor);
+    const result = formatToolCall(
+      'read',
+      { path: `${home}/src/file.ts`, offset: 1, limit: 80 },
+      noColor,
+    );
     expect(result).toBe('read ~/src/file.ts:1-80');
   });
 
@@ -146,7 +151,11 @@ describe('formatToolCall', () => {
   });
 
   it('formats write with single line (no line count)', () => {
-    const result = formatToolCall('write', { path: `${home}/src/file.ts`, content: 'single' }, noColor);
+    const result = formatToolCall(
+      'write',
+      { path: `${home}/src/file.ts`, content: 'single' },
+      noColor,
+    );
     expect(result).toBe('write ~/src/file.ts');
   });
 
@@ -156,7 +165,11 @@ describe('formatToolCall', () => {
   });
 
   it('formats grep', () => {
-    const result = formatToolCall('grep', { pattern: 'refreshToken', path: `${home}/src/auth/` }, noColor);
+    const result = formatToolCall(
+      'grep',
+      { pattern: 'refreshToken', path: `${home}/src/auth/` },
+      noColor,
+    );
     expect(result).toBe('grep /refreshToken/ in ~/src/auth/');
   });
 
@@ -193,7 +206,10 @@ describe('formatToolCall', () => {
 
   it('applies colorize to tool parts', () => {
     const calls: Array<[string, string]> = [];
-    const trackColor: Colorize = (color, text) => { calls.push([color, text]); return text; };
+    const trackColor: Colorize = (color, text) => {
+      calls.push([color, text]);
+      return text;
+    };
     formatToolCall('read', { path: '/tmp/file.ts' }, trackColor);
     expect(calls.some(([c]) => c === 'muted')).toBe(true);
     expect(calls.some(([c]) => c === 'accent')).toBe(true);
@@ -240,7 +256,9 @@ describe('formatUsageStats', () => {
   });
 
   it('includes model name', () => {
-    expect(formatUsageStats({ ...zeroUsage, turns: 2 }, 'claude-sonnet-4-6')).toBe('2 turns claude-sonnet-4-6');
+    expect(formatUsageStats({ ...zeroUsage, turns: 2 }, 'claude-sonnet-4-6')).toBe(
+      '2 turns claude-sonnet-4-6',
+    );
   });
 
   it('formats full usage stats', () => {
@@ -329,9 +347,12 @@ describe('renderSingleCall', () => {
 
   it('applies bold to dispatch_flow', () => {
     const calls: string[] = [];
-    const trackBold: Bold = (text) => { calls.push(text); return text; };
+    const trackBold: Bold = (text) => {
+      calls.push(text);
+      return text;
+    };
     renderSingleCall('scout', 'task', 'user', noColor, trackBold);
-    expect(calls.some(t => t.includes('dispatch_flow'))).toBe(true);
+    expect(calls.some((t) => t.includes('dispatch_flow'))).toBe(true);
   });
 });
 
@@ -375,7 +396,12 @@ describe('renderParallelCall', () => {
 
   it('truncates long task previews', () => {
     const longTask = 'x'.repeat(70);
-    const result = renderParallelCall([{ agent: 'scout', task: longTask }], 'user', noColor, noBold);
+    const result = renderParallelCall(
+      [{ agent: 'scout', task: longTask }],
+      'user',
+      noColor,
+      noBold,
+    );
     expect(result).toContain('x'.repeat(TASK_PREVIEW_CHARS) + '...');
   });
 });
@@ -406,9 +432,7 @@ describe('renderChainCall', () => {
   });
 
   it('cleans up {previous} placeholder from task text', () => {
-    const stepsWithPrev = [
-      { agent: 'strategist', task: 'Design based on {previous} output' },
-    ];
+    const stepsWithPrev = [{ agent: 'strategist', task: 'Design based on {previous} output' }];
     const result = renderChainCall(stepsWithPrev, 'user', noColor, noBold);
     expect(result).not.toContain('{previous}');
     expect(result).toContain('Design based on');
@@ -585,9 +609,7 @@ describe('renderAgentCard', () => {
     });
 
     it('includes final text output in expanded mode', () => {
-      const messages = [
-        makeTextMessage('## Summary\n\nImplemented the feature.'),
-      ];
+      const messages = [makeTextMessage('## Summary\n\nImplemented the feature.')];
       const result = makeResult({ exitCode: 0, messages });
       const card = renderAgentCard(result, true, noColor, noBold);
       expect(card).toContain('## Summary');
@@ -615,7 +637,10 @@ describe('renderAgentCard', () => {
     });
 
     it('shows first line of stderr when present', () => {
-      const result = makeResult({ exitCode: 1, stderr: 'TypeError: foo\n  at bar:42\n  at baz:10' });
+      const result = makeResult({
+        exitCode: 1,
+        stderr: 'TypeError: foo\n  at bar:42\n  at baz:10',
+      });
       const card = renderAgentCard(result, false, noColor, noBold);
       expect(card).toContain('TypeError: foo');
       expect(card).not.toContain('at bar:42');
@@ -793,9 +818,7 @@ describe('renderChainResult', () => {
   });
 
   it('falls back to index-based step number when step is undefined', () => {
-    const results = [
-      makeResult({ agent: 'scout', exitCode: 1, errorMessage: 'fail' }),
-    ];
+    const results = [makeResult({ agent: 'scout', exitCode: 1, errorMessage: 'fail' })];
     const text = renderChainResult(results, false, noColor, noBold);
     expect(text).toContain('stopped at step 1');
   });
@@ -848,7 +871,10 @@ describe('renderFlowStatus', () => {
 
   it('applies colorize to all parts', () => {
     const colors: string[] = [];
-    const trackColor: Colorize = (color, text) => { colors.push(color); return text; };
+    const trackColor: Colorize = (color, text) => {
+      colors.push(color);
+      return text;
+    };
     renderFlowStatus('feature', 'execute', 1, 2, 1.0, 1, trackColor, noBold);
     expect(colors).toContain('accent');
     expect(colors).toContain('dim');
@@ -993,9 +1019,7 @@ describe('buildFlowResult', () => {
     ]);
     const root = buildFlowResult(details, { expanded: false, isPartial: false }, stubTheme as any);
     // At least 3 Container children (one per agent card)
-    const containerChildren = (root as any).children.filter(
-      (c: any) => c instanceof Container,
-    );
+    const containerChildren = (root as any).children.filter((c: any) => c instanceof Container);
     expect(containerChildren.length).toBe(3);
   });
 

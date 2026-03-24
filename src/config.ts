@@ -7,8 +7,8 @@ const DEFAULT_CONFIG: FlowConfig = {
   guardrails: {
     token_cap_per_agent: 100000,
     cost_cap_per_agent_usd: 10.0,
-    scope_creep_warning: 0.20,
-    scope_creep_halt: 0.30,
+    scope_creep_warning: 0.2,
+    scope_creep_halt: 0.3,
     loop_detection_window: 10,
     loop_detection_threshold: 3,
     analysis_paralysis_threshold: 8,
@@ -31,10 +31,7 @@ function parseScalar(raw: string): string | number | boolean {
   const n = Number(s);
   if (!Number.isNaN(n) && s !== '') return n;
   // Strip surrounding quotes (single or double)
-  if (
-    (s.startsWith('"') && s.endsWith('"')) ||
-    (s.startsWith("'") && s.endsWith("'"))
-  ) {
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
     return s.slice(1, -1);
   }
   return s;
@@ -91,7 +88,10 @@ function parseSimpleYaml(content: string): Record<string, Record<string, unknown
  * Only merges keys that exist in `base` to prevent unknown keys from
  * corrupting the config structure.
  */
-function mergeSection<T extends Record<string, unknown>>(base: T, override: Record<string, unknown>): T {
+function mergeSection<T extends Record<string, unknown>>(
+  base: T,
+  override: Record<string, unknown>,
+): T {
   const merged = { ...base };
   for (const key of Object.keys(base) as Array<keyof T>) {
     if (Object.prototype.hasOwnProperty.call(override, key as string)) {
@@ -124,12 +124,8 @@ export function loadConfig(cwd: string): FlowConfig {
       guardrails: parsed.guardrails
         ? mergeSection(defaults.guardrails, parsed.guardrails)
         : defaults.guardrails,
-      memory: parsed.memory
-        ? mergeSection(defaults.memory, parsed.memory)
-        : defaults.memory,
-      git: parsed.git
-        ? mergeSection(defaults.git, parsed.git)
-        : defaults.git,
+      memory: parsed.memory ? mergeSection(defaults.memory, parsed.memory) : defaults.memory,
+      git: parsed.git ? mergeSection(defaults.git, parsed.git) : defaults.git,
     };
   } catch {
     return getDefaultConfig();

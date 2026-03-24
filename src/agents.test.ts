@@ -120,7 +120,9 @@ describe('parseAgentFile', () => {
 
   it('parses basic scalar fields from frontmatter', () => {
     const filePath = path.join(tmpDir, 'scout.md');
-    writeMd(filePath, `---
+    writeMd(
+      filePath,
+      `---
 name: scout
 label: Scout
 model: claude-sonnet-4-6
@@ -142,7 +144,8 @@ variables:
 # Scout Agent
 
 You map codebases.
-`);
+`,
+    );
 
     const agent = parseAgentFile(filePath, 'builtin');
     expect(agent.name).toBe('scout');
@@ -155,7 +158,9 @@ You map codebases.
 
   it('parses tools as YAML list', () => {
     const filePath = path.join(tmpDir, 'builder.md');
-    writeMd(filePath, `---
+    writeMd(
+      filePath,
+      `---
 name: builder
 model: claude-sonnet-4-6
 tools:
@@ -171,7 +176,8 @@ limits:
 ---
 
 Body.
-`);
+`,
+    );
 
     const agent = parseAgentFile(filePath, 'builtin');
     expect(agent.tools).toEqual(['read', 'write', 'edit', 'bash']);
@@ -179,7 +185,9 @@ Body.
 
   it('parses tools as comma-separated string', () => {
     const filePath = path.join(tmpDir, 'planner.md');
-    writeMd(filePath, `---
+    writeMd(
+      filePath,
+      `---
 name: planner
 model: claude-sonnet-4-6
 tools: read, grep, find
@@ -190,7 +198,8 @@ limits:
 ---
 
 Body.
-`);
+`,
+    );
 
     const agent = parseAgentFile(filePath, 'builtin');
     expect(agent.tools).toEqual(['read', 'grep', 'find']);
@@ -198,7 +207,9 @@ Body.
 
   it('parses phases as YAML list', () => {
     const filePath = path.join(tmpDir, 'clarifier.md');
-    writeMd(filePath, `---
+    writeMd(
+      filePath,
+      `---
 name: clarifier
 model: claude-opus-4-6
 tools:
@@ -212,7 +223,8 @@ limits:
 ---
 
 Body.
-`);
+`,
+    );
 
     const agent = parseAgentFile(filePath, 'builtin');
     expect(agent.phases).toEqual(['intent', 'spec']);
@@ -220,7 +232,9 @@ Body.
 
   it('parses phases as comma-separated string', () => {
     const filePath = path.join(tmpDir, 'sentinel.md');
-    writeMd(filePath, `---
+    writeMd(
+      filePath,
+      `---
 name: sentinel
 model: claude-opus-4-6
 tools: read, bash
@@ -231,7 +245,8 @@ limits:
 ---
 
 Body.
-`);
+`,
+    );
 
     const agent = parseAgentFile(filePath, 'builtin');
     expect(agent.phases).toEqual(['execute', 'review']);
@@ -239,7 +254,9 @@ Body.
 
   it('parses nested limits field', () => {
     const filePath = path.join(tmpDir, 'agent.md');
-    writeMd(filePath, `---
+    writeMd(
+      filePath,
+      `---
 name: agent
 model: claude-sonnet-4-6
 tools:
@@ -252,7 +269,8 @@ limits:
 ---
 
 Body.
-`);
+`,
+    );
 
     const agent = parseAgentFile(filePath, 'builtin');
     expect(agent.limits.max_tokens).toBe(75000);
@@ -261,7 +279,9 @@ Body.
 
   it('parses variables as YAML list', () => {
     const filePath = path.join(tmpDir, 'agent.md');
-    writeMd(filePath, `---
+    writeMd(
+      filePath,
+      `---
 name: agent
 model: claude-sonnet-4-6
 tools:
@@ -278,7 +298,8 @@ variables:
 ---
 
 Body.
-`);
+`,
+    );
 
     const agent = parseAgentFile(filePath, 'builtin');
     expect(agent.variables).toEqual(['FEATURE_NAME', 'WAVE_TASKS', 'SPEC_GOAL']);
@@ -286,7 +307,9 @@ Body.
 
   it('parses variables as comma-separated string', () => {
     const filePath = path.join(tmpDir, 'agent.md');
-    writeMd(filePath, `---
+    writeMd(
+      filePath,
+      `---
 name: agent
 model: claude-sonnet-4-6
 tools: read
@@ -298,7 +321,8 @@ limits:
 ---
 
 Body.
-`);
+`,
+    );
 
     const agent = parseAgentFile(filePath, 'builtin');
     expect(agent.variables).toEqual(['FEATURE_NAME', 'SPEC_GOAL']);
@@ -306,7 +330,9 @@ Body.
 
   it('sets systemPrompt from markdown body (after frontmatter)', () => {
     const filePath = path.join(tmpDir, 'agent.md');
-    writeMd(filePath, `---
+    writeMd(
+      filePath,
+      `---
 name: agent
 model: claude-sonnet-4-6
 tools:
@@ -321,7 +347,8 @@ limits:
 # Agent
 
 You are the agent. Do things.
-`);
+`,
+    );
 
     const agent = parseAgentFile(filePath, 'builtin');
     expect(agent.systemPrompt).toContain('# Agent');
@@ -332,7 +359,9 @@ You are the agent. Do things.
 
   it('sets source and filePath correctly', () => {
     const filePath = path.join(tmpDir, 'agent.md');
-    writeMd(filePath, `---
+    writeMd(
+      filePath,
+      `---
 name: agent
 model: claude-sonnet-4-6
 tools:
@@ -345,7 +374,8 @@ limits:
 ---
 
 Body.
-`);
+`,
+    );
 
     const builtin = parseAgentFile(filePath, 'builtin');
     expect(builtin.source).toBe('builtin');
@@ -357,7 +387,9 @@ Body.
 
   it('defaults label to name when label is absent', () => {
     const filePath = path.join(tmpDir, 'agent.md');
-    writeMd(filePath, `---
+    writeMd(
+      filePath,
+      `---
 name: myagent
 model: claude-sonnet-4-6
 tools:
@@ -370,7 +402,8 @@ limits:
 ---
 
 Body.
-`);
+`,
+    );
 
     const agent = parseAgentFile(filePath, 'builtin');
     expect(agent.label).toBe('myagent');
@@ -378,7 +411,9 @@ Body.
 
   it('parses folded description string (> syntax)', () => {
     const filePath = path.join(tmpDir, 'agent.md');
-    writeMd(filePath, `---
+    writeMd(
+      filePath,
+      `---
 name: agent
 model: claude-sonnet-4-6
 description: >
@@ -394,7 +429,8 @@ limits:
 ---
 
 Body.
-`);
+`,
+    );
 
     const agent = parseAgentFile(filePath, 'builtin');
     expect(agent.description).toContain('long description');
@@ -403,7 +439,9 @@ Body.
 
   it('parses writable: true as boolean true', () => {
     const filePath = path.join(tmpDir, 'agent.md');
-    writeMd(filePath, `---
+    writeMd(
+      filePath,
+      `---
 name: agent
 model: claude-sonnet-4-6
 tools:
@@ -417,7 +455,8 @@ limits:
 ---
 
 Body.
-`);
+`,
+    );
 
     const agent = parseAgentFile(filePath, 'builtin');
     expect(agent.writable).toBe(true);
@@ -425,7 +464,9 @@ Body.
 
   it('defaults writable to false when not specified', () => {
     const filePath = path.join(tmpDir, 'agent.md');
-    writeMd(filePath, `---
+    writeMd(
+      filePath,
+      `---
 name: agent
 model: claude-sonnet-4-6
 tools:
@@ -438,7 +479,8 @@ limits:
 ---
 
 Body.
-`);
+`,
+    );
 
     const agent = parseAgentFile(filePath, 'builtin');
     expect(agent.writable).toBe(false);
@@ -455,56 +497,61 @@ describe('validateAgent', () => {
 
   it('returns error for missing name', () => {
     const errors = validateAgent(makeAgent({ name: '' }));
-    expect(errors.some(e => /name/i.test(e))).toBe(true);
+    expect(errors.some((e) => /name/i.test(e))).toBe(true);
   });
 
   it('returns error for missing model', () => {
     const errors = validateAgent(makeAgent({ model: '' }));
-    expect(errors.some(e => /model/i.test(e))).toBe(true);
+    expect(errors.some((e) => /model/i.test(e))).toBe(true);
   });
 
   it('returns error for empty tools array', () => {
     const errors = validateAgent(makeAgent({ tools: [] }));
-    expect(errors.some(e => /tools/i.test(e))).toBe(true);
+    expect(errors.some((e) => /tools/i.test(e))).toBe(true);
   });
 
   it('returns error for empty phases array', () => {
     const errors = validateAgent(makeAgent({ phases: [] }));
-    expect(errors.some(e => /phases/i.test(e))).toBe(true);
+    expect(errors.some((e) => /phases/i.test(e))).toBe(true);
   });
 
   it('returns error when model does not contain "claude"', () => {
     const errors = validateAgent(makeAgent({ model: 'gpt-4-turbo' }));
-    expect(errors.some(e => /model/i.test(e))).toBe(true);
+    expect(errors.some((e) => /model/i.test(e))).toBe(true);
   });
 
   it('accepts valid claude model variants', () => {
-    const models = ['claude-sonnet-4-6', 'claude-opus-4-6', 'claude-haiku-4-5', 'claude-3-5-sonnet-20241022'];
+    const models = [
+      'claude-sonnet-4-6',
+      'claude-opus-4-6',
+      'claude-haiku-4-5',
+      'claude-3-5-sonnet-20241022',
+    ];
     for (const model of models) {
       const errors = validateAgent(makeAgent({ model }));
-      expect(errors.some(e => /model/i.test(e))).toBe(false);
+      expect(errors.some((e) => /model/i.test(e))).toBe(false);
     }
   });
 
   it('returns error for unknown tool', () => {
     const errors = validateAgent(makeAgent({ tools: ['read', 'curl', 'bash'] }));
-    expect(errors.some(e => /curl/i.test(e))).toBe(true);
+    expect(errors.some((e) => /curl/i.test(e))).toBe(true);
   });
 
   it('does not error for all allowed tools', () => {
     const allTools = ['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls'];
     const errors = validateAgent(makeAgent({ tools: allTools, writable: true }));
-    expect(errors.filter(e => /unknown tool/i.test(e))).toHaveLength(0);
+    expect(errors.filter((e) => /unknown tool/i.test(e))).toHaveLength(0);
   });
 
   it('returns error when writable is false and tools include write', () => {
     const errors = validateAgent(makeAgent({ writable: false, tools: ['read', 'write'] }));
-    expect(errors.some(e => /write/i.test(e))).toBe(true);
+    expect(errors.some((e) => /write/i.test(e))).toBe(true);
   });
 
   it('returns error when writable is false and tools include edit', () => {
     const errors = validateAgent(makeAgent({ writable: false, tools: ['read', 'edit'] }));
-    expect(errors.some(e => /edit/i.test(e))).toBe(true);
+    expect(errors.some((e) => /edit/i.test(e))).toBe(true);
   });
 
   it('allows write and edit when writable is true', () => {
@@ -513,7 +560,9 @@ describe('validateAgent', () => {
   });
 
   it('allows read-only tools when writable is false', () => {
-    const errors = validateAgent(makeAgent({ writable: false, tools: ['read', 'grep', 'find', 'ls', 'bash'] }));
+    const errors = validateAgent(
+      makeAgent({ writable: false, tools: ['read', 'grep', 'find', 'ls', 'bash'] }),
+    );
     expect(errors).toHaveLength(0);
   });
 });
@@ -542,7 +591,9 @@ describe('discoverAgents', () => {
   it('loads built-in agents from extensionDir/agents/', () => {
     const agentsDir = path.join(extensionDir, 'agents');
     fs.mkdirSync(agentsDir, { recursive: true });
-    writeMd(path.join(agentsDir, 'scout.md'), `---
+    writeMd(
+      path.join(agentsDir, 'scout.md'),
+      `---
 name: scout
 model: claude-sonnet-4-6
 tools:
@@ -555,7 +606,8 @@ limits:
 ---
 
 Scout body.
-`);
+`,
+    );
 
     const agents = discoverAgents(extensionDir, cwd);
     expect(agents).toHaveLength(1);
@@ -567,7 +619,9 @@ Scout body.
     const agentsDir = path.join(extensionDir, 'agents');
     fs.mkdirSync(agentsDir);
     for (const name of ['builder', 'sentinel', 'reviewer']) {
-      writeMd(path.join(agentsDir, `${name}.md`), `---
+      writeMd(
+        path.join(agentsDir, `${name}.md`),
+        `---
 name: ${name}
 model: claude-sonnet-4-6
 tools:
@@ -580,18 +634,21 @@ limits:
 ---
 
 Body.
-`);
+`,
+      );
     }
 
     const agents = discoverAgents(extensionDir, cwd);
     expect(agents).toHaveLength(3);
-    expect(agents.map(a => a.name).sort()).toEqual(['builder', 'reviewer', 'sentinel']);
+    expect(agents.map((a) => a.name).sort()).toEqual(['builder', 'reviewer', 'sentinel']);
   });
 
   it('loads custom agents from .flow/agents/custom/ in cwd', () => {
     const customDir = path.join(cwd, '.flow', 'agents', 'custom');
     fs.mkdirSync(customDir, { recursive: true });
-    writeMd(path.join(customDir, 'specialist.md'), `---
+    writeMd(
+      path.join(customDir, 'specialist.md'),
+      `---
 name: specialist
 model: claude-sonnet-4-6
 tools:
@@ -604,7 +661,8 @@ limits:
 ---
 
 Custom body.
-`);
+`,
+    );
 
     const agents = discoverAgents(extensionDir, cwd);
     expect(agents).toHaveLength(1);
@@ -615,7 +673,9 @@ Custom body.
   it('custom agent overrides built-in agent with same name', () => {
     const agentsDir = path.join(extensionDir, 'agents');
     fs.mkdirSync(agentsDir, { recursive: true });
-    writeMd(path.join(agentsDir, 'builder.md'), `---
+    writeMd(
+      path.join(agentsDir, 'builder.md'),
+      `---
 name: builder
 model: claude-sonnet-4-6
 tools:
@@ -628,11 +688,14 @@ limits:
 ---
 
 Builtin builder.
-`);
+`,
+    );
 
     const customDir = path.join(cwd, '.flow', 'agents', 'custom');
     fs.mkdirSync(customDir, { recursive: true });
-    writeMd(path.join(customDir, 'builder.md'), `---
+    writeMd(
+      path.join(customDir, 'builder.md'),
+      `---
 name: builder
 model: claude-opus-4-6
 tools:
@@ -648,10 +711,11 @@ limits:
 ---
 
 Custom builder.
-`);
+`,
+    );
 
     const agents = discoverAgents(extensionDir, cwd);
-    const builder = agents.find(a => a.name === 'builder');
+    const builder = agents.find((a) => a.name === 'builder');
     expect(builder).toBeDefined();
     expect(builder!.source).toBe('custom');
     expect(builder!.model).toBe('claude-opus-4-6');
@@ -662,7 +726,9 @@ Custom builder.
     const agentsDir = path.join(extensionDir, 'agents');
     fs.mkdirSync(agentsDir, { recursive: true });
     for (const name of ['builder', 'scout']) {
-      writeMd(path.join(agentsDir, `${name}.md`), `---
+      writeMd(
+        path.join(agentsDir, `${name}.md`),
+        `---
 name: ${name}
 model: claude-sonnet-4-6
 tools:
@@ -675,12 +741,15 @@ limits:
 ---
 
 Body.
-`);
+`,
+      );
     }
 
     const customDir = path.join(cwd, '.flow', 'agents', 'custom');
     fs.mkdirSync(customDir, { recursive: true });
-    writeMd(path.join(customDir, 'builder.md'), `---
+    writeMd(
+      path.join(customDir, 'builder.md'),
+      `---
 name: builder
 model: claude-opus-4-6
 tools:
@@ -694,11 +763,12 @@ limits:
 ---
 
 Custom.
-`);
+`,
+    );
 
     const agents = discoverAgents(extensionDir, cwd);
     expect(agents).toHaveLength(2);
-    const scout = agents.find(a => a.name === 'scout');
+    const scout = agents.find((a) => a.name === 'scout');
     expect(scout!.source).toBe('builtin');
   });
 
@@ -710,7 +780,9 @@ Custom.
 
     const customDir = path.join(parentDir, '.flow', 'agents', 'custom');
     fs.mkdirSync(customDir, { recursive: true });
-    writeMd(path.join(customDir, 'specialist.md'), `---
+    writeMd(
+      path.join(customDir, 'specialist.md'),
+      `---
 name: specialist
 model: claude-sonnet-4-6
 tools:
@@ -723,10 +795,11 @@ limits:
 ---
 
 Body.
-`);
+`,
+    );
 
     const agents = discoverAgents(extensionDir, nestedCwd);
-    expect(agents.find(a => a.name === 'specialist')).toBeDefined();
+    expect(agents.find((a) => a.name === 'specialist')).toBeDefined();
 
     fs.rmSync(parentDir, { recursive: true, force: true });
   });
@@ -833,7 +906,9 @@ describe('buildVariableMap', () => {
   });
 
   it('reads SPEC_GOAL from spec.md Goal section', () => {
-    writeMd(path.join(featureDir, 'spec.md'), `---
+    writeMd(
+      path.join(featureDir, 'spec.md'),
+      `---
 approved: true
 ---
 
@@ -844,21 +919,25 @@ Build JWT refresh token rotation.
 ## Behaviors
 
 WHEN user calls /auth/refresh...
-`);
+`,
+    );
 
     const map = buildVariableMap(cwd, featureDir, null);
     expect(map.SPEC_GOAL).toBe('Build JWT refresh token rotation.');
   });
 
   it('reads SPEC_BEHAVIORS from spec.md Behaviors section', () => {
-    writeMd(path.join(featureDir, 'spec.md'), `## Goal
+    writeMd(
+      path.join(featureDir, 'spec.md'),
+      `## Goal
 
 Goal.
 
 ## Behaviors
 
 WHEN user calls /auth/refresh, THE system SHALL issue a new token.
-`);
+`,
+    );
 
     const map = buildVariableMap(cwd, featureDir, null);
     expect(map.SPEC_BEHAVIORS).toContain('/auth/refresh');
@@ -870,14 +949,17 @@ WHEN user calls /auth/refresh, THE system SHALL issue a new token.
   });
 
   it('reads CHOSEN_APPROACH from design.md Decision section', () => {
-    writeMd(path.join(featureDir, 'design.md'), `## Options
+    writeMd(
+      path.join(featureDir, 'design.md'),
+      `## Options
 
 Option A or B.
 
 ## Decision
 
 Use Approach B: Redis rotating blacklist.
-`);
+`,
+    );
 
     const map = buildVariableMap(cwd, featureDir, null);
     expect(map.CHOSEN_APPROACH).toContain('Approach B');
@@ -889,7 +971,9 @@ Use Approach B: Redis rotating blacklist.
   });
 
   it('reads WAVE_TASKS from current wave in tasks.md (state.current_wave)', () => {
-    writeMd(path.join(featureDir, 'tasks.md'), `---
+    writeMd(
+      path.join(featureDir, 'tasks.md'),
+      `---
 wave_count: 2
 ---
 
@@ -900,7 +984,8 @@ wave_count: 2
 ## Wave 2
 
 - [ ] task-2.1: Add tests
-`);
+`,
+    );
 
     const map = buildVariableMap(cwd, featureDir, { current_wave: 2 });
     expect(map.WAVE_TASKS).toContain('task-2.1');
@@ -908,14 +993,17 @@ wave_count: 2
   });
 
   it('defaults to wave 1 for WAVE_TASKS when state is null', () => {
-    writeMd(path.join(featureDir, 'tasks.md'), `## Wave 1
+    writeMd(
+      path.join(featureDir, 'tasks.md'),
+      `## Wave 1
 
 - [ ] task-1.1: Do something
 
 ## Wave 2
 
 - [ ] task-2.1: Do something else
-`);
+`,
+    );
 
     const map = buildVariableMap(cwd, featureDir, null);
     expect(map.WAVE_TASKS).toContain('task-1.1');
@@ -932,27 +1020,33 @@ wave_count: 2
   });
 
   it('reads TOTAL_WAVES from tasks.md frontmatter wave_count', () => {
-    writeMd(path.join(featureDir, 'tasks.md'), `---
+    writeMd(
+      path.join(featureDir, 'tasks.md'),
+      `---
 wave_count: 4
 ---
 
 ## Wave 1
 
 tasks...
-`);
+`,
+    );
 
     const map = buildVariableMap(cwd, featureDir, null);
     expect(map.TOTAL_WAVES).toBe('4');
   });
 
   it('reads OPEN_HALTS from sentinel-log.md frontmatter', () => {
-    writeMd(path.join(featureDir, 'sentinel-log.md'), `---
+    writeMd(
+      path.join(featureDir, 'sentinel-log.md'),
+      `---
 open_halts: 2
 open_warns: 1
 ---
 
 ## Wave 1 findings...
-`);
+`,
+    );
 
     const map = buildVariableMap(cwd, featureDir, null);
     expect(map.OPEN_HALTS).toBe('2');
@@ -986,7 +1080,7 @@ open_warns: 1
   it('returns all string values (no undefined)', () => {
     const map = buildVariableMap(cwd, featureDir, null);
     for (const [key, value] of Object.entries(map)) {
-      expect(typeof value).toBe('string', `Expected ${key} to be a string`);
+      expect(typeof value, `Expected ${key} to be a string`).toBe('string');
     }
   });
 });

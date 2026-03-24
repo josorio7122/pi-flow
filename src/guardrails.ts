@@ -23,8 +23,7 @@ export function checkBudget(
     return {
       warn: true,
       halt: true,
-      message:
-        `HALT: Cost cap exceeded. $${total.toFixed(2)} spent of $${capUsd.toFixed(2)} cap.`,
+      message: `HALT: Cost cap exceeded. $${total.toFixed(2)} spent of $${capUsd.toFixed(2)} cap.`,
     };
   }
 
@@ -56,8 +55,7 @@ export function checkTokenBudget(
     return {
       warn: true,
       halt: true,
-      message:
-        `HALT: Token cap exceeded. ${total.toLocaleString()} tokens used of ${capTokens.toLocaleString()} cap.`,
+      message: `HALT: Token cap exceeded. ${total.toLocaleString()} tokens used of ${capTokens.toLocaleString()} cap.`,
     };
   }
 
@@ -243,10 +241,11 @@ export async function checkGitActivity(
   sinceMinutes: number,
 ): Promise<GitActivityResult> {
   try {
-    const output = execSync(
-      `git log --oneline --since="${sinceMinutes} minutes ago"`,
-      { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] },
-    );
+    const output = execSync(`git log --oneline --since="${sinceMinutes} minutes ago"`, {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
 
     const lines = output.split('\n').filter((l) => l.trim().length > 0);
     return { hasCommits: lines.length > 0, commitCount: lines.length };
@@ -303,9 +302,7 @@ function sortedStringify(obj: unknown): string {
     return JSON.stringify(obj);
   }
   const sorted = Object.fromEntries(
-    Object.entries(obj as Record<string, unknown>).sort(([a], [b]) =>
-      a < b ? -1 : a > b ? 1 : 0,
-    ),
+    Object.entries(obj as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
   );
   return JSON.stringify(sorted);
 }

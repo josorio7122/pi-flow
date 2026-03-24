@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -18,45 +18,45 @@ import {
 
 describe('checkBudget', () => {
   it('returns no warn/halt when well under cap', () => {
-    const result = checkBudget(0, 1.00, 10.00);
+    const result = checkBudget(0, 1.0, 10.0);
     expect(result.warn).toBe(false);
     expect(result.halt).toBe(false);
   });
 
   it('warns at exactly 80% of cap', () => {
     // total = 8.00 (80% of 10.00)
-    const result = checkBudget(7.00, 1.00, 10.00);
+    const result = checkBudget(7.0, 1.0, 10.0);
     expect(result.warn).toBe(true);
     expect(result.halt).toBe(false);
     expect(result.message).toMatch(/warn/i);
   });
 
   it('warns above 80% but below 100%', () => {
-    const result = checkBudget(8.50, 0.50, 10.00);
+    const result = checkBudget(8.5, 0.5, 10.0);
     expect(result.warn).toBe(true);
     expect(result.halt).toBe(false);
   });
 
   it('halts at exactly 100% of cap', () => {
-    const result = checkBudget(9.00, 1.00, 10.00);
+    const result = checkBudget(9.0, 1.0, 10.0);
     expect(result.halt).toBe(true);
     expect(result.message).toMatch(/halt/i);
   });
 
   it('halts above 100% of cap', () => {
-    const result = checkBudget(10.00, 1.00, 10.00);
+    const result = checkBudget(10.0, 1.0, 10.0);
     expect(result.halt).toBe(true);
   });
 
   it('does not warn at just under 80%', () => {
     // total = 7.99 — not yet at 80%
-    const result = checkBudget(7.00, 0.99, 10.00);
+    const result = checkBudget(7.0, 0.99, 10.0);
     expect(result.warn).toBe(false);
     expect(result.halt).toBe(false);
   });
 
   it('message includes current and cap amounts', () => {
-    const result = checkBudget(0, 8.50, 10.00);
+    const result = checkBudget(0, 8.5, 10.0);
     expect(result.message).toMatch(/8\.50|8.5/);
     expect(result.message).toMatch(/10\.00|10/);
   });
@@ -219,28 +219,28 @@ describe('detectLoop', () => {
 
 describe('checkScopeCreep', () => {
   it('returns ok when actual equals planned', () => {
-    const result = checkScopeCreep(10, 10, 0.20, 0.30);
+    const result = checkScopeCreep(10, 10, 0.2, 0.3);
     expect(result.warn).toBe(false);
     expect(result.halt).toBe(false);
     expect(result.ratio).toBeCloseTo(1.0);
   });
 
   it('returns ok when actual is less than planned', () => {
-    const result = checkScopeCreep(10, 8, 0.20, 0.30);
+    const result = checkScopeCreep(10, 8, 0.2, 0.3);
     expect(result.warn).toBe(false);
     expect(result.halt).toBe(false);
   });
 
   it('returns ok at exactly 20% over (boundary — not strictly over)', () => {
     // ratio = 12/10 = 1.20 — not > 1.20
-    const result = checkScopeCreep(10, 12, 0.20, 0.30);
+    const result = checkScopeCreep(10, 12, 0.2, 0.3);
     expect(result.warn).toBe(false);
     expect(result.halt).toBe(false);
   });
 
   it('warns when ratio is strictly over 20%', () => {
     // ratio = 13/10 = 1.30 — > 1.20 but not > 1.30
-    const result = checkScopeCreep(10, 13, 0.20, 0.30);
+    const result = checkScopeCreep(10, 13, 0.2, 0.3);
     expect(result.warn).toBe(true);
     expect(result.halt).toBe(false);
     expect(result.message).toMatch(/warn/i);
@@ -248,24 +248,24 @@ describe('checkScopeCreep', () => {
 
   it('returns ok at exactly 30% over (boundary — not strictly > 30%)', () => {
     // ratio = 13/10 = 1.30 — §13 C7: strictly > 1.30 required for halt
-    const result = checkScopeCreep(10, 13, 0.20, 0.30);
+    const result = checkScopeCreep(10, 13, 0.2, 0.3);
     expect(result.halt).toBe(false);
   });
 
   it('halts when ratio is strictly over 30% (14/10 = 1.40)', () => {
-    const result = checkScopeCreep(10, 14, 0.20, 0.30);
+    const result = checkScopeCreep(10, 14, 0.2, 0.3);
     expect(result.halt).toBe(true);
     expect(result.message).toMatch(/halt/i);
   });
 
   it('ratio is included in the result', () => {
-    const result = checkScopeCreep(10, 15, 0.20, 0.30);
+    const result = checkScopeCreep(10, 15, 0.2, 0.3);
     expect(result.ratio).toBeCloseTo(1.5);
   });
 
   it('handles plannedFiles = 0 without crashing', () => {
     // ratio should be 1 (no plan = treat as exactly on target)
-    const result = checkScopeCreep(0, 5, 0.20, 0.30);
+    const result = checkScopeCreep(0, 5, 0.2, 0.3);
     expect(result).toBeDefined();
   });
 });
@@ -273,9 +273,6 @@ describe('checkScopeCreep', () => {
 // ── checkAnalysisParalysis ────────────────────────────────────────────────────
 
 describe('checkAnalysisParalysis', () => {
-  const readOnly = ['read', 'grep', 'find', 'ls'];
-  const action = ['bash', 'write', 'edit'];
-
   it('returns not tripped when array is empty', () => {
     const result = checkAnalysisParalysis([], 8);
     expect(result.tripped).toBe(false);
@@ -283,11 +280,7 @@ describe('checkAnalysisParalysis', () => {
   });
 
   it('counts consecutive read-only calls from the end', () => {
-    const calls = [
-      { tool: 'read' },
-      { tool: 'read' },
-      { tool: 'read' },
-    ];
+    const calls = [{ tool: 'read' }, { tool: 'read' }, { tool: 'read' }];
     const result = checkAnalysisParalysis(calls, 8);
     expect(result.count).toBe(3);
     expect(result.tripped).toBe(false);
@@ -384,7 +377,10 @@ describe('estimateCost', () => {
 
   it('returns 0 for zero usage', () => {
     const cost = estimateCost('claude-sonnet-4-5', {
-      input: 0, output: 0, cacheRead: 0, cacheWrite: 0,
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
     });
     expect(cost).toBe(0);
   });
@@ -396,14 +392,20 @@ describe('estimateCost', () => {
 
   it('handles partial usage (only output tokens)', () => {
     const cost = estimateCost('claude-sonnet-4-5', {
-      input: 0, output: 1_000_000, cacheRead: 0, cacheWrite: 0,
+      input: 0,
+      output: 1_000_000,
+      cacheRead: 0,
+      cacheWrite: 0,
     });
     expect(cost).toBeCloseTo(15.0, 2);
   });
 
   it('handles partial usage (only input tokens)', () => {
     const cost = estimateCost('claude-sonnet-4-5', {
-      input: 1_000_000, output: 0, cacheRead: 0, cacheWrite: 0,
+      input: 1_000_000,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
     });
     expect(cost).toBeCloseTo(3.0, 2);
   });

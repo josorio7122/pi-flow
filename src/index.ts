@@ -26,7 +26,7 @@ import type {
   AgentToolResult,
   AgentToolUpdateCallback,
 } from '@mariozechner/pi-coding-agent';
-import type { Theme } from '@mariozechner/pi-coding-agent';
+import type { Theme, ThemeColor } from '@mariozechner/pi-coding-agent';
 
 import { executeDispatch } from './dispatch.js';
 import { findFlowDir, readStateFile, writeCheckpoint, readCheckpoint } from './state.js';
@@ -75,7 +75,9 @@ function extractGoalFromSpec(specContent: string): string {
 
 /** Extracts the tasks for a given wave from tasks.md content (capped at 800 chars). */
 function extractWaveTasks(tasksContent: string, waveNum: number): string {
-  const match = new RegExp(`^## Wave ${waveNum}\\s*\\n([\\s\\S]*?)(?=^## |\\s*$)`, 'm').exec(tasksContent);
+  const match = new RegExp(`^## Wave ${waveNum}\\s*\\n([\\s\\S]*?)(?=^## |\\s*$)`, 'm').exec(
+    tasksContent,
+  );
   return match ? match[1].trim().slice(0, 800) : '(no tasks for this wave)';
 }
 
@@ -109,8 +111,7 @@ function buildResumeSnapshot(state: FlowState, featureDir: string): string {
   const chosenApproach = extractChosenApproach(designContent);
 
   // Sentinel issues excerpt (capped at 500 chars)
-  const haltExcerpt =
-    state.sentinel.open_halts > 0 ? sentinelContent.slice(0, 500) : '';
+  const haltExcerpt = state.sentinel.open_halts > 0 ? sentinelContent.slice(0, 500) : '';
 
   return `<flow_resume
   feature="${state.feature}"
@@ -141,9 +142,7 @@ function buildResumeSnapshot(state: FlowState, featureDir: string): string {
 
 function formatStatusSummary(state: FlowState): string {
   const wave =
-    state.current_wave !== null
-      ? ` wave ${state.current_wave}/${state.wave_count ?? '?'}`
-      : '';
+    state.current_wave !== null ? ` wave ${state.current_wave}/${state.wave_count ?? '?'}` : '';
 
   const lines: string[] = [
     `Feature: ${state.feature}`,
@@ -197,7 +196,7 @@ function updateFooterStatus(state: FlowState, ui: ExtensionContext['ui']): void 
     state.wave_count,
     state.budget.total_cost_usd,
     state.sentinel.open_halts,
-    (color: string, t: string) => ui.theme.fg(color, t),
+    (color: string, t: string) => ui.theme.fg(color as ThemeColor, t),
     (t: string) => ui.theme.bold(t),
   );
   ui.setStatus('pi-flow', statusText);
@@ -264,12 +263,11 @@ export default function piFlow(pi: ExtensionAPI) {
     parameters: Type.Object({
       agent: Type.Optional(
         Type.String({
-          description: 'Agent name for single dispatch (clarifier/scout/strategist/planner/builder/sentinel/reviewer/shipper)',
+          description:
+            'Agent name for single dispatch (clarifier/scout/strategist/planner/builder/sentinel/reviewer/shipper)',
         }),
       ),
-      task: Type.Optional(
-        Type.String({ description: 'Task description for single dispatch' }),
-      ),
+      task: Type.Optional(Type.String({ description: 'Task description for single dispatch' })),
       parallel: Type.Optional(
         Type.Array(
           Type.Object({
@@ -287,11 +285,12 @@ export default function piFlow(pi: ExtensionAPI) {
           Type.Object({
             agent: Type.String({ description: 'Agent name' }),
             task: Type.String({
-              description: 'Task. Use {previous} to reference the prior agent\'s output.',
+              description: "Task. Use {previous} to reference the prior agent's output.",
             }),
           }),
           {
-            description: 'Chain dispatch — sequential, each step receives prior output via {previous}',
+            description:
+              'Chain dispatch — sequential, each step receives prior output via {previous}',
           },
         ),
       ),
@@ -332,7 +331,10 @@ export default function piFlow(pi: ExtensionAPI) {
         rootDir,
         signal,
         onUpdate
-          ? (partial: { content: Array<{ type: 'text'; text: string }>; details: FlowDispatchDetails }) => {
+          ? (partial: {
+              content: Array<{ type: 'text'; text: string }>;
+              details: FlowDispatchDetails;
+            }) => {
               onUpdate({
                 content: partial.content,
                 details: partial.details,
@@ -342,9 +344,7 @@ export default function piFlow(pi: ExtensionAPI) {
       );
 
       // Memory write-back after Shipper completes successfully (per §13 C5)
-      const lastAgent = params.chain
-        ? params.chain[params.chain.length - 1]?.agent
-        : params.agent;
+      const lastAgent = params.chain ? params.chain[params.chain.length - 1]?.agent : params.agent;
       if (lastAgent === 'shipper' && !result.isError) {
         const flowDir = findFlowDir(ctx.cwd);
         if (flowDir) {
@@ -381,7 +381,7 @@ export default function piFlow(pi: ExtensionAPI) {
       },
       theme: Theme,
     ) {
-      const colorize = (color: string, t: string): string => theme.fg(color, t);
+      const colorize = (color: string, t: string): string => theme.fg(color as ThemeColor, t);
       const bold = (t: string): string => theme.bold(t);
 
       let text: string;
@@ -390,13 +390,7 @@ export default function piFlow(pi: ExtensionAPI) {
       } else if (args.chain && args.chain.length > 0) {
         text = renderChainCall(args.chain, 'builtin', colorize, bold);
       } else {
-        text = renderSingleCall(
-          args.agent ?? '...',
-          args.task ?? '...',
-          'builtin',
-          colorize,
-          bold,
-        );
+        text = renderSingleCall(args.agent ?? '...', args.task ?? '...', 'builtin', colorize, bold);
       }
 
       return new Text(text, 0, 0);
@@ -429,13 +423,8 @@ export default function piFlow(pi: ExtensionAPI) {
       }
       const { state } = active;
       const wave =
-        state.current_wave !== null
-          ? ` wave ${state.current_wave}/${state.wave_count ?? '?'}`
-          : '';
-      const halts =
-        state.sentinel.open_halts > 0
-          ? ` | ${state.sentinel.open_halts} HALT`
-          : '';
+        state.current_wave !== null ? ` wave ${state.current_wave}/${state.wave_count ?? '?'}` : '';
+      const halts = state.sentinel.open_halts > 0 ? ` | ${state.sentinel.open_halts} HALT` : '';
       const cost = `$${state.budget.total_cost_usd.toFixed(2)}`;
       ctx.ui.notify(
         `${state.feature} | ${state.current_phase.toUpperCase()}${wave} | ${cost}${halts}`,
@@ -450,10 +439,7 @@ export default function piFlow(pi: ExtensionAPI) {
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
       const active = findActiveFeature(ctx.cwd);
       if (!active) {
-        ctx.ui.notify(
-          'pi-flow: no active feature. Start one by describing what to build.',
-          'info',
-        );
+        ctx.ui.notify('pi-flow: no active feature. Start one by describing what to build.', 'info');
         return;
       }
       const summary = formatStatusSummary(active.state);
@@ -489,7 +475,7 @@ export default function piFlow(pi: ExtensionAPI) {
     handler: async (args: string, ctx: ExtensionCommandContext) => {
       const flowDir = findFlowDir(ctx.cwd);
       if (!flowDir) {
-        ctx.ui.notify('pi-flow: no .flow/ directory found', 'warn');
+        ctx.ui.notify('pi-flow: no .flow/ directory found', 'warning');
         return;
       }
 
@@ -497,16 +483,13 @@ export default function piFlow(pi: ExtensionAPI) {
       const active = findActiveFeature(ctx.cwd);
       const target = args.trim() || active?.state.feature;
       if (!target) {
-        ctx.ui.notify(
-          'pi-flow: no feature to reset. Usage: /flow:reset <feature-name>',
-          'warn',
-        );
+        ctx.ui.notify('pi-flow: no feature to reset. Usage: /flow:reset <feature-name>', 'warning');
         return;
       }
 
       const featureDir = path.join(flowDir, 'features', target);
       if (!fs.existsSync(featureDir)) {
-        ctx.ui.notify(`pi-flow: feature '${target}' not found`, 'warn');
+        ctx.ui.notify(`pi-flow: feature '${target}' not found`, 'warning');
         return;
       }
 
@@ -583,9 +566,7 @@ export default function piFlow(pi: ExtensionAPI) {
 
     // Notify user of the in-progress feature
     const wave =
-      state.current_wave !== null
-        ? ` wave ${state.current_wave}/${state.wave_count ?? '?'}`
-        : '';
+      state.current_wave !== null ? ` wave ${state.current_wave}/${state.wave_count ?? '?'}` : '';
     ctx.ui.notify(
       `pi-flow: resuming '${state.feature}' — ${state.current_phase.toUpperCase()}${wave}`,
       'info',
@@ -613,56 +594,62 @@ export default function piFlow(pi: ExtensionAPI) {
   });
 
   // tool_call — block coordinator writes outside .flow/ and detect loops
-  pi.on('tool_call', async (event: ToolCallEvent, ctx: ExtensionContext): Promise<ToolCallEventResult | void> => {
-    const toolName: string = event.toolName;
-    const args: Record<string, unknown> =
-      (event as { toolName: string; input: Record<string, unknown> }).input ?? {};
+  pi.on(
+    'tool_call',
+    async (event: ToolCallEvent, ctx: ExtensionContext): Promise<ToolCallEventResult | void> => {
+      const toolName: string = event.toolName;
+      const args: Record<string, unknown> =
+        (event as { toolName: string; input: Record<string, unknown> }).input ?? {};
 
-    // Loop detection (runs for all tools)
-    const argsHash = hashToolCall(toolName, args);
-    loopHistory.push({ tool: toolName, argsHash });
-    // Keep the ring buffer bounded
-    if (loopHistory.length > LOOP_WINDOW * 2) {
-      loopHistory.splice(0, loopHistory.length - LOOP_WINDOW * 2);
-    }
-    const loopResult = detectLoop(loopHistory, LOOP_WINDOW, LOOP_THRESHOLD);
-    if (loopResult.tripped) {
-      return {
-        block: true,
-        reason:
-          `CIRCUIT BREAKER: '${loopResult.tool}' has been called with identical ` +
-          `arguments ${loopResult.count} times in the last ${LOOP_WINDOW} tool calls. ` +
-          `This is a loop. Stop immediately. In one sentence, state what you are trying ` +
-          `to accomplish. Then either write code or report a blocker.`,
-      };
-    }
-
-    // Write/edit isolation: coordinator may only write inside .flow/
-    if (toolName === 'write' || toolName === 'edit') {
-      const filePath = (args.path ?? args.file_path ?? args.filePath ?? '') as string;
-      if (filePath && !isAllowedCoordinatorWrite(filePath, ctx.cwd)) {
+      // Loop detection (runs for all tools)
+      const argsHash = hashToolCall(toolName, args);
+      loopHistory.push({ tool: toolName, argsHash });
+      // Keep the ring buffer bounded
+      if (loopHistory.length > LOOP_WINDOW * 2) {
+        loopHistory.splice(0, loopHistory.length - LOOP_WINDOW * 2);
+      }
+      const loopResult = detectLoop(loopHistory, LOOP_WINDOW, LOOP_THRESHOLD);
+      if (loopResult.tripped) {
         return {
           block: true,
           reason:
-            `Coordinator cannot write to '${filePath}' directly. ` +
-            `All production code changes must be delegated via dispatch_flow(agent="builder"). ` +
-            `Only paths inside .flow/ may be written by the coordinator.`,
+            `CIRCUIT BREAKER: '${loopResult.tool}' has been called with identical ` +
+            `arguments ${loopResult.count} times in the last ${LOOP_WINDOW} tool calls. ` +
+            `This is a loop. Stop immediately. In one sentence, state what you are trying ` +
+            `to accomplish. Then either write code or report a blocker.`,
         };
       }
-    }
-  });
+
+      // Write/edit isolation: coordinator may only write inside .flow/
+      if (toolName === 'write' || toolName === 'edit') {
+        const filePath = (args.path ?? args.file_path ?? args.filePath ?? '') as string;
+        if (filePath && !isAllowedCoordinatorWrite(filePath, ctx.cwd)) {
+          return {
+            block: true,
+            reason:
+              `Coordinator cannot write to '${filePath}' directly. ` +
+              `All production code changes must be delegated via dispatch_flow(agent="builder"). ` +
+              `Only paths inside .flow/ may be written by the coordinator.`,
+          };
+        }
+      }
+    },
+  );
 
   // session_before_compact — write a resume snapshot before context is lost
-  pi.on('session_before_compact', async (_event: SessionBeforeCompactEvent, ctx: ExtensionContext) => {
-    const active = findActiveFeature(ctx.cwd);
-    if (!active) return;
+  pi.on(
+    'session_before_compact',
+    async (_event: SessionBeforeCompactEvent, ctx: ExtensionContext) => {
+      const active = findActiveFeature(ctx.cwd);
+      if (!active) return;
 
-    const { state, featureDir } = active;
-    try {
-      const snapshot = buildResumeSnapshot(state, featureDir);
-      writeCheckpoint(featureDir, state.current_phase, state.current_wave, snapshot);
-    } catch {
-      // Checkpoint writing is best-effort — non-fatal during compaction
-    }
-  });
+      const { state, featureDir } = active;
+      try {
+        const snapshot = buildResumeSnapshot(state, featureDir);
+        writeCheckpoint(featureDir, state.current_phase, state.current_wave, snapshot);
+      } catch {
+        // Checkpoint writing is best-effort — non-fatal during compaction
+      }
+    },
+  );
 }

@@ -16,7 +16,13 @@ vi.mock('node:fs', () => {
     mkdtemp: vi.fn().mockResolvedValue('/tmp/pi-flow-test-dir'),
     writeFile: vi.fn().mockResolvedValue(undefined),
   };
-  return { default: { unlinkSync, rmdirSync, existsSync, promises }, unlinkSync, rmdirSync, existsSync, promises };
+  return {
+    default: { unlinkSync, rmdirSync, existsSync, promises },
+    unlinkSync,
+    rmdirSync,
+    existsSync,
+    promises,
+  };
 });
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -42,7 +48,10 @@ function makeResult(overrides: Partial<SingleAgentResult> = {}): SingleAgentResu
   };
 }
 
-function makeAssistantMessage(text: string, toolCalls: Array<{ name: string; arguments: Record<string, unknown> }> = []) {
+function makeAssistantMessage(
+  text: string,
+  toolCalls: Array<{ name: string; arguments: Record<string, unknown> }> = [],
+) {
   return {
     role: 'assistant',
     content: [
@@ -139,14 +148,19 @@ describe('buildSpawnArgs', () => {
     const args = buildSpawnArgs(agent, 'do the thing', '/tmp/prompt.md');
 
     expect(args).toEqual([
-      '--mode', 'json',
+      '--mode',
+      'json',
       '-p',
       '--no-session',
       '--no-extensions',
-      '--model', 'claude-sonnet-4-6',
-      '--thinking', 'medium',
-      '--tools', 'read,write,edit,bash',
-      '--append-system-prompt', '/tmp/prompt.md',
+      '--model',
+      'claude-sonnet-4-6',
+      '--thinking',
+      'medium',
+      '--tools',
+      'read,write,edit,bash',
+      '--append-system-prompt',
+      '/tmp/prompt.md',
       'do the thing',
     ]);
   });
@@ -189,11 +203,11 @@ describe('buildSpawnArgs', () => {
 
 describe('processNdjsonLine', () => {
   let result: SingleAgentResult;
-  let emitUpdate: ReturnType<typeof vi.fn>;
+  let emitUpdate: ReturnType<typeof vi.fn<() => void>>;
 
   beforeEach(() => {
     result = makeResult();
-    emitUpdate = vi.fn();
+    emitUpdate = vi.fn<() => void>();
   });
 
   it('ignores empty lines', () => {
@@ -293,20 +307,32 @@ describe('processNdjsonLine', () => {
 
   it('handles tool_result_end: pushes message', () => {
     const msg = makeToolResultMessage('read');
-    processNdjsonLine(JSON.stringify({ type: 'tool_result_end', message: msg }), result, emitUpdate);
+    processNdjsonLine(
+      JSON.stringify({ type: 'tool_result_end', message: msg }),
+      result,
+      emitUpdate,
+    );
     expect(result.messages).toHaveLength(1);
     expect(result.messages[0]).toStrictEqual(msg);
   });
 
   it('handles tool_result_end: calls emitUpdate', () => {
     const msg = makeToolResultMessage('bash');
-    processNdjsonLine(JSON.stringify({ type: 'tool_result_end', message: msg }), result, emitUpdate);
+    processNdjsonLine(
+      JSON.stringify({ type: 'tool_result_end', message: msg }),
+      result,
+      emitUpdate,
+    );
     expect(emitUpdate).toHaveBeenCalledOnce();
   });
 
   it('handles tool_result_end: does not change usage stats', () => {
     const msg = makeToolResultMessage('read');
-    processNdjsonLine(JSON.stringify({ type: 'tool_result_end', message: msg }), result, emitUpdate);
+    processNdjsonLine(
+      JSON.stringify({ type: 'tool_result_end', message: msg }),
+      result,
+      emitUpdate,
+    );
     expect(result.usage.turns).toBe(0);
     expect(result.usage.input).toBe(0);
   });
@@ -337,7 +363,15 @@ describe('aggregateUsage', () => {
 
   it('returns the single result usage when given one result', () => {
     const r = makeResult({
-      usage: { input: 10, output: 5, cacheRead: 20, cacheWrite: 3, cost: 0.01, contextTokens: 100, turns: 2 },
+      usage: {
+        input: 10,
+        output: 5,
+        cacheRead: 20,
+        cacheWrite: 3,
+        cost: 0.01,
+        contextTokens: 100,
+        turns: 2,
+      },
     });
     const stats = aggregateUsage([r]);
     expect(stats.input).toBe(10);
@@ -348,10 +382,26 @@ describe('aggregateUsage', () => {
 
   it('sums input, output, cacheRead, cacheWrite, cost, and turns across results', () => {
     const r1 = makeResult({
-      usage: { input: 100, output: 50, cacheRead: 200, cacheWrite: 10, cost: 0.01, contextTokens: 100, turns: 3 },
+      usage: {
+        input: 100,
+        output: 50,
+        cacheRead: 200,
+        cacheWrite: 10,
+        cost: 0.01,
+        contextTokens: 100,
+        turns: 3,
+      },
     });
     const r2 = makeResult({
-      usage: { input: 200, output: 100, cacheRead: 400, cacheWrite: 20, cost: 0.02, contextTokens: 500, turns: 5 },
+      usage: {
+        input: 200,
+        output: 100,
+        cacheRead: 400,
+        cacheWrite: 20,
+        cost: 0.02,
+        contextTokens: 500,
+        turns: 5,
+      },
     });
     const stats = aggregateUsage([r1, r2]);
     expect(stats.input).toBe(300);
@@ -363,8 +413,28 @@ describe('aggregateUsage', () => {
   });
 
   it('uses contextTokens from the last result', () => {
-    const r1 = makeResult({ usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 100, turns: 0 } });
-    const r2 = makeResult({ usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 999, turns: 0 } });
+    const r1 = makeResult({
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        cost: 0,
+        contextTokens: 100,
+        turns: 0,
+      },
+    });
+    const r2 = makeResult({
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        cost: 0,
+        contextTokens: 999,
+        turns: 0,
+      },
+    });
     const stats = aggregateUsage([r1, r2]);
     expect(stats.contextTokens).toBe(999);
   });
@@ -432,16 +502,12 @@ describe('getDisplayItems', () => {
   });
 
   it('returns empty array when no assistant messages exist', () => {
-    const messages = [
-      { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
-    ];
+    const messages = [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }];
     expect(getDisplayItems(messages)).toEqual([]);
   });
 
   it('extracts text blocks from assistant messages', () => {
-    const messages = [
-      { role: 'assistant', content: [{ type: 'text', text: 'My output' }] },
-    ];
+    const messages = [{ role: 'assistant', content: [{ type: 'text', text: 'My output' }] }];
     const items = getDisplayItems(messages);
     expect(items).toHaveLength(1);
     expect(items[0]).toEqual({ type: 'text', text: 'My output' });
@@ -451,9 +517,7 @@ describe('getDisplayItems', () => {
     const messages = [
       {
         role: 'assistant',
-        content: [
-          { type: 'toolCall', name: 'read', arguments: { path: 'foo.ts' } },
-        ],
+        content: [{ type: 'toolCall', name: 'read', arguments: { path: 'foo.ts' } }],
       },
     ];
     const items = getDisplayItems(messages);
@@ -632,7 +696,14 @@ describe('spawnAgent', () => {
     const assistantMsg = {
       role: 'assistant',
       content: [{ type: 'text', text: 'Working...' }],
-      usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, cost: { total: 0 }, totalTokens: 15 },
+      usage: {
+        input: 10,
+        output: 5,
+        cacheRead: 0,
+        cacheWrite: 0,
+        cost: { total: 0 },
+        totalTokens: 15,
+      },
       model: 'claude-sonnet-4-6',
       stopReason: 'tool_use',
     };

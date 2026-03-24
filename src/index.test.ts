@@ -67,7 +67,11 @@ vi.mock('@mariozechner/pi-tui', () => ({
   Markdown: class MockMarkdown {},
   Spacer: class MockSpacer {},
   Text: class MockText {
-    constructor(public text: string, _x: number, _y: number) {}
+    constructor(
+      public text: string,
+      _x: number,
+      _y: number,
+    ) {}
   },
 }));
 
@@ -101,6 +105,7 @@ import { discoverAgents } from './agents.js';
 import { buildCoordinatorPrompt, buildNudgeMessage } from './prompt.js';
 import { findFlowDir, readStateFile } from './state.js';
 import piFlow from './index.js';
+import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import * as fs from 'node:fs';
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
@@ -125,11 +130,11 @@ function makeFlowState(overrides: Record<string, unknown> = {}) {
  * enough surface area for the extension to operate.
  */
 function makePiMock() {
-  const hooks: Record<string, Function[]> = {};
+  const hooks: Record<string, ((...args: unknown[]) => unknown)[]> = {};
   const pi = {
     registerTool: vi.fn(),
     registerCommand: vi.fn(),
-    on: vi.fn((event: string, handler: Function) => {
+    on: vi.fn((event: string, handler: (...args: unknown[]) => unknown) => {
       if (!hooks[event]) hooks[event] = [];
       hooks[event].push(handler);
     }),
@@ -145,7 +150,10 @@ function makePiMock() {
     },
     hooks,
   };
-  return pi;
+  return pi as unknown as ExtensionAPI & {
+    hooks: Record<string, ((...args: unknown[]) => unknown)[]>;
+    trigger: (event: string, eventArg?: unknown, ctx?: unknown) => Promise<unknown>;
+  };
 }
 
 function makeCtx(cwd = '/project') {
@@ -298,11 +306,7 @@ describe('before_agent_start hook', () => {
       throw new Error('agents directory not found');
     });
 
-    const result = await pi.trigger(
-      'before_agent_start',
-      { systemPrompt: 'Base' },
-      makeCtx(),
-    );
+    const result = await pi.trigger('before_agent_start', { systemPrompt: 'Base' }, makeCtx());
 
     expect((result as any).systemPrompt).toContain('Base');
     expect((result as any).systemPrompt).toContain('dispatch_flow');

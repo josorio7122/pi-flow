@@ -336,10 +336,7 @@ function extractBody(content: string): string {
  * output is parseable with the simple single-level readFrontmatter.
  */
 function serializeFlowState(state: FlowState): string {
-  const skipped =
-    state.skipped_phases.length > 0
-      ? `[${state.skipped_phases.join(', ')}]`
-      : '[]';
+  const skipped = state.skipped_phases.length > 0 ? `[${state.skipped_phases.join(', ')}]` : '[]';
 
   const lines = [
     '---',
@@ -414,8 +411,7 @@ function parseStateContent(content: string): FlowState | null {
 
   // Parse review_verdict (null or a string like "PASSED").
   const rawVerdict = fields['gates_review_verdict'];
-  const review_verdict: string | null =
-    !rawVerdict || rawVerdict === 'null' ? null : rawVerdict;
+  const review_verdict: string | null = !rawVerdict || rawVerdict === 'null' ? null : rawVerdict;
 
   return {
     feature: fields['feature'],

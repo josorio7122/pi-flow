@@ -5,7 +5,12 @@
   "main": "src/index.ts",
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/",
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm run test"
   },
   "keywords": [],
   "author": "",
@@ -14,6 +19,12 @@
   "type": "module",
   "private": "true",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.5.0",
+    "eslint": "^10.1.0",
+    "prettier": "^3.8.1",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.57.2",
     "vitest": "^4.1.1"
   },
   "dependencies": {

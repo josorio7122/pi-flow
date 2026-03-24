@@ -180,10 +180,7 @@ describe('readStateFile', () => {
 
   it('parses sentinel open_halts and open_warns', () => {
     const featureDir = ensureFeatureDir(tmpDir, 'test-feature');
-    writeStateFile(
-      featureDir,
-      makeState({ sentinel: { open_halts: 2, open_warns: 3 } }),
-    );
+    writeStateFile(featureDir, makeState({ sentinel: { open_halts: 2, open_warns: 3 } }));
     const parsed = readStateFile(featureDir);
     expect(parsed!.sentinel.open_halts).toBe(2);
     expect(parsed!.sentinel.open_warns).toBe(3);
@@ -308,8 +305,8 @@ describe('readFrontmatter', () => {
     const content = '---\nfeature: my-feature\napproved: true\ncount: 42\n---\n# Body';
     const fm = readFrontmatter(content);
     expect(fm['feature']).toBe('my-feature');
-    expect(fm['approved']).toBe('true');  // string, not boolean
-    expect(fm['count']).toBe('42');       // string, not number
+    expect(fm['approved']).toBe('true'); // string, not boolean
+    expect(fm['count']).toBe('42'); // string, not number
   });
 
   it('skips lines with empty values', () => {
@@ -342,10 +339,7 @@ describe('updateFrontmatter', () => {
 
   it('adds a new key that does not exist yet', () => {
     const featureDir = ensureFeatureDir(tmpDir, 'test-feature');
-    fs.writeFileSync(
-      path.join(featureDir, 'spec.md'),
-      '---\nfeature: test\n---\n# Body',
-    );
+    fs.writeFileSync(path.join(featureDir, 'spec.md'), '---\nfeature: test\n---\n# Body');
     updateFrontmatter(featureDir, 'spec.md', { approved: 'true' });
     const content = fs.readFileSync(path.join(featureDir, 'spec.md'), 'utf8');
     expect(content).toContain('approved: true');
@@ -410,10 +404,7 @@ describe('writeCheckpoint', () => {
     const featureDir = ensureFeatureDir(tmpDir, 'test-feature');
     writeCheckpoint(featureDir, 'spec', null, 'checkpoint-1');
     writeCheckpoint(featureDir, 'analyze', null, 'checkpoint-2');
-    const content = fs.readFileSync(
-      path.join(featureDir, 'checkpoints', 'latest.xml'),
-      'utf8',
-    );
+    const content = fs.readFileSync(path.join(featureDir, 'checkpoints', 'latest.xml'), 'utf8');
     expect(content).toBe('checkpoint-2');
   });
 

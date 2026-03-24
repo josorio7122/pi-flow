@@ -78,10 +78,7 @@ describe('appendDecision', () => {
       date: '2026-03-25',
     });
 
-    const content = fs.readFileSync(
-      path.join(tmpDir, '.flow', 'memory', 'decisions.md'),
-      'utf8',
-    );
+    const content = fs.readFileSync(path.join(tmpDir, '.flow', 'memory', 'decisions.md'), 'utf8');
     expect(content).toContain('## feature-a — 2026-03-24');
     expect(content).toContain('## feature-b — 2026-03-25');
   });
@@ -122,10 +119,7 @@ describe('appendPattern', () => {
       date: '2026-03-25',
     });
 
-    const content = fs.readFileSync(
-      path.join(tmpDir, '.flow', 'memory', 'patterns.md'),
-      'utf8',
-    );
+    const content = fs.readFileSync(path.join(tmpDir, '.flow', 'memory', 'patterns.md'), 'utf8');
     expect(content).toContain('## Pattern A — first seen 2026-03-24');
     expect(content).toContain('## Pattern B — first seen 2026-03-25');
   });
@@ -148,7 +142,9 @@ describe('appendLesson', () => {
     const content = fs.readFileSync(lessonsPath, 'utf8');
     expect(content).toContain('## Missing rate limit on mutations — 2026-03-24');
     expect(content).toContain('Builder skipped rate limiting on POST /auth/refresh.');
-    expect(content).toContain('**Resolution:** Add explicit task for WHILE-behaviors in Planner prompt.');
+    expect(content).toContain(
+      '**Resolution:** Add explicit task for WHILE-behaviors in Planner prompt.',
+    );
     expect(content).toContain('---');
   });
 
@@ -166,10 +162,7 @@ describe('appendLesson', () => {
       date: '2026-03-25',
     });
 
-    const content = fs.readFileSync(
-      path.join(tmpDir, '.flow', 'memory', 'lessons.md'),
-      'utf8',
-    );
+    const content = fs.readFileSync(path.join(tmpDir, '.flow', 'memory', 'lessons.md'), 'utf8');
     expect(content).toContain('## Lesson A — 2026-03-24');
     expect(content).toContain('## Lesson B — 2026-03-25');
   });
@@ -185,10 +178,7 @@ describe('readMemoryFile', () => {
 
   it('returns file content when it exists', () => {
     ensureMemoryDir(tmpDir);
-    fs.writeFileSync(
-      path.join(tmpDir, '.flow', 'memory', 'decisions.md'),
-      'hello memory',
-    );
+    fs.writeFileSync(path.join(tmpDir, '.flow', 'memory', 'decisions.md'), 'hello memory');
     expect(readMemoryFile(tmpDir, 'decisions.md')).toBe('hello memory');
   });
 });
@@ -253,10 +243,7 @@ describe('searchMemory', () => {
     const sections = Array.from({ length: 5 }, (_, i) =>
       [`## section-${i} — 2026-03-24`, `content keyword`, '---'].join('\n'),
     ).join('\n');
-    fs.writeFileSync(
-      path.join(tmpDir, '.flow', 'memory', 'decisions.md'),
-      sections,
-    );
+    fs.writeFileSync(path.join(tmpDir, '.flow', 'memory', 'decisions.md'), sections);
 
     const result = searchMemory(tmpDir, 'keyword', 2);
     const matches = result.match(/## section-/g) ?? [];
@@ -278,10 +265,7 @@ describe('searchMemory', () => {
     const sections = Array.from({ length: 5 }, (_, i) =>
       [`## section-${i} — 2026-03-24`, `content keyword`, '---'].join('\n'),
     ).join('\n');
-    fs.writeFileSync(
-      path.join(tmpDir, '.flow', 'memory', 'decisions.md'),
-      sections,
-    );
+    fs.writeFileSync(path.join(tmpDir, '.flow', 'memory', 'decisions.md'), sections);
 
     const result = searchMemory(tmpDir, 'keyword');
     const matches = result.match(/## section-/g) ?? [];

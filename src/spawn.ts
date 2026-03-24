@@ -7,9 +7,6 @@ import { injectVariables } from './agents.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MAX_PARALLEL_TASKS = 8;
-const MAX_CONCURRENCY = 4;
-const SPAWN_STAGGER_MS = 150;
 export const RETRY_DELAYS_MS = [500, 1000, 2000];
 
 // ─── DisplayItem type ─────────────────────────────────────────────────────────
@@ -49,20 +46,21 @@ export function getPiInvocation(extraArgs: string[]): { command: string; args: s
  *
  * --no-extensions is critical: sub-agents cannot spawn sub-agents (§14 S4).
  */
-export function buildSpawnArgs(
-  agent: FlowAgentConfig,
-  task: string,
-  promptPath: string,
-): string[] {
+export function buildSpawnArgs(agent: FlowAgentConfig, task: string, promptPath: string): string[] {
   return [
-    '--mode', 'json',
+    '--mode',
+    'json',
     '-p',
     '--no-session',
     '--no-extensions',
-    '--model', agent.model,
-    '--thinking', agent.thinking,
-    '--tools', agent.tools.join(','),
-    '--append-system-prompt', promptPath,
+    '--model',
+    agent.model,
+    '--thinking',
+    agent.thinking,
+    '--tools',
+    agent.tools.join(','),
+    '--append-system-prompt',
+    promptPath,
     task,
   ];
 }
@@ -81,9 +79,7 @@ export async function writeAgentPrompt(
 ): Promise<{ dir: string; filePath: string }> {
   const prompt = injectVariables(agent.systemPrompt, variableMap, agent.variables);
 
-  const tmpDir = await fs.promises.mkdtemp(
-    path.join(os.tmpdir(), `pi-flow-${agent.name}-`),
-  );
+  const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), `pi-flow-${agent.name}-`));
   const safeName = agent.name.replace(/[^\w.-]+/g, '_');
   const filePath = path.join(tmpDir, `${safeName}-prompt.md`);
 
@@ -133,17 +129,18 @@ export function processNdjsonLine(
 
       const u = msg.usage as Record<string, unknown> | undefined;
       if (u) {
-        result.usage.input      += (u.input      as number) || 0;
-        result.usage.output     += (u.output     as number) || 0;
-        result.usage.cacheRead  += (u.cacheRead  as number) || 0;
+        result.usage.input += (u.input as number) || 0;
+        result.usage.output += (u.output as number) || 0;
+        result.usage.cacheRead += (u.cacheRead as number) || 0;
         result.usage.cacheWrite += (u.cacheWrite as number) || 0;
-        result.usage.cost       += ((u.cost as Record<string, unknown> | undefined)?.total as number) || 0;
+        result.usage.cost +=
+          ((u.cost as Record<string, unknown> | undefined)?.total as number) || 0;
         result.usage.contextTokens = (u.totalTokens as number) || 0;
       }
 
-      if (!result.model && msg.model)          result.model = msg.model as string;
-      if (msg.stopReason)                      result.stopReason = msg.stopReason as string;
-      if (msg.errorMessage)                    result.errorMessage = msg.errorMessage as string;
+      if (!result.model && msg.model) result.model = msg.model as string;
+      if (msg.stopReason) result.stopReason = msg.stopReason as string;
+      if (msg.errorMessage) result.errorMessage = msg.errorMessage as string;
     }
 
     emitUpdate();
@@ -177,14 +174,14 @@ export function aggregateUsage(results: SingleAgentResult[]): UsageStats {
 
   return results.reduce(
     (total, r, idx) => ({
-      input:         total.input        + r.usage.input,
-      output:        total.output       + r.usage.output,
-      cacheRead:     total.cacheRead    + r.usage.cacheRead,
-      cacheWrite:    total.cacheWrite   + r.usage.cacheWrite,
-      cost:          total.cost         + r.usage.cost,
+      input: total.input + r.usage.input,
+      output: total.output + r.usage.output,
+      cacheRead: total.cacheRead + r.usage.cacheRead,
+      cacheWrite: total.cacheWrite + r.usage.cacheWrite,
+      cost: total.cost + r.usage.cost,
       // Last result's contextTokens reflects the most recent context window
       contextTokens: idx === results.length - 1 ? r.usage.contextTokens : total.contextTokens,
-      turns:         total.turns        + r.usage.turns,
+      turns: total.turns + r.usage.turns,
     }),
     zero,
   );
@@ -223,7 +220,11 @@ export function getDisplayItems(messages: Record<string, unknown>[]): DisplayIte
         if (part.type === 'text') {
           items.push({ type: 'text', text: part.text as string });
         } else if (part.type === 'toolCall') {
-          items.push({ type: 'toolCall', name: part.name as string, args: part.arguments as Record<string, unknown> });
+          items.push({
+            type: 'toolCall',
+            name: part.name as string,
+            args: part.arguments as Record<string, unknown>,
+          });
         }
       }
     }
@@ -358,7 +359,7 @@ export async function spawnAgent(
     agent: agent.name,
     agentSource: agent.source,
     task,
-    exitCode: -1,  // -1 = running; set to actual exit code when the process closes
+    exitCode: -1, // -1 = running; set to actual exit code when the process closes
     messages: [],
     stderr: '',
     usage: {
@@ -406,10 +407,18 @@ export async function spawnAgent(
   } finally {
     // Clean up temp files regardless of success or failure
     if (tmpFilePath) {
-      try { fs.unlinkSync(tmpFilePath); } catch { /* ignore */ }
+      try {
+        fs.unlinkSync(tmpFilePath);
+      } catch {
+        /* ignore */
+      }
     }
     if (tmpDir) {
-      try { fs.rmdirSync(tmpDir); } catch { /* ignore */ }
+      try {
+        fs.rmdirSync(tmpDir);
+      } catch {
+        /* ignore */
+      }
     }
   }
 }
@@ -421,10 +430,7 @@ export async function spawnAgent(
  * that is worth retrying (lock file contention or missing API key on first run).
  */
 function isTransientError(result: SingleAgentResult): boolean {
-  return (
-    result.stderr.includes('Lock file') ||
-    result.stderr.includes('No API key found')
-  );
+  return result.stderr.includes('Lock file') || result.stderr.includes('No API key found');
 }
 
 // ─── spawnAgentWithRetry ──────────────────────────────────────────────────────
@@ -472,7 +478,15 @@ export async function spawnAgentWithRetry(
         exitCode: 1,
         messages: [],
         stderr: err instanceof Error ? err.message : String(err),
-        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          cost: 0,
+          contextTokens: 0,
+          turns: 0,
+        },
       };
 
       if (attempt < delays.length) {
@@ -482,13 +496,23 @@ export async function spawnAgentWithRetry(
   }
 
   // All retries exhausted — return the last known result
-  return lastResult ?? {
-    agent: agent.name,
-    agentSource: agent.source,
-    task,
-    exitCode: 1,
-    messages: [],
-    stderr: 'Spawn failed after retries',
-    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-  };
+  return (
+    lastResult ?? {
+      agent: agent.name,
+      agentSource: agent.source,
+      task,
+      exitCode: 1,
+      messages: [],
+      stderr: 'Spawn failed after retries',
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        cost: 0,
+        contextTokens: 0,
+        turns: 0,
+      },
+    }
+  );
 }

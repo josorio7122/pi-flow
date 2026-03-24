@@ -45,10 +45,7 @@ function parseScalar(raw: string): unknown {
   if (s === 'null' || s === '~') return null;
   const n = Number(s);
   if (!Number.isNaN(n) && s !== '') return n;
-  if (
-    (s.startsWith('"') && s.endsWith('"')) ||
-    (s.startsWith("'") && s.endsWith("'"))
-  ) {
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
     return s.slice(1, -1);
   }
   return s;
@@ -138,9 +135,15 @@ export function gateExecute(featureDir: string): GateResult {
   }
   const tasksPath = path.join(featureDir, 'tasks.md');
   if (!fileExists(tasksPath)) {
-    return { canAdvance: false, reason: 'tasks.md does not exist — Planner must write task breakdown first' };
+    return {
+      canAdvance: false,
+      reason: 'tasks.md does not exist — Planner must write task breakdown first',
+    };
   }
-  return { canAdvance: true, reason: 'design.md approved and tasks.md present — ready for EXECUTE' };
+  return {
+    canAdvance: true,
+    reason: 'design.md approved and tasks.md present — ready for EXECUTE',
+  };
 }
 
 /**
@@ -193,12 +196,19 @@ export function gateShip(featureDir: string): GateResult {
  */
 export function checkPhaseGate(targetPhase: Phase, featureDir: string): GateResult {
   switch (targetPhase) {
-    case 'intent':  return gateIntent(featureDir);
-    case 'spec':    return gateSpec(featureDir);
-    case 'analyze': return gateAnalyze(featureDir);
-    case 'plan':    return gatePlan(featureDir);
-    case 'execute': return gateExecute(featureDir);
-    case 'review':  return gateReview(featureDir);
-    case 'ship':    return gateShip(featureDir);
+    case 'intent':
+      return gateIntent(featureDir);
+    case 'spec':
+      return gateSpec(featureDir);
+    case 'analyze':
+      return gateAnalyze(featureDir);
+    case 'plan':
+      return gatePlan(featureDir);
+    case 'execute':
+      return gateExecute(featureDir);
+    case 'review':
+      return gateReview(featureDir);
+    case 'ship':
+      return gateShip(featureDir);
   }
 }

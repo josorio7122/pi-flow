@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildCoordinatorPrompt, buildNudgeMessage } from './prompt.js';
-import type { FlowAgentConfig, FlowState, Phase } from './types.js';
+import type { FlowAgentConfig, FlowState } from './types.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -61,9 +61,7 @@ describe('buildCoordinatorPrompt', () => {
     const lines = output.split('\n');
     const separatorIdx = lines.findIndex((l) => l.startsWith('|---'));
     // Everything after the separator until the next blank/non-table line should be empty
-    const rowsAfterSeparator = lines
-      .slice(separatorIdx + 1)
-      .filter((l) => l.startsWith('|'));
+    const rowsAfterSeparator = lines.slice(separatorIdx + 1).filter((l) => l.startsWith('|'));
     expect(rowsAfterSeparator).toHaveLength(0);
   });
 
@@ -84,17 +82,13 @@ describe('buildCoordinatorPrompt', () => {
   });
 
   it('16 agents → table contains exactly 15 rows plus "...and 1 more" line', () => {
-    const agents = Array.from({ length: 16 }, (_, i) =>
-      makeAgent({ name: `agent${i}` }),
-    );
+    const agents = Array.from({ length: 16 }, (_, i) => makeAgent({ name: `agent${i}` }));
     const output = buildCoordinatorPrompt(agents, null);
     expect(output).toContain('...and 1 more');
     // Count table data rows (lines starting with | that are not header or separator)
     const lines = output.split('\n');
     const separatorIdx = lines.findIndex((l) => l.startsWith('|---'));
-    const dataRows = lines
-      .slice(separatorIdx + 1)
-      .filter((l) => l.startsWith('|'));
+    const dataRows = lines.slice(separatorIdx + 1).filter((l) => l.startsWith('|'));
     expect(dataRows).toHaveLength(15);
   });
 
@@ -141,9 +135,7 @@ describe('buildCoordinatorPrompt', () => {
     });
     expect(output).toContain('⚠️ Active:');
     // Extract just the active section line
-    const activeLine = output
-      .split('\n')
-      .find((l) => l.includes('⚠️ Active:')) ?? '';
+    const activeLine = output.split('\n').find((l) => l.includes('⚠️ Active:')) ?? '';
     expect(activeLine).not.toContain('wave');
   });
 

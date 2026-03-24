@@ -1,9 +1,16 @@
 // Phase type — 7 phases of the pi-flow state machine
 export const PHASES = ['intent', 'spec', 'analyze', 'plan', 'execute', 'review', 'ship'] as const;
-export type Phase = typeof PHASES[number];
+export type Phase = (typeof PHASES)[number];
 
-export const CHANGE_TYPES = ['feature', 'refactor', 'hotfix', 'docs', 'config', 'research'] as const;
-export type ChangeType = typeof CHANGE_TYPES[number];
+export const CHANGE_TYPES = [
+  'feature',
+  'refactor',
+  'hotfix',
+  'docs',
+  'config',
+  'research',
+] as const;
+export type ChangeType = (typeof CHANGE_TYPES)[number];
 
 // Agent config parsed from .md frontmatter
 export interface FlowAgentConfig {
@@ -18,7 +25,7 @@ export interface FlowAgentConfig {
   temperament: string;
   limits: { max_tokens: number; max_steps: number };
   variables: string[];
-  systemPrompt: string;  // markdown body after frontmatter
+  systemPrompt: string; // markdown body after frontmatter
   source: 'builtin' | 'custom';
   filePath: string;
 }
@@ -79,7 +86,7 @@ export interface SingleAgentResult {
   model?: string;
   stopReason?: string;
   errorMessage?: string;
-  step?: number;      // for chain mode
+  step?: number; // for chain mode
   startedAt?: number; // epoch ms when agent was spawned — used for elapsed display
 }
 
@@ -101,5 +108,3 @@ export interface FlowDispatchDetails {
   feature: string;
   results: SingleAgentResult[];
 }
-
-
