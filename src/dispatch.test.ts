@@ -28,6 +28,7 @@ vi.mock('./state.js', () => ({
   appendProgressLog: vi.fn(),
   writeStateFile: vi.fn(),
   ensureFeatureDir: vi.fn(),
+  writeCheckpoint: vi.fn(),
 }));
 
 vi.mock('./gates.js', () => ({
@@ -47,7 +48,7 @@ import {
 import { spawnAgentWithRetry } from './spawn.js';
 import { discoverAgents, buildVariableMap } from './agents.js';
 import { loadConfig } from './config.js';
-import { writeDispatchLog, writeStateFile, ensureFeatureDir, appendProgressLog, readStateFile } from './state.js';
+import { writeDispatchLog, writeStateFile, ensureFeatureDir, appendProgressLog, readStateFile, writeCheckpoint } from './state.js';
 import { checkPhaseGate } from './gates.js';
 
 // ─── test helpers ─────────────────────────────────────────────────────────────
@@ -1315,6 +1316,329 @@ describe('executeDispatch', () => {
 
       expect(result.isError).toBe(true);
       expect(spawnAgentWithRetry).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── task-3.1: chain placeholder array ──────────────────────────────────
+
+  describe('chain placeholder array (task-3.1)', () => {
+    const featureDir = path.join(CWD, '.flow', 'features', 'auth');
+
+    beforeEach(() => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(checkPhaseGate).mockReturnValue({ canAdvance: true, reason: 'ok' });
+    });
+
+    it('(a) every onUpdate in a 3-step chain receives details.results with length === 3', async () => {
+      const onUpdate = vi.fn();
+      vi.mocked(spawnAgentWithRetry)
+        .mockResolvedValueOnce(makeResult({ agent: 'scout' }))
+        .mockResolvedValueOnce(makeResult({ agent: 'builder' }))
+        .mockResolvedValueOnce(makeResult({ agent: 'scout' }));
+
+      const params: DispatchParams = {
+        chain: [
+          { agent: 'scout', task: 'step 1' },
+          { agent: 'builder', task: 'step 2' },
+          { agent: 'scout', task: 'step 3' },
+        ],
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR, undefined, onUpdate);
+
+      for (const call of vi.mocked(onUpdate).mock.calls) {
+        const update: DispatchResult = call[0];
+        expect(update.details.results).toHaveLength(3);
+      }
+    });
+
+    it('(b) 3-step successful chain: final details.results has length === 3 with all exitCodes 0', async () => {
+      vi.mocked(spawnAgentWithRetry)
+        .mockResolvedValueOnce(makeResult({ agent: 'scout', exitCode: 0 }))
+        .mockResolvedValueOnce(makeResult({ agent: 'builder', exitCode: 0 }))
+        .mockResolvedValueOnce(makeResult({ agent: 'scout', exitCode: 0 }));
+
+      const params: DispatchParams = {
+        chain: [
+          { agent: 'scout', task: 'step 1' },
+          { agent: 'builder', task: 'step 2' },
+          { agent: 'scout', task: 'step 3' },
+        ],
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(result.details.results).toHaveLength(3);
+      expect(result.details.results.every((r) => r.exitCode === 0)).toBe(true);
+    });
+
+    it('(c) chain error at step 2: final results.length === 2, step 3 absent', async () => {
+      vi.mocked(spawnAgentWithRetry)
+        .mockResolvedValueOnce(makeResult({ agent: 'scout', exitCode: 0 }))
+        .mockResolvedValueOnce(makeResult({ agent: 'builder', exitCode: 1 }));
+
+      const params: DispatchParams = {
+        chain: [
+          { agent: 'scout', task: 'step 1' },
+          { agent: 'builder', task: 'step 2' },
+          { agent: 'scout', task: 'step 3' },
+        ],
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(result.details.results).toHaveLength(2);
+      expect(result.details.results[0].exitCode).toBe(0);
+      expect(result.details.results[1].exitCode).toBe(1);
+    });
+
+    it('(c) onUpdate during error chain still shows length 3', async () => {
+      const onUpdate = vi.fn();
+      vi.mocked(spawnAgentWithRetry)
+        .mockResolvedValueOnce(makeResult({ agent: 'scout', exitCode: 0 }))
+        .mockResolvedValueOnce(makeResult({ agent: 'builder', exitCode: 1 }));
+
+      const params: DispatchParams = {
+        chain: [
+          { agent: 'scout', task: 'step 1' },
+          { agent: 'builder', task: 'step 2' },
+          { agent: 'scout', task: 'step 3' },
+        ],
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR, undefined, onUpdate);
+
+      for (const call of vi.mocked(onUpdate).mock.calls) {
+        const update: DispatchResult = call[0];
+        expect(update.details.results).toHaveLength(3);
+      }
+    });
+
+    it('(d) {previous} substitution still works correctly with placeholder array', async () => {
+      const scoutOutput = 'Scout analysis complete.';
+      vi.mocked(spawnAgentWithRetry)
+        .mockResolvedValueOnce(makeResult({
+          agent: 'scout',
+          messages: [{ role: 'assistant', content: [{ type: 'text', text: scoutOutput }] }],
+        }))
+        .mockResolvedValueOnce(makeResult({ agent: 'builder' }))
+        .mockResolvedValueOnce(makeResult({ agent: 'scout' }));
+
+      const params: DispatchParams = {
+        chain: [
+          { agent: 'scout', task: 'analyze' },
+          { agent: 'builder', task: 'build based on: {previous}' },
+          { agent: 'scout', task: 'verify' },
+        ],
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      const secondCall = vi.mocked(spawnAgentWithRetry).mock.calls[1];
+      expect(secondCall[2]).toBe(`build based on: ${scoutOutput}`);
+    });
+
+    it('(edge) 1-step chain: onUpdate shows length 1, final result has length 1', async () => {
+      const onUpdate = vi.fn();
+      vi.mocked(spawnAgentWithRetry).mockResolvedValueOnce(makeResult({ agent: 'scout' }));
+
+      const params: DispatchParams = {
+        chain: [{ agent: 'scout', task: 'step 1' }],
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      const result = await executeDispatch(params, CWD, EXTENSION_DIR, undefined, onUpdate);
+
+      expect(result.details.results).toHaveLength(1);
+      for (const call of vi.mocked(onUpdate).mock.calls) {
+        expect((call[0] as DispatchResult).details.results).toHaveLength(1);
+      }
+    });
+
+    it('(edge) chain error at step 1: final result has length 1', async () => {
+      vi.mocked(spawnAgentWithRetry).mockResolvedValueOnce(makeResult({ agent: 'scout', exitCode: 1 }));
+
+      const params: DispatchParams = {
+        chain: [
+          { agent: 'scout', task: 'step 1' },
+          { agent: 'builder', task: 'step 2' },
+          { agent: 'scout', task: 'step 3' },
+        ],
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(result.details.results).toHaveLength(1);
+    });
+  });
+
+  // ─── task-3.2: writeCheckpoint wiring ───────────────────────────────────
+
+  describe('writeCheckpoint wiring (task-3.2)', () => {
+    const featureDir = path.join(CWD, '.flow', 'features', 'auth');
+
+    beforeEach(() => {
+      vi.mocked(readStateFile).mockReturnValue(makeFlowState());
+      vi.mocked(checkPhaseGate).mockReturnValue({ canAdvance: true, reason: 'ok' });
+    });
+
+    it('(a) successful single dispatch: writeCheckpoint called once with featureDir, phase, wave, snapshot', async () => {
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult());
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+        wave: 2,
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(writeCheckpoint).toHaveBeenCalledTimes(1);
+      expect(writeCheckpoint).toHaveBeenCalledWith(
+        featureDir,
+        'execute',
+        2,
+        expect.any(String),
+      );
+      const snapshotArg = vi.mocked(writeCheckpoint).mock.calls[0][3] as string;
+      expect(snapshotArg.length).toBeGreaterThan(0);
+    });
+
+    it('(a) wave undefined: writeCheckpoint called with null for wave', async () => {
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult());
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(writeCheckpoint).toHaveBeenCalledWith(
+        featureDir,
+        'execute',
+        null,
+        expect.any(String),
+      );
+    });
+
+    it('(b) gate blocked: writeCheckpoint NOT called', async () => {
+      vi.mocked(checkPhaseGate).mockReturnValue({ canAdvance: false, reason: 'blocked' });
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(writeCheckpoint).not.toHaveBeenCalled();
+    });
+
+    it('(b) agent not found: writeCheckpoint NOT called', async () => {
+      const params: DispatchParams = {
+        agent: 'nonexistent',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(writeCheckpoint).not.toHaveBeenCalled();
+    });
+
+    it('(c) chain step fails: writeCheckpoint NOT called', async () => {
+      vi.mocked(spawnAgentWithRetry)
+        .mockResolvedValueOnce(makeResult({ agent: 'scout', exitCode: 0 }))
+        .mockResolvedValueOnce(makeResult({ agent: 'builder', exitCode: 1 }));
+
+      const params: DispatchParams = {
+        chain: [
+          { agent: 'scout', task: 'step 1' },
+          { agent: 'builder', task: 'step 2' },
+        ],
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(writeCheckpoint).not.toHaveBeenCalled();
+    });
+
+    it('(d) successful parallel dispatch: writeCheckpoint called once', async () => {
+      vi.mocked(spawnAgentWithRetry)
+        .mockResolvedValueOnce(makeResult({ agent: 'builder' }))
+        .mockResolvedValueOnce(makeResult({ agent: 'scout' }));
+
+      const params: DispatchParams = {
+        parallel: [
+          { agent: 'builder', task: 'task 1' },
+          { agent: 'scout', task: 'task 2' },
+        ],
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(writeCheckpoint).toHaveBeenCalledTimes(1);
+    });
+
+    it('(e) successful chain dispatch (all steps pass): writeCheckpoint called once', async () => {
+      vi.mocked(spawnAgentWithRetry)
+        .mockResolvedValueOnce(makeResult({ agent: 'scout', exitCode: 0 }))
+        .mockResolvedValueOnce(makeResult({ agent: 'builder', exitCode: 0 }));
+
+      const params: DispatchParams = {
+        chain: [
+          { agent: 'scout', task: 'step 1' },
+          { agent: 'builder', task: 'step 2' },
+        ],
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(writeCheckpoint).toHaveBeenCalledTimes(1);
+    });
+
+    it('writeCheckpoint throws: dispatch result still returned', async () => {
+      vi.mocked(writeCheckpoint).mockImplementation(() => { throw new Error('disk full'); });
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult());
+
+      const params: DispatchParams = {
+        agent: 'builder',
+        task: 'implement',
+        phase: 'execute',
+        feature: 'auth',
+      };
+
+      const result = await executeDispatch(params, CWD, EXTENSION_DIR);
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toBeTruthy();
     });
   });
 });

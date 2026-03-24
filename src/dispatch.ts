@@ -10,7 +10,7 @@ import type {
 import { loadConfig } from './config.js';
 import { discoverAgents, buildVariableMap } from './agents.js';
 import { spawnAgentWithRetry, mapWithConcurrencyLimit, getFinalOutput } from './spawn.js';
-import { readStateFile, writeDispatchLog, writeStateFile, ensureFeatureDir, appendProgressLog } from './state.js';
+import { readStateFile, writeDispatchLog, writeStateFile, ensureFeatureDir, appendProgressLog, writeCheckpoint } from './state.js';
 import { checkPhaseGate } from './gates.js';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
@@ -230,26 +230,41 @@ async function executeChain(
   onUpdate?: OnUpdateCallback,
 ): Promise<SingleAgentResult[]> {
   const buildDetailsForUpdate = makeDetails('chain', phase, feature);
-  const results: SingleAgentResult[] = [];
   const flowDir = path.join(cwd, '.flow');
+
+  // Pre-create full-length placeholder array so onUpdate always reports N/N
+  const allResults: SingleAgentResult[] = steps.map(({ agent, task: rawTask }) => ({
+    agent: agent.name,
+    agentSource: agent.source,
+    task: rawTask,
+    exitCode: -1,
+    messages: [],
+    stderr: '',
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+  }));
+
+  // Track completed results separately for {previous} substitution
+  const completedResults: SingleAgentResult[] = [];
+  let lastAttemptedIndex = -1;
 
   for (let i = 0; i < steps.length; i++) {
     const { agent, task: rawTask } = steps[i];
+    lastAttemptedIndex = i;
 
     // Replace all {previous} occurrences with the prior agent's final output
     const previousOutput =
-      results.length > 0 ? getFinalOutput(results[results.length - 1].messages) : '';
+      completedResults.length > 0 ? getFinalOutput(completedResults[completedResults.length - 1].messages) : '';
     const task = rawTask.replace(/\{previous\}/g, previousOutput);
 
     const onAgentUpdate = onUpdate
       ? (result: SingleAgentResult) => {
-          const currentResults = [...results, result];
+          allResults[i] = result;
           onUpdate({
-            content: currentResults.map((r) => ({
+            content: allResults.map((r) => ({
               type: 'text' as const,
               text: getFinalOutput(r.messages),
             })),
-            details: buildDetailsForUpdate(currentResults),
+            details: buildDetailsForUpdate([...allResults]),
           });
         }
       : undefined;
@@ -263,6 +278,10 @@ async function executeChain(
       onAgentUpdate,
     );
 
+    // Update the placeholder in-place with the actual result
+    allResults[i] = result;
+    completedResults.push(result);
+
     // Write dispatch log for this step
     writeDispatchLog(flowDir, feature, {
       agent: agent.name,
@@ -273,27 +292,26 @@ async function executeChain(
       usage: result.usage,
     });
 
-    results.push(result);
-
     // Emit accumulated update after each step (covers cases where the
     // agent's own callback was never invoked, e.g. in tests)
     if (onUpdate) {
       onUpdate({
-        content: results.map((r) => ({
+        content: allResults.map((r) => ({
           type: 'text' as const,
           text: getFinalOutput(r.messages),
         })),
-        details: buildDetailsForUpdate([...results]),
+        details: buildDetailsForUpdate([...allResults]),
       });
     }
 
-    // Stop chain on error
+    // Stop chain on error — truncate to attempted steps only
     if (result.exitCode !== 0) {
-      break;
+      return allResults.slice(0, lastAttemptedIndex + 1);
     }
   }
 
-  return results;
+  // All steps completed — return full array
+  return allResults;
 }
 
 // ─── Public entry point ───────────────────────────────────────────────────────
@@ -385,7 +403,7 @@ export async function executeDispatch(
       );
       const details = makeDetails('parallel', params.phase, params.feature)(results);
 
-      accumulateBudget(featureDir, currentState, results, params);
+      accumulateBudget(featureDir, currentState, results, params, true);
 
       return {
         content: buildContent(results),
@@ -423,7 +441,9 @@ export async function executeDispatch(
       );
       const details = makeDetails('chain', params.phase, params.feature)(results);
 
-      accumulateBudget(featureDir, currentState, results, params);
+      // Only checkpoint if all steps succeeded
+      const chainSuccess = results.length === steps.length && results.every((r) => r.exitCode === 0);
+      accumulateBudget(featureDir, currentState, results, params, chainSuccess);
 
       return {
         content: buildContent(results),
@@ -470,7 +490,7 @@ export async function executeDispatch(
     );
     const details = makeDetails('single', params.phase, params.feature)([result]);
 
-    accumulateBudget(featureDir, currentState, [result], params);
+    accumulateBudget(featureDir, currentState, [result], params, true);
 
     return {
       content: buildContent([result]),
@@ -485,14 +505,16 @@ export async function executeDispatch(
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
 /**
- * Updates state budget from execution results, writes state file, and appends
- * a progress log entry. All failures are swallowed — budget/log loss is acceptable.
+ * Updates state budget from execution results, writes state file, appends
+ * a progress log entry, and optionally writes a checkpoint.
+ * All failures are swallowed — budget/log/checkpoint loss is acceptable.
  */
 function accumulateBudget(
   featureDir: string,
   currentState: FlowState,
   results: SingleAgentResult[],
   params: DispatchParams,
+  writeCheckpointOnSuccess: boolean,
 ): void {
   try {
     const usage = aggregateUsage(results);
@@ -508,6 +530,13 @@ function accumulateBudget(
     };
     writeStateFile(featureDir, updatedState);
   } catch { /* budget loss acceptable */ }
+
+  if (writeCheckpointOnSuccess) {
+    try {
+      const snapshot = results.map((r) => `${r.agent}: exit=${r.exitCode}`).join(', ');
+      writeCheckpoint(featureDir, params.phase, params.wave ?? null, snapshot);
+    } catch { /* checkpoint loss acceptable */ }
+  }
 
   try {
     const agentNames = results.map((r) => r.agent).join(', ') || 'unknown';

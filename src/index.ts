@@ -15,7 +15,7 @@ import { getMarkdownTheme } from '@mariozechner/pi-coding-agent';
 import { Container, Markdown, Spacer, Text } from '@mariozechner/pi-tui';
 
 import { executeDispatch } from './dispatch.js';
-import { findFlowDir, readStateFile, writeCheckpoint } from './state.js';
+import { findFlowDir, readStateFile, writeCheckpoint, readCheckpoint } from './state.js';
 import { discoverAgents } from './agents.js';
 import { buildCoordinatorPrompt, buildNudgeMessage } from './prompt.js';
 import {
