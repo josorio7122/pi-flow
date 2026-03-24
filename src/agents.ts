@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { execSync } from 'node:child_process';
 import type { FlowAgentConfig } from './types.js';
 
 // ─── Scalar parser ────────────────────────────────────────────────────────────
@@ -401,7 +402,6 @@ export function readAgentsMd(cwd: string): string {
 export function buildVariableMap(
   cwd: string,
   featureDir: string,
-  _state: object | null,
 ): Record<string, string> {
   const featureName = path.basename(featureDir);
   const memoryDir = path.join(cwd, '.flow', 'memory');
@@ -451,21 +451,15 @@ export function buildVariableMap(
 
 function detectBaseBranch(cwd: string): string {
   try {
-    const { execSync } = require('node:child_process');
-    // Try main, then master
-    try {
-      execSync('git rev-parse --verify main', { cwd, stdio: 'pipe' });
-      return 'main';
-    } catch {
-      try {
-        execSync('git rev-parse --verify master', { cwd, stdio: 'pipe' });
-        return 'master';
-      } catch {
-        return 'main';
-      }
-    }
-  } catch {
+    execSync('git rev-parse --verify main', { cwd, stdio: 'pipe' });
     return 'main';
+  } catch {
+    try {
+      execSync('git rev-parse --verify master', { cwd, stdio: 'pipe' });
+      return 'master';
+    } catch {
+      return 'main';
+    }
   }
 }
 

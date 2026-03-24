@@ -843,12 +843,12 @@ describe('buildVariableMap', () => {
   });
 
   it('sets FEATURE_NAME from the basename of featureDir', () => {
-    const map = buildVariableMap(cwd, featureDir, null);
+    const map = buildVariableMap(cwd, featureDir);
     expect(map.FEATURE_NAME).toBe('auth-refresh');
   });
 
   it('includes AGENTS_MD in the variable map', () => {
-    const map = buildVariableMap(cwd, featureDir, null);
+    const map = buildVariableMap(cwd, featureDir);
     expect('AGENTS_MD' in map).toBe(true);
     expect(typeof map.AGENTS_MD).toBe('string');
   });
@@ -870,7 +870,7 @@ WHEN user calls /auth/refresh...
 `,
     );
 
-    const map = buildVariableMap(cwd, featureDir, null);
+    const map = buildVariableMap(cwd, featureDir);
     expect(map.SPEC_GOAL).toBe('Build JWT refresh token rotation.');
   });
 
@@ -887,12 +887,12 @@ WHEN user calls /auth/refresh, THE system SHALL issue a new token.
 `,
     );
 
-    const map = buildVariableMap(cwd, featureDir, null);
+    const map = buildVariableMap(cwd, featureDir);
     expect(map.SPEC_BEHAVIORS).toContain('/auth/refresh');
   });
 
   it('returns empty string for SPEC_GOAL when spec.md is missing', () => {
-    const map = buildVariableMap(cwd, featureDir, null);
+    const map = buildVariableMap(cwd, featureDir);
     expect(map.SPEC_GOAL).toBe('');
   });
 
@@ -909,12 +909,12 @@ Use Approach B: Redis rotating blacklist.
 `,
     );
 
-    const map = buildVariableMap(cwd, featureDir, null);
+    const map = buildVariableMap(cwd, featureDir);
     expect(map.CHOSEN_APPROACH).toContain('Approach B');
   });
 
   it('returns empty string for CHOSEN_APPROACH when design.md is missing', () => {
-    const map = buildVariableMap(cwd, featureDir, null);
+    const map = buildVariableMap(cwd, featureDir);
     expect(map.CHOSEN_APPROACH).toBe('');
   });
 
@@ -935,7 +935,7 @@ wave_count: 2
 `,
     );
 
-    const map = buildVariableMap(cwd, featureDir, null);
+    const map = buildVariableMap(cwd, featureDir);
     expect(map.WAVE_TASKS).toContain('task-1.1');
     expect(map.WAVE_TASKS).toContain('task-2.1');
   });
@@ -947,21 +947,21 @@ wave_count: 2
     writeMd(path.join(memDir, 'patterns.md'), 'Pattern: Result<T> everywhere.');
     writeMd(path.join(memDir, 'lessons.md'), 'Lesson: add rate limits early.');
 
-    const map = buildVariableMap(cwd, featureDir, null);
+    const map = buildVariableMap(cwd, featureDir);
     expect(map.MEMORY_DECISIONS).toContain('use Redis');
     expect(map.MEMORY_PATTERNS).toContain('Result<T>');
     expect(map.MEMORY_LESSONS).toContain('rate limits');
   });
 
   it('returns empty string for memory files when they do not exist', () => {
-    const map = buildVariableMap(cwd, featureDir, null);
+    const map = buildVariableMap(cwd, featureDir);
     expect(map.MEMORY_DECISIONS).toBe('');
     expect(map.MEMORY_PATTERNS).toBe('');
     expect(map.MEMORY_LESSONS).toBe('');
   });
 
   it('returns all string values (no undefined)', () => {
-    const map = buildVariableMap(cwd, featureDir, null);
+    const map = buildVariableMap(cwd, featureDir);
     for (const [key, value] of Object.entries(map)) {
       expect(typeof value, `Expected ${key} to be a string`).toBe('string');
     }

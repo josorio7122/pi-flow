@@ -41,12 +41,9 @@ export interface FlowState {
 export interface FlowConfig {
   concurrency: { max_parallel: number; max_workers: number; stagger_ms: number };
   guardrails: {
-    token_cap_per_agent: number;
-    cost_cap_per_agent_usd: number;
     loop_detection_window: number;
     loop_detection_threshold: number;
   };
-  memory: { enabled: boolean };
 }
 
 // ─── Dispatch types ───────────────────────────────────────────────────────────

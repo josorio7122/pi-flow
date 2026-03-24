@@ -9,6 +9,24 @@ import { injectVariables } from './agents.js';
 
 export const RETRY_DELAYS_MS = [500, 1000, 2000];
 
+// ─── Factory helpers ──────────────────────────────────────────────────────────
+
+export function emptyUsage(): UsageStats {
+  return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 };
+}
+
+export function emptyResult(agent: FlowAgentConfig, task: string): SingleAgentResult {
+  return {
+    agent: agent.name,
+    agentSource: agent.source,
+    task,
+    exitCode: -1,
+    messages: [],
+    stderr: '',
+    usage: emptyUsage(),
+  };
+}
+
 // ─── DisplayItem type ─────────────────────────────────────────────────────────
 
 export type DisplayItem =

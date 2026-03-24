@@ -5,12 +5,9 @@ import type { FlowConfig } from './types.js';
 const DEFAULT_CONFIG: FlowConfig = {
   concurrency: { max_parallel: 8, max_workers: 4, stagger_ms: 150 },
   guardrails: {
-    token_cap_per_agent: 100000,
-    cost_cap_per_agent_usd: 10.0,
     loop_detection_window: 10,
     loop_detection_threshold: 3,
   },
-  memory: { enabled: true },
 };
 
 /**
@@ -118,7 +115,6 @@ export function loadConfig(cwd: string): FlowConfig {
       guardrails: parsed.guardrails
         ? mergeSection(defaults.guardrails, parsed.guardrails)
         : defaults.guardrails,
-      memory: parsed.memory ? mergeSection(defaults.memory, parsed.memory) : defaults.memory,
     };
   } catch {
     return getDefaultConfig();

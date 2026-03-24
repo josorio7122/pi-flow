@@ -2,7 +2,6 @@ import * as path from 'node:path';
 
 import type {
   FlowAgentConfig,
-  FlowConfig,
   FlowDispatchDetails,
   FlowState,
   SingleAgentResult,
@@ -11,7 +10,7 @@ import type {
 } from './types.js';
 import { loadConfig } from './config.js';
 import { discoverAgents, buildVariableMap } from './agents.js';
-import { spawnAgentWithRetry, mapWithConcurrencyLimit, getFinalOutput } from './spawn.js';
+import { spawnAgentWithRetry, mapWithConcurrencyLimit, getFinalOutput, emptyResult } from './spawn.js';
 import {
   readStateFile,
   writeDispatchLog,
@@ -73,7 +72,6 @@ async function executeSingle(
   task: string,
   cwd: string,
   variableMap: Record<string, string>,
-  _config: FlowConfig,
   feature: string,
   signal?: AbortSignal,
   onUpdate?: OnUpdateCallback,
@@ -81,18 +79,9 @@ async function executeSingle(
   const buildDetailsForUpdate = makeDetails('single', feature);
 
   if (onUpdate) {
-    const placeholder: SingleAgentResult = {
-      agent: agent.name,
-      agentSource: agent.source,
-      task,
-      exitCode: -1,
-      messages: [],
-      stderr: '',
-      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-    };
     onUpdate({
       content: [{ type: 'text', text: '' }],
-      details: buildDetailsForUpdate([placeholder]),
+      details: buildDetailsForUpdate([emptyResult(agent, task)]),
     });
   }
 
@@ -122,22 +111,14 @@ async function executeParallel(
   agentTasks: Array<{ agent: FlowAgentConfig; task: string }>,
   cwd: string,
   variableMap: Record<string, string>,
-  config: FlowConfig,
+  maxWorkers: number,
   feature: string,
   signal?: AbortSignal,
   onUpdate?: OnUpdateCallback,
 ): Promise<SingleAgentResult[]> {
   const buildDetailsForUpdate = makeDetails('parallel', feature);
 
-  const results: SingleAgentResult[] = agentTasks.map(({ agent, task }) => ({
-    agent: agent.name,
-    agentSource: agent.source,
-    task,
-    exitCode: -1,
-    messages: [],
-    stderr: '',
-    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-  }));
+  const results: SingleAgentResult[] = agentTasks.map(({ agent, task }) => emptyResult(agent, task));
 
   if (onUpdate) {
     onUpdate({
@@ -148,7 +129,7 @@ async function executeParallel(
 
   await mapWithConcurrencyLimit(
     agentTasks,
-    config.concurrency.max_workers,
+    maxWorkers,
     async ({ agent, task }, index) => {
       const onAgentUpdate = onUpdate
         ? (result: SingleAgentResult) => {
@@ -182,7 +163,6 @@ async function executeChain(
   steps: Array<{ agent: FlowAgentConfig; task: string }>,
   cwd: string,
   variableMap: Record<string, string>,
-  _config: FlowConfig,
   feature: string,
   signal?: AbortSignal,
   onUpdate?: OnUpdateCallback,
@@ -190,15 +170,9 @@ async function executeChain(
   const buildDetailsForUpdate = makeDetails('chain', feature);
   const flowDir = path.join(cwd, '.flow');
 
-  const allResults: SingleAgentResult[] = steps.map(({ agent, task: rawTask }) => ({
-    agent: agent.name,
-    agentSource: agent.source,
-    task: rawTask,
-    exitCode: -1,
-    messages: [],
-    stderr: '',
-    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-  }));
+  const allResults: SingleAgentResult[] = steps.map(({ agent, task: rawTask }) =>
+    emptyResult(agent, rawTask),
+  );
 
   if (onUpdate) {
     onUpdate({
@@ -373,14 +347,14 @@ export async function executeDispatch(
     const featureDir = path.join(cwd, '.flow', 'features', feature);
     const currentState = initializeState(cwd, featureDir, feature);
     const agents = discoverAgents(extensionDir, cwd);
-    const variableMap = buildVariableMap(cwd, featureDir, currentState);
+    const variableMap = buildVariableMap(cwd, featureDir);
 
     if (params.parallel) {
       const resolved = resolveAgentTasks(params.parallel, agents);
       if ('error' in resolved) return errorResult(resolved.error, params);
 
       const results = await executeParallel(
-        resolved.resolved, cwd, variableMap, config, feature, signal, onUpdate,
+        resolved.resolved, cwd, variableMap, config.concurrency.max_workers, feature, signal, onUpdate,
       );
       const details = makeDetails('parallel', feature)(results);
       updateBudget(featureDir, currentState, results);
@@ -393,7 +367,7 @@ export async function executeDispatch(
       if ('error' in resolved) return errorResult(resolved.error, params);
 
       const results = await executeChain(
-        resolved.resolved, cwd, variableMap, config, feature, signal, onUpdate,
+        resolved.resolved, cwd, variableMap, feature, signal, onUpdate,
       );
       const details = makeDetails('chain', feature)(results);
       updateBudget(featureDir, currentState, results);
@@ -415,7 +389,7 @@ export async function executeDispatch(
     }
 
     const result = await executeSingle(
-      agent, params.task, cwd, variableMap, config, feature, signal, onUpdate,
+      agent, params.task, cwd, variableMap, feature, signal, onUpdate,
     );
     const details = makeDetails('single', feature)([result]);
     updateBudget(featureDir, currentState, [result]);

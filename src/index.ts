@@ -37,6 +37,7 @@ import {
   buildFlowResult,
 } from './rendering.js';
 import { hashToolCall, detectLoop } from './guardrails.js';
+import { shouldBlockToolCall } from './tool-blocking.js';
 import type { FlowDispatchDetails, FlowState } from './types.js';
 
 // ─── Module-level state ───────────────────────────────────────────────────────
@@ -44,15 +45,6 @@ import type { FlowDispatchDetails, FlowState } from './types.js';
 const loopHistory: Array<{ tool: string; argsHash: string }> = [];
 const LOOP_WINDOW = 10;
 const LOOP_THRESHOLD = 3;
-
-// ─── Coordinator write whitelist ──────────────────────────────────────────────
-
-function isAllowedCoordinatorWrite(filePath: string, cwd: string): boolean {
-  const flowDir = findFlowDir(cwd);
-  if (!flowDir) return false;
-  const normalized = path.resolve(cwd, filePath);
-  return normalized.startsWith(flowDir + path.sep) || normalized === flowDir;
-}
 
 // ─── Active feature finder ───────────────────────────────────────────────────
 
@@ -95,22 +87,11 @@ function findActiveFeature(
 
 // ─── Status helpers ──────────────────────────────────────────────────────────
 
-function formatStatusSummary(state: FlowState): string {
+function formatStatus(state: FlowState): string {
   return [
     `Feature: ${state.feature}`,
-    '',
-    'Budget',
-    `  Tokens: ${state.budget.total_tokens.toLocaleString()}`,
-    `  Cost:   $${state.budget.total_cost_usd.toFixed(4)}`,
-  ].join('\n');
-}
-
-function formatBudgetTable(state: FlowState): string {
-  return [
-    `Feature: ${state.feature}`,
-    '',
-    `Tokens: ${state.budget.total_tokens.toLocaleString()}`,
-    `Cost:   $${state.budget.total_cost_usd.toFixed(4)}`,
+    `Tokens:  ${state.budget.total_tokens.toLocaleString()}`,
+    `Cost:    $${state.budget.total_cost_usd.toFixed(4)}`,
   ].join('\n');
 }
 
@@ -274,7 +255,7 @@ export default function piFlow(pi: ExtensionAPI) {
         pi.sendMessage({ customType: 'pi-flow-status', content: 'No active pi-flow feature.', display: true });
         return;
       }
-      const summary = formatStatusSummary(active.state);
+      const summary = formatStatus(active.state);
       pi.sendMessage({ customType: 'pi-flow-status', content: `[Flow Status]\n\n${summary}`, display: true });
     },
   });
@@ -287,7 +268,7 @@ export default function piFlow(pi: ExtensionAPI) {
         pi.sendMessage({ customType: 'pi-flow-budget', content: 'No active pi-flow feature.', display: true });
         return;
       }
-      const table = formatBudgetTable(active.state);
+      const table = formatStatus(active.state);
       pi.sendMessage({ customType: 'pi-flow-budget', content: `[Flow Budget]\n\n${table}`, display: true });
     },
   });
@@ -323,22 +304,13 @@ export default function piFlow(pi: ExtensionAPI) {
   // tool_call — enforce coordinator write restrictions + loop detection
   pi.on(
     'tool_call',
-    async (event: ToolCallEvent, ctx: ExtensionContext): Promise<ToolCallEventResult> => {
+    async (event: ToolCallEvent, _ctx: ExtensionContext): Promise<ToolCallEventResult> => {
       const name = event.toolName;
       const input = event.input as Record<string, unknown>;
 
       // Tool blocking: coordinator can't write outside .flow/
-      if (name === 'Write' || name === 'Edit') {
-        const filePath = input.path as string | undefined;
-        if (filePath && !isAllowedCoordinatorWrite(filePath, ctx.cwd)) {
-          return {
-            block: true,
-            reason:
-              `Coordinator cannot write to '${filePath}'. ` +
-              'Dispatch builder for code changes. You may only write inside .flow/.',
-          };
-        }
-      }
+      const blockResult = shouldBlockToolCall(name, input);
+      if (blockResult.block) return blockResult;
 
       // Loop detection
       const hash = hashToolCall(name, input);

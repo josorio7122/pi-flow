@@ -23,18 +23,6 @@ export function findFlowDir(cwd: string): string | null {
   }
 }
 
-// ─── ensureFlowDir ────────────────────────────────────────────────────────────
-
-/**
- * Creates `.flow/` inside `cwd` if it does not already exist.
- * Returns the absolute path to the `.flow/` directory.
- */
-export function ensureFlowDir(cwd: string): string {
-  const flowDir = path.join(cwd, '.flow');
-  fs.mkdirSync(flowDir, { recursive: true });
-  return flowDir;
-}
-
 // ─── ensureFeatureDir ─────────────────────────────────────────────────────────
 
 /**
@@ -129,22 +117,6 @@ export function writeCheckpoint(
 
   const latestPath = path.join(checkpointsDir, 'latest.json');
   fs.copyFileSync(checkpointPath, latestPath);
-}
-
-// ─── readCheckpoint ───────────────────────────────────────────────────────────
-
-/**
- * Reads the latest checkpoint from `<featureDir>/checkpoints/latest.json`.
- * Returns null if the file does not exist.
- */
-export function readCheckpoint(featureDir: string): string | null {
-  const latestPath = path.join(featureDir, 'checkpoints', 'latest.json');
-  if (!fs.existsSync(latestPath)) return null;
-  try {
-    return fs.readFileSync(latestPath, 'utf8');
-  } catch {
-    return null;
-  }
 }
 
 // ─── writeDispatchLog ─────────────────────────────────────────────────────────
