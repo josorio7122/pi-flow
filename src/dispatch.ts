@@ -149,6 +149,23 @@ async function executeSingle(
 ): Promise<SingleAgentResult> {
   const buildDetailsForUpdate = makeDetails('single', phase, feature);
 
+  // Emit initial update with queued placeholder — prevents flash
+  if (onUpdate) {
+    const placeholder: SingleAgentResult = {
+      agent: agent.name,
+      agentSource: agent.source,
+      task,
+      exitCode: -1,
+      messages: [],
+      stderr: '',
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+    };
+    onUpdate({
+      content: [{ type: 'text', text: '' }],
+      details: buildDetailsForUpdate([placeholder]),
+    });
+  }
+
   const onAgentUpdate = onUpdate
     ? (result: SingleAgentResult) => {
         onUpdate({
@@ -203,6 +220,19 @@ async function executeParallel(
       turns: 0,
     },
   }));
+
+  // Emit initial update with queued placeholders so renderResult takes
+  // over from renderCall immediately — prevents a visual flash/reflow
+  // when the first real update arrives with agent cards.
+  if (onUpdate) {
+    onUpdate({
+      content: results.map((r) => ({
+        type: 'text' as const,
+        text: getFinalOutput(r.messages),
+      })),
+      details: buildDetailsForUpdate([...results]),
+    });
+  }
 
   await mapWithConcurrencyLimit(
     agentTasks,
@@ -280,6 +310,17 @@ async function executeChain(
       turns: 0,
     },
   }));
+
+  // Emit initial update with queued placeholders — prevents flash
+  if (onUpdate) {
+    onUpdate({
+      content: allResults.map((r) => ({
+        type: 'text' as const,
+        text: getFinalOutput(r.messages),
+      })),
+      details: buildDetailsForUpdate([...allResults]),
+    });
+  }
 
   // Track completed results separately for {previous} substitution
   const completedResults: SingleAgentResult[] = [];
