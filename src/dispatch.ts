@@ -553,15 +553,22 @@ function accumulateBudget(
     const usage = sumBudget(results);
     const allSucceeded = results.every((r) => r.exitCode === 0);
 
-    // Determine the next phase: auto-advance on success, stay on current on failure
+    // Determine the next phase: auto-advance on success, stay on current on failure.
+    // For wave-based execute: only advance after the final wave.
     let nextPhase = params.phase;
     if (allSucceeded) {
-      const advanced = getNextPhase(
-        currentState.change_type,
-        currentState.skipped_phases,
-        params.phase,
-      );
-      if (advanced) nextPhase = advanced;
+      const hasMoreWaves =
+        params.wave !== undefined &&
+        (currentState.wave_count === null || params.wave < currentState.wave_count);
+
+      if (!hasMoreWaves) {
+        const advanced = getNextPhase(
+          currentState.change_type,
+          currentState.skipped_phases,
+          params.phase,
+        );
+        if (advanced) nextPhase = advanced;
+      }
     }
 
     const updatedState: FlowState = {

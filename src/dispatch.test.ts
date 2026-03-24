@@ -2528,6 +2528,67 @@ describe('integration: full lifecycle sequence', () => {
       expect(lastCall[1].current_phase).toBe('plan');
     });
 
+    it('does NOT advance from execute when wave < wave_count (more waves remain)', async () => {
+      vi.mocked(readStateFile).mockReturnValue(
+        makeFlowState({
+          change_type: 'feature',
+          current_phase: 'execute',
+          wave_count: 3,
+        }),
+      );
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult({ exitCode: 0 }));
+
+      await executeDispatch(
+        { agent: 'builder', task: 'build wave 1', phase: 'execute', feature: 'auth', wave: 1 },
+        CWD,
+        EXTENSION_DIR,
+      );
+
+      const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(lastCall[1].current_phase).toBe('execute');
+      expect(lastCall[1].current_wave).toBe(1);
+    });
+
+    it('advances from execute when wave === wave_count (final wave)', async () => {
+      vi.mocked(readStateFile).mockReturnValue(
+        makeFlowState({
+          change_type: 'feature',
+          current_phase: 'execute',
+          wave_count: 3,
+        }),
+      );
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult({ exitCode: 0 }));
+
+      await executeDispatch(
+        { agent: 'builder', task: 'build wave 3', phase: 'execute', feature: 'auth', wave: 3 },
+        CWD,
+        EXTENSION_DIR,
+      );
+
+      const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(lastCall[1].current_phase).toBe('review');
+    });
+
+    it('does NOT advance when wave is set but wave_count is null (unknown total)', async () => {
+      vi.mocked(readStateFile).mockReturnValue(
+        makeFlowState({
+          change_type: 'feature',
+          current_phase: 'execute',
+          wave_count: null,
+        }),
+      );
+      vi.mocked(spawnAgentWithRetry).mockResolvedValue(makeResult({ exitCode: 0 }));
+
+      await executeDispatch(
+        { agent: 'builder', task: 'build', phase: 'execute', feature: 'auth', wave: 1 },
+        CWD,
+        EXTENSION_DIR,
+      );
+
+      const lastCall = vi.mocked(writeStateFile).mock.calls.at(-1)!;
+      expect(lastCall[1].current_phase).toBe('execute');
+    });
+
     it('does NOT advance in parallel mode when any agent fails', async () => {
       vi.mocked(readStateFile).mockReturnValue(
         makeFlowState({ change_type: 'feature', current_phase: 'analyze' }),
