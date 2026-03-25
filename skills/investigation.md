@@ -28,7 +28,9 @@ Hypothesis: [what you think is actually wrong]
 Need: [what information or decision is required]
 ```
 
-Do not try a fourth approach. Present the escalation to the user.
+Do not try a fourth approach. Present the escalation in your output.
+(If you are a sub-agent, this escalates to the coordinator. If you are
+the coordinator, this escalates to the user.)
 
 **Scope lock:** Restrict changes to the affected files.
 Do not refactor adjacent code during a debugging session.

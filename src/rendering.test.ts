@@ -354,6 +354,15 @@ describe('renderSingleCall', () => {
     renderSingleCall('scout', 'task', 'user', noColor, trackBold);
     expect(calls.some((t) => t.includes('dispatch_flow'))).toBe(true);
   });
+
+  it('minimal mode shows only header without task preview', () => {
+    const result = renderSingleCall('scout', 'Map auth module', 'builtin', noColor, noBold, true);
+    expect(result).toContain('dispatch_flow');
+    expect(result).toContain('scout');
+    expect(result).toContain('[builtin]');
+    expect(result).not.toContain('Map auth module');
+    expect(result.split('\n')).toHaveLength(1);
+  });
 });
 
 // ─── renderParallelCall ───────────────────────────────────────────────────────
@@ -404,6 +413,17 @@ describe('renderParallelCall', () => {
     );
     expect(result).toContain('x'.repeat(TASK_PREVIEW_CHARS) + '...');
   });
+
+  it('minimal mode shows only header without task listings', () => {
+    const result = renderParallelCall(tasks, 'builtin', noColor, noBold, true);
+    expect(result).toContain('dispatch_flow');
+    expect(result).toContain('parallel (3 tasks)');
+    expect(result).toContain('[builtin]');
+    expect(result).not.toContain('Map frontend architecture');
+    expect(result).not.toContain('Map backend API layer');
+    expect(result).not.toContain('Map test coverage');
+    expect(result.split('\n')).toHaveLength(1);
+  });
 });
 
 // ─── renderChainCall ──────────────────────────────────────────────────────────
@@ -448,6 +468,16 @@ describe('renderChainCall', () => {
     const result = renderChainCall(manySteps, 'user', noColor, noBold);
     expect(result).not.toContain('Step 4');
     expect(result).toContain('... +1 more');
+  });
+
+  it('minimal mode shows only header without step listings', () => {
+    const result = renderChainCall(steps, 'builtin', noColor, noBold, true);
+    expect(result).toContain('dispatch_flow');
+    expect(result).toContain('chain (3 steps)');
+    expect(result).toContain('[builtin]');
+    expect(result).not.toContain('Find all payment endpoints');
+    expect(result).not.toContain('1.');
+    expect(result.split('\n')).toHaveLength(1);
   });
 });
 

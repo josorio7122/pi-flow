@@ -213,17 +213,29 @@ export default function piFlow(pi: ExtensionAPI) {
         chain?: Array<{ agent: string; task: string }>;
       },
       theme: Theme,
+      context: { executionStarted: boolean },
     ) {
       const colorize = (color: string, t: string): string => theme.fg(color as ThemeColor, t);
       const bold = (t: string): string => theme.bold(t);
 
+      // Once execution starts, show minimal header — agent cards in renderResult
+      // already display each task with live progress, so repeating them here is redundant.
+      const minimal = context.executionStarted;
+
       let text: string;
       if (args.parallel && args.parallel.length > 0) {
-        text = renderParallelCall(args.parallel, 'builtin', colorize, bold);
+        text = renderParallelCall(args.parallel, 'builtin', colorize, bold, minimal);
       } else if (args.chain && args.chain.length > 0) {
-        text = renderChainCall(args.chain, 'builtin', colorize, bold);
+        text = renderChainCall(args.chain, 'builtin', colorize, bold, minimal);
       } else {
-        text = renderSingleCall(args.agent ?? '...', args.task ?? '...', 'builtin', colorize, bold);
+        text = renderSingleCall(
+          args.agent ?? '...',
+          args.task ?? '...',
+          'builtin',
+          colorize,
+          bold,
+          minimal,
+        );
       }
 
       return new Text(text, 0, 0);

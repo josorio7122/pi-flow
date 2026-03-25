@@ -48,9 +48,9 @@ describe('buildCoordinatorPrompt', () => {
 
   it('includes full feature workflow steps', () => {
     const prompt = buildCoordinatorPrompt([], [], null);
-    expect(prompt).toContain('Forcing questions');
+    expect(prompt).toContain('Restate the user');
     expect(prompt).toContain('Scout the codebase');
-    expect(prompt).toContain('Design review');
+    expect(prompt).toContain('Checkpoint');
     expect(prompt).toContain('Plan');
     expect(prompt).toContain('Build');
     expect(prompt).toContain('Review');
@@ -85,6 +85,44 @@ describe('buildCoordinatorPrompt', () => {
     const prompt = buildCoordinatorPrompt([], [], null);
     expect(prompt).toContain('blocked outside');
     expect(prompt).toContain('.flow/');
+  });
+
+  it('includes checkpoint and protocol violation rule', () => {
+    const prompt = buildCoordinatorPrompt([], [], null);
+    expect(prompt).toContain('STOP and wait for user approval');
+    expect(prompt).toContain('protocol violation');
+  });
+
+  it('includes delegation rules', () => {
+    const prompt = buildCoordinatorPrompt([], [], null);
+    expect(prompt).toContain('Delegation rules');
+    expect(prompt).toContain('limited to git commands');
+    expect(prompt).toContain('dispatch a scout');
+  });
+
+  it('includes correction handling rule', () => {
+    const prompt = buildCoordinatorPrompt([], [], null);
+    expect(prompt).toContain('user corrects you');
+    expect(prompt).toContain('restate what you now understand');
+  });
+
+  it('includes large document guidance', () => {
+    const prompt = buildCoordinatorPrompt([], [], null);
+    expect(prompt).toContain('200 lines');
+    expect(prompt).toContain('dispatch planner first');
+  });
+
+  it('clarifies what agents inherit vs what must be in the task', () => {
+    const prompt = buildCoordinatorPrompt([], [], null);
+    expect(prompt).toContain('inherit the project');
+    expect(prompt).toContain('NO access to your conversation');
+    expect(prompt).toContain('must be included in the task string');
+  });
+
+  it('uses one-at-a-time questioning aligned with forcing-questions skill', () => {
+    const prompt = buildCoordinatorPrompt([], [], null);
+    expect(prompt).toContain('one question');
+    expect(prompt).toContain('not batched');
   });
 
   it('renders agent table with name, model, and description', () => {

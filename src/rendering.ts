@@ -180,14 +180,17 @@ export function renderSingleCall(
   scope: string,
   colorize: Colorize,
   bold: Bold,
+  minimal = false,
 ): string {
-  const preview =
-    task.length > TASK_PREVIEW_CHARS ? `${task.slice(0, TASK_PREVIEW_CHARS)}...` : task;
   let text =
     colorize('toolTitle', bold('dispatch_flow ')) +
     colorize('accent', agentName) +
     colorize('muted', ` [${scope}]`);
-  text += `\n  ${colorize('dim', preview)}`;
+  if (!minimal) {
+    const preview =
+      task.length > TASK_PREVIEW_CHARS ? `${task.slice(0, TASK_PREVIEW_CHARS)}...` : task;
+    text += `\n  ${colorize('dim', preview)}`;
+  }
   return text;
 }
 
@@ -206,18 +209,21 @@ export function renderParallelCall(
   scope: string,
   colorize: Colorize,
   bold: Bold,
+  minimal = false,
 ): string {
   let text =
     colorize('toolTitle', bold('dispatch_flow ')) +
     colorize('accent', `parallel (${tasks.length} tasks)`) +
     colorize('muted', ` [${scope}]`);
-  for (const t of tasks.slice(0, 3)) {
-    const preview =
-      t.task.length > TASK_PREVIEW_CHARS ? `${t.task.slice(0, TASK_PREVIEW_CHARS)}...` : t.task;
-    text += `\n  ${colorize('accent', t.agent)}${colorize('dim', ` ${preview}`)}`;
-  }
-  if (tasks.length > 3) {
-    text += `\n  ${colorize('muted', `... +${tasks.length - 3} more`)}`;
+  if (!minimal) {
+    for (const t of tasks.slice(0, 3)) {
+      const preview =
+        t.task.length > TASK_PREVIEW_CHARS ? `${t.task.slice(0, TASK_PREVIEW_CHARS)}...` : t.task;
+      text += `\n  ${colorize('accent', t.agent)}${colorize('dim', ` ${preview}`)}`;
+    }
+    if (tasks.length > 3) {
+      text += `\n  ${colorize('muted', `... +${tasks.length - 3} more`)}`;
+    }
   }
   return text;
 }
@@ -237,25 +243,28 @@ export function renderChainCall(
   scope: string,
   colorize: Colorize,
   bold: Bold,
+  minimal = false,
 ): string {
   let text =
     colorize('toolTitle', bold('dispatch_flow ')) +
     colorize('accent', `chain (${steps.length} steps)`) +
     colorize('muted', ` [${scope}]`);
-  for (let i = 0; i < Math.min(steps.length, 3); i++) {
-    const step = steps[i];
-    const cleanTask = step.task.replace(/\{previous\}/g, '').trim();
-    const preview =
-      cleanTask.length > TASK_PREVIEW_CHARS
-        ? `${cleanTask.slice(0, TASK_PREVIEW_CHARS)}...`
-        : cleanTask;
-    text +=
-      `\n  ${colorize('muted', `${i + 1}.`)} ` +
-      colorize('accent', step.agent) +
-      colorize('dim', ` ${preview}`);
-  }
-  if (steps.length > 3) {
-    text += `\n  ${colorize('muted', `... +${steps.length - 3} more`)}`;
+  if (!minimal) {
+    for (let i = 0; i < Math.min(steps.length, 3); i++) {
+      const step = steps[i];
+      const cleanTask = step.task.replace(/\{previous\}/g, '').trim();
+      const preview =
+        cleanTask.length > TASK_PREVIEW_CHARS
+          ? `${cleanTask.slice(0, TASK_PREVIEW_CHARS)}...`
+          : cleanTask;
+      text +=
+        `\n  ${colorize('muted', `${i + 1}.`)} ` +
+        colorize('accent', step.agent) +
+        colorize('dim', ` ${preview}`);
+    }
+    if (steps.length > 3) {
+      text += `\n  ${colorize('muted', `... +${steps.length - 3} more`)}`;
+    }
   }
   return text;
 }
