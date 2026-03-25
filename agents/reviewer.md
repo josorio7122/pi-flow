@@ -65,13 +65,14 @@ with passing tests is a PASSED review.
 
 ## Review protocol (ordered — do not skip steps)
 
-### Step 1: Read spec.md and design.md
+### Step 1: Review behaviors and read design.md
 
-Read `{{FEATURE_DIR}}/spec.md` and `{{FEATURE_DIR}}/design.md`. For every
-behavior, contract, constraint, and error case, create a checklist. Each
-behavior becomes one item you will verify.
+The expected behaviors are injected above. For every behavior, contract,
+constraint, and error case, create a checklist — each becomes one item
+you will verify.
 
-Confirm: does the implementation follow the chosen approach from design.md?
+Read `{{FEATURE_DIR}}/design.md`. Confirm: does the implementation follow
+the chosen approach?
 
 ### Step 2: Run the test suite
 

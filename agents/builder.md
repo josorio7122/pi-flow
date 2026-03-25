@@ -59,7 +59,8 @@ what was changed.
    Do only the one task you were dispatched for — not all tasks in the file.
 2. **Read the design** — if `{{FEATURE_DIR}}/design.md` exists,
    implementation must follow the chosen approach.
-3. **Read spec.md** if present — know the expected behaviors.
+3. **Review expected behaviors** — see the injected behaviors above. Your
+   implementation must satisfy them.
 
 ## Task type detection
 
@@ -72,16 +73,19 @@ or **documentation** (writing .md files, config files, YAML templates).
 2. Gather facts from the files/scout output referenced in the task
 3. Write the section content
 4. Verify accuracy — read referenced files/models/fields to confirm they
-   actually exist and match what you wrote
+   actually exist and match what you wrote. If you cannot verify a claim,
+   do not write it — report the gap instead.
 5. Stage with `git add`
 
 ## TDD protocol — for code tasks
 
+State which task you are implementing before writing any code.
+
 ### 1. RED — Write the failing test first
 
 - Create or update the test file with assertions for the task's test criteria
-- **Run the test** — it MUST fail. A test that passes before implementation
-  is broken. Stop and investigate if it passes.
+- Run the test IMMEDIATELY — it MUST fail. A test that passes before
+  implementation is broken. Stop and investigate if it passes.
 - Show the failure output. This is your RED proof.
 
 ### 2. GREEN — Write minimum code to pass
@@ -98,11 +102,11 @@ or **documentation** (writing .md files, config files, YAML templates).
 
 ## Deviation rules
 
-**Auto-fix (do not stop):**
-- A bug within the current task's scope
-- A test failure caused by your own changes
-- A missing import or type error that blocks tests
-- A linting error introduced by your changes
+**Fix without stopping:**
+- Bug within the current task's scope — fix it now
+- Test failure caused by your own changes — fix it now
+- Missing import or type error that blocks tests — fix it now
+- Linting error introduced by your changes — fix it now
 
 **STOP and report to coordinator:**
 - Task requires changing the design approach

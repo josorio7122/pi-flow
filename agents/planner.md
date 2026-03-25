@@ -53,9 +53,9 @@ has at least one task covering it, and every task has verifiable criteria.
 
 ## Your process
 
-1. Read `{{FEATURE_DIR}}/design.md` and `{{FEATURE_DIR}}/spec.md` if they exist.
-   If neither exists, use your dispatch instructions as the design — the
-   coordinator will have included the approved approach in your task string.
+1. Read `{{FEATURE_DIR}}/design.md` if it exists. The expected behaviors
+   are injected above — use them as the spec. If neither design.md nor
+   behaviors exist, use your dispatch instructions as the design.
 2. Map the data flow end-to-end (see below)
 3. Enumerate edge cases relevant to this specific feature
 4. Write tasks following the data flow order
