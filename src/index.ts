@@ -25,7 +25,14 @@ import type {
 import type { Theme, ThemeColor } from '@mariozechner/pi-coding-agent';
 
 import { executeDispatch } from './dispatch.js';
-import { findFlowDir, readStateFile } from './state.js';
+import {
+  findFlowDir,
+  readStateFile,
+  generateSessionId,
+  ensureSessionDir,
+  readSessionFile,
+  writeSessionFile,
+} from './state.js';
 import { discoverAgents } from './agents.js';
 import { discoverSkills } from './skills.js';
 import { buildCoordinatorPrompt } from './prompt.js';
@@ -37,7 +44,7 @@ import {
 } from './rendering.js';
 import { hashToolCall, detectLoop } from './guardrails.js';
 import { shouldBlockToolCall } from './tool-blocking.js';
-import type { FlowDispatchDetails, FlowState } from './types.js';
+import type { FlowDispatchDetails, FlowState, SessionState } from './types.js';
 
 // ─── Module-level state ───────────────────────────────────────────────────────
 
@@ -45,56 +52,43 @@ const loopHistory: Array<{ tool: string; argsHash: string }> = [];
 const LOOP_WINDOW = 10;
 const LOOP_THRESHOLD = 3;
 
-// ─── Active feature finder ───────────────────────────────────────────────────
+// Session isolation: each pi process gets a unique session ID.
+// Feature is null until explicitly set by the first dispatch with a feature param.
+let sessionId: string | null = null;
+let sessionDir: string | null = null;
+let sessionFeature: string | null = null;
 
-function findActiveFeature(cwd: string): { state: FlowState; featureDir: string } | null {
-  const flowDir = findFlowDir(cwd);
-  if (!flowDir) return null;
+// ─── Session initialization ──────────────────────────────────────────────────
 
-  const featuresDir = path.join(flowDir, 'features');
-  let entries: string[];
-  try {
-    entries = fs.readdirSync(featuresDir);
-  } catch {
-    return null;
-  }
-
-  // Return the most recently updated feature
-  let latest: { state: FlowState; featureDir: string } | null = null;
-  let latestTime = 0;
-
-  for (const entry of entries) {
-    const featureDir = path.join(featuresDir, entry);
-    try {
-      if (!fs.statSync(featureDir).isDirectory()) continue;
-    } catch {
-      continue;
-    }
-    const state = readStateFile(featureDir);
-    if (!state) continue;
-    const time = new Date(state.last_updated).getTime();
-    if (time > latestTime) {
-      latestTime = time;
-      latest = { state, featureDir };
-    }
-  }
-
-  return latest;
+function initSession(cwd: string): void {
+  if (sessionId) return; // already initialized
+  sessionId = generateSessionId();
+  sessionDir = ensureSessionDir(cwd, sessionId);
+  const state: SessionState = {
+    session_id: sessionId,
+    started_at: new Date().toISOString(),
+    last_updated: new Date().toISOString(),
+    feature: null,
+    budget: { total_tokens: 0, total_cost_usd: 0 },
+  };
+  writeSessionFile(sessionDir, state);
 }
 
 // ─── Status helpers ──────────────────────────────────────────────────────────
 
-function formatStatus(state: FlowState): string {
-  return [
-    `Feature: ${state.feature}`,
-    `Tokens:  ${state.budget.total_tokens.toLocaleString()}`,
-    `Cost:    $${state.budget.total_cost_usd.toFixed(4)}`,
-  ].join('\n');
+function formatSessionStatus(): string {
+  const lines = [`Session: ${sessionId ?? '(none)'}`];
+  if (sessionFeature) {
+    lines.push(`Feature: ${sessionFeature}`);
+  } else {
+    lines.push('Feature: (none — ad-hoc mode)');
+  }
+  return lines.join('\n');
 }
 
-function updateFooterStatus(state: FlowState, ui: ExtensionContext['ui']): void {
-  const cost = `$${state.budget.total_cost_usd.toFixed(2)}`;
-  ui.setStatus('pi-flow', `● ${state.feature}  |  ${cost}`);
+function updateFooterStatus(ui: ExtensionContext['ui']): void {
+  const label = sessionFeature ?? 'ad-hoc';
+  ui.setStatus('pi-flow', `● ${label}`);
 }
 
 // ─── Extension entry point ────────────────────────────────────────────────────
@@ -112,13 +106,15 @@ export default function piFlow(pi: ExtensionAPI) {
       'Dispatch specialized agents. Modes: single (agent+task), ' +
       'parallel (concurrent scouts), chain (sequential with {previous}).',
     promptSnippet:
-      'Dispatch specialized subagents: scout (read-only analysis), ' +
-      'planner (task breakdown), builder (TDD implementation), ' +
-      'reviewer (spec compliance + security). ' +
-      'Feature is auto-inferred from active feature.',
+      'Dispatch specialized subagents: scout (read-only code analysis), ' +
+      'probe (runtime investigation), planner (task breakdown), ' +
+      'test-writer (writes failing tests — RED), ' +
+      'builder (writes implementation — GREEN), ' +
+      'doc-writer (documentation), reviewer (spec compliance + security). ' +
+      'Feature must be explicitly set on first dispatch.',
     parameters: Type.Object({
       agent: Type.Optional(
-        Type.String({ description: 'Agent name (scout/planner/builder/reviewer)' }),
+        Type.String({ description: 'Agent name (scout/probe/planner/test-writer/builder/doc-writer/reviewer)' }),
       ),
       task: Type.Optional(Type.String({ description: 'Task description' })),
       parallel: Type.Optional(
@@ -164,21 +160,30 @@ export default function piFlow(pi: ExtensionAPI) {
       onUpdate: AgentToolUpdateCallback<FlowDispatchDetails> | undefined,
       ctx: ExtensionContext,
     ) {
-      // Infer feature from active state if not provided
-      const activeFeature = findActiveFeature(ctx.cwd);
-      const feature = params.feature ?? activeFeature?.state.feature;
-      if (!feature) {
-        return {
-          content: [
-            { type: 'text' as const, text: 'No active feature. Provide a feature name to start.' },
-          ],
-          details: { mode: 'single' as const, feature: 'unknown', results: [] },
-          isError: true,
-        };
+      // Initialize session on first dispatch
+      initSession(ctx.cwd);
+
+      // Bind feature to session when explicitly provided
+      if (params.feature) {
+        sessionFeature = params.feature;
+        // Update session file with feature binding
+        if (sessionDir) {
+          const existing = readSessionFile(sessionDir);
+          if (existing) {
+            writeSessionFile(sessionDir, {
+              ...existing,
+              feature: sessionFeature,
+              last_updated: new Date().toISOString(),
+            });
+          }
+        }
       }
 
+      // Use session-bound feature if no explicit feature in this call
+      const feature = params.feature ?? sessionFeature ?? undefined;
+
       const result = await executeDispatch(
-        { ...params, feature },
+        { ...params, feature, sessionDir: sessionDir ?? undefined },
         ctx.cwd,
         rootDir,
         signal,
@@ -194,12 +199,7 @@ export default function piFlow(pi: ExtensionAPI) {
 
       // Update footer status
       if (ctx.hasUI) {
-        const flowDir = findFlowDir(ctx.cwd);
-        if (flowDir) {
-          const featureDir = path.join(flowDir, 'features', feature);
-          const state = readStateFile(featureDir);
-          if (state) updateFooterStatus(state, ctx.ui);
-        }
+        updateFooterStatus(ctx.ui);
       }
 
       return result;
@@ -261,18 +261,9 @@ export default function piFlow(pi: ExtensionAPI) {
   // ─── 2. Commands ────────────────────────────────────────────────────────────
 
   pi.registerCommand('flow', {
-    description: 'Show pi-flow status',
-    handler: async (_: string, ctx: ExtensionCommandContext) => {
-      const active = findActiveFeature(ctx.cwd);
-      if (!active) {
-        pi.sendMessage({
-          customType: 'pi-flow-status',
-          content: 'No active pi-flow feature.',
-          display: true,
-        });
-        return;
-      }
-      const summary = formatStatus(active.state);
+    description: 'Show pi-flow session status',
+    handler: async () => {
+      const summary = formatSessionStatus();
       pi.sendMessage({
         customType: 'pi-flow-status',
         content: `[Flow Status]\n\n${summary}`,
@@ -288,7 +279,15 @@ export default function piFlow(pi: ExtensionAPI) {
     try {
       const agents = discoverAgents(rootDir, ctx.cwd);
       const skills = discoverSkills(rootDir, ctx.cwd);
-      const active = findActiveFeature(ctx.cwd);
+
+      // Build active feature context for coordinator prompt
+      let active: { state: FlowState; featureDir: string } | null = null;
+      if (sessionFeature) {
+        const featureDir = path.join(ctx.cwd, '.flow', 'features', sessionFeature);
+        const state = readStateFile(featureDir);
+        if (state) active = { state, featureDir };
+      }
+
       const prompt = buildCoordinatorPrompt(agents, skills, active);
       return { systemPrompt: event.systemPrompt + '\n\n' + prompt };
     } catch {
@@ -305,12 +304,12 @@ export default function piFlow(pi: ExtensionAPI) {
     loopHistory.length = 0;
   });
 
-  // session_start — restore footer status
+  // session_start — no feature recovery (new session = blank slate)
   pi.on('session_start', async (_: SessionStartEvent, ctx: ExtensionContext) => {
+    // Session starts blank — no feature bound, no recovery from filesystem.
+    // The user must explicitly provide a feature on first dispatch.
     if (!ctx.hasUI) return;
-    const active = findActiveFeature(ctx.cwd);
-    if (!active) return;
-    updateFooterStatus(active.state, ctx.ui);
+    updateFooterStatus(ctx.ui);
   });
 
   // tool_call — enforce coordinator write restrictions + loop detection

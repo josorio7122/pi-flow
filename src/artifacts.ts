@@ -15,10 +15,10 @@ import * as path from 'node:path';
 import type { FlowAgentConfig } from './types.js';
 
 /** Agents that write their own files — the extension should NOT overwrite their output. */
-const SELF_WRITING_AGENTS = new Set(['builder']);
+const SELF_WRITING_AGENTS = new Set(['builder', 'test-writer', 'doc-writer']);
 
 /** Agents whose output is appended (not overwritten) to support parallel dispatch. */
-const APPEND_AGENTS = new Set(['scout']);
+const APPEND_AGENTS = new Set(['scout', 'probe']);
 
 /**
  * Writes an agent's output to the appropriate artifact file in featureDir.

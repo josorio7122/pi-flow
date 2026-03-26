@@ -23,12 +23,27 @@ import {
   ensureFeatureDir,
   appendProgressLog,
   writeCheckpoint,
+  writeFinding,
+  writeSessionDispatchLog,
 } from './state.js';
 import { writeArtifact } from './artifacts.js';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
 export type OnUpdateCallback = (partial: DispatchResult) => void;
+
+// ─── Feature-requiring agents ─────────────────────────────────────────────────
+
+/** Agents that produce feature-scoped artifacts and require a bound feature. */
+const FEATURE_REQUIRED_AGENTS = new Set(['builder', 'test-writer', 'doc-writer', 'planner', 'reviewer']);
+
+/**
+ * Returns true when the given agent name requires an active feature to dispatch.
+ * Scout and probe can run featureless (ad-hoc investigation).
+ */
+export function requiresFeature(agentName: string): boolean {
+  return FEATURE_REQUIRED_AGENTS.has(agentName);
+}
 
 // ─── Pure helpers (exported for testing) ──────────────────────────────────────
 
@@ -77,11 +92,13 @@ async function executeSingle(
   task: string,
   cwd: string,
   variableMap: Record<string, string>,
-  feature: string,
+  feature: string | undefined,
+  sessionDir: string | undefined,
   signal?: AbortSignal,
   onUpdate?: OnUpdateCallback,
 ): Promise<SingleAgentResult> {
-  const buildDetailsForUpdate = makeDetails('single', feature);
+  const featureLabel = feature ?? 'ad-hoc';
+  const buildDetailsForUpdate = makeDetails('single', featureLabel);
 
   if (onUpdate) {
     onUpdate({
@@ -101,13 +118,27 @@ async function executeSingle(
 
   const result = await spawnAgentWithRetry(cwd, agent, task, variableMap, signal, onAgentUpdate);
 
-  const flowDir = path.join(cwd, '.flow');
-  writeDispatchLog(flowDir, feature, {
-    agent: agent.name,
-    task,
-    exitCode: result.exitCode,
-    usage: result.usage,
-  });
+  // Session-scoped dispatch log
+  if (sessionDir) {
+    writeSessionDispatchLog(sessionDir, {
+      agent: agent.name,
+      task,
+      feature: feature ?? null,
+      exitCode: result.exitCode,
+      usage: result.usage,
+    });
+  }
+
+  // Feature-scoped dispatch log (legacy, for feature audit trail)
+  if (feature) {
+    const flowDir = path.join(cwd, '.flow');
+    writeDispatchLog(flowDir, feature, {
+      agent: agent.name,
+      task,
+      exitCode: result.exitCode,
+      usage: result.usage,
+    });
+  }
 
   return result;
 }
@@ -117,11 +148,13 @@ async function executeParallel(
   cwd: string,
   variableMap: Record<string, string>,
   maxWorkers: number,
-  feature: string,
+  feature: string | undefined,
+  sessionDir: string | undefined,
   signal?: AbortSignal,
   onUpdate?: OnUpdateCallback,
 ): Promise<SingleAgentResult[]> {
-  const buildDetailsForUpdate = makeDetails('parallel', feature);
+  const featureLabel = feature ?? 'ad-hoc';
+  const buildDetailsForUpdate = makeDetails('parallel', featureLabel);
 
   const results: SingleAgentResult[] = agentTasks.map(({ agent, task }) =>
     emptyResult(agent, task),
@@ -151,13 +184,25 @@ async function executeParallel(
     const result = await spawnAgentWithRetry(cwd, agent, task, variableMap, signal, onAgentUpdate);
     results[index] = result;
 
-    const flowDir = path.join(cwd, '.flow');
-    writeDispatchLog(flowDir, feature, {
-      agent: agent.name,
-      task,
-      exitCode: result.exitCode,
-      usage: result.usage,
-    });
+    if (sessionDir) {
+      writeSessionDispatchLog(sessionDir, {
+        agent: agent.name,
+        task,
+        feature: feature ?? null,
+        exitCode: result.exitCode,
+        usage: result.usage,
+      });
+    }
+
+    if (feature) {
+      const flowDir = path.join(cwd, '.flow');
+      writeDispatchLog(flowDir, feature, {
+        agent: agent.name,
+        task,
+        exitCode: result.exitCode,
+        usage: result.usage,
+      });
+    }
 
     return result;
   });
@@ -169,12 +214,13 @@ async function executeChain(
   steps: Array<{ agent: FlowAgentConfig; task: string }>,
   cwd: string,
   variableMap: Record<string, string>,
-  feature: string,
+  feature: string | undefined,
+  sessionDir: string | undefined,
   signal?: AbortSignal,
   onUpdate?: OnUpdateCallback,
 ): Promise<SingleAgentResult[]> {
-  const buildDetailsForUpdate = makeDetails('chain', feature);
-  const flowDir = path.join(cwd, '.flow');
+  const featureLabel = feature ?? 'ad-hoc';
+  const buildDetailsForUpdate = makeDetails('chain', featureLabel);
 
   const allResults: SingleAgentResult[] = steps.map(({ agent, task: rawTask }) =>
     emptyResult(agent, rawTask),
@@ -215,13 +261,27 @@ async function executeChain(
     allResults[i] = result;
     completedResults.push(result);
 
-    writeDispatchLog(flowDir, feature, {
-      agent: agent.name,
-      task,
-      step: i + 1,
-      exitCode: result.exitCode,
-      usage: result.usage,
-    });
+    if (sessionDir) {
+      writeSessionDispatchLog(sessionDir, {
+        agent: agent.name,
+        task,
+        step: i + 1,
+        feature: feature ?? null,
+        exitCode: result.exitCode,
+        usage: result.usage,
+      });
+    }
+
+    if (feature) {
+      const flowDir = path.join(cwd, '.flow');
+      writeDispatchLog(flowDir, feature, {
+        agent: agent.name,
+        task,
+        step: i + 1,
+        exitCode: result.exitCode,
+        usage: result.usage,
+      });
+    }
 
     if (onUpdate) {
       onUpdate({
@@ -243,9 +303,10 @@ async function executeChain(
 
 // ─── State helpers ────────────────────────────────────────────────────────────
 
-function initializeState(cwd: string, featureDir: string, feature: string): FlowState | null {
+function initializeState(cwd: string, feature: string): { featureDir: string; state: FlowState } | null {
+  const featureDir = path.join(cwd, '.flow', 'features', feature);
   const existing = readStateFile(featureDir);
-  if (existing) return existing;
+  if (existing) return { featureDir, state: existing };
 
   try {
     ensureFeatureDir(cwd, feature);
@@ -256,7 +317,7 @@ function initializeState(cwd: string, featureDir: string, feature: string): Flow
       budget: { total_tokens: 0, total_cost_usd: 0 },
     };
     writeStateFile(featureDir, fresh);
-    return fresh;
+    return { featureDir, state: fresh };
   } catch {
     return null;
   }
@@ -302,8 +363,9 @@ function updateBudget(
 
 // ─── Artifact write-back ──────────────────────────────────────────────────────
 
-function writeArtifacts(
-  featureDir: string,
+function writeArtifactsAndFindings(
+  featureDir: string | undefined,
+  sessionDir: string | undefined,
   agents: FlowAgentConfig[],
   results: SingleAgentResult[],
   resolvedTasks: Array<{ agent: FlowAgentConfig; task: string }>,
@@ -315,10 +377,23 @@ function writeArtifacts(
     if (!agent) continue;
     const output = getFinalOutput(result.messages);
     if (!output) continue;
-    try {
-      writeArtifact(featureDir, agent, output, result.task);
-    } catch {
-      /* artifact write failure is non-fatal */
+
+    // Session-scoped findings (scout/probe output always saved per-session)
+    if (sessionDir) {
+      try {
+        writeFinding(sessionDir, agent.name, result.task, output);
+      } catch {
+        /* finding write failure is non-fatal */
+      }
+    }
+
+    // Feature-scoped artifacts (only when feature is bound)
+    if (featureDir) {
+      try {
+        writeArtifact(featureDir, agent, output, result.task);
+      } catch {
+        /* artifact write failure is non-fatal */
+      }
     }
   }
 }
@@ -367,12 +442,37 @@ export async function executeDispatch(
       );
     }
 
+    // Feature enforcement: check if any dispatched agent requires a feature
+    const feature = params.feature;
+    const sessionDir = params.sessionDir;
+    const agentNames = collectAgentNames(params);
+
+    for (const name of agentNames) {
+      if (requiresFeature(name) && !feature) {
+        return errorResult(
+          `Agent '${name}' requires an active feature. ` +
+          `Provide a feature name: dispatch_flow({ feature: "my-feature", ... })`,
+          params,
+        );
+      }
+    }
+
     const config = loadConfig(cwd);
-    const feature = params.feature ?? 'default';
-    const featureDir = path.join(cwd, '.flow', 'features', feature);
-    const currentState = initializeState(cwd, featureDir, feature);
+
+    // Initialize feature state only when feature is provided
+    let featureDir: string | undefined;
+    let currentState: FlowState | null = null;
+    if (feature) {
+      const init = initializeState(cwd, feature);
+      featureDir = init?.featureDir;
+      currentState = init?.state ?? null;
+    }
+
     const agents = discoverAgents(extensionDir, cwd);
-    const variableMap = buildVariableMap(cwd, featureDir);
+    // Use feature dir for variable map when available, fall back to a temp-like path
+    const variableDir = featureDir ?? path.join(cwd, '.flow', 'sessions', 'ad-hoc');
+    const variableMap = buildVariableMap(cwd, variableDir);
+    const featureLabel = feature ?? 'ad-hoc';
 
     if (hasParallel) {
       const resolved = resolveAgentTasks(params.parallel!, agents);
@@ -384,12 +484,13 @@ export async function executeDispatch(
         variableMap,
         config.concurrency.max_workers,
         feature,
+        sessionDir,
         signal,
         onUpdate,
       );
-      const details = makeDetails('parallel', feature)(results);
-      updateBudget(featureDir, currentState, results);
-      writeArtifacts(featureDir, agents, results, resolved.resolved);
+      const details = makeDetails('parallel', featureLabel)(results);
+      if (featureDir) updateBudget(featureDir, currentState, results);
+      writeArtifactsAndFindings(featureDir, sessionDir, agents, results, resolved.resolved);
       return { content: buildContent(results), details };
     }
 
@@ -402,12 +503,13 @@ export async function executeDispatch(
         cwd,
         variableMap,
         feature,
+        sessionDir,
         signal,
         onUpdate,
       );
-      const details = makeDetails('chain', feature)(results);
-      updateBudget(featureDir, currentState, results);
-      writeArtifacts(featureDir, agents, results, resolved.resolved);
+      const details = makeDetails('chain', featureLabel)(results);
+      if (featureDir) updateBudget(featureDir, currentState, results);
+      writeArtifactsAndFindings(featureDir, sessionDir, agents, results, resolved.resolved);
       return { content: buildContent(results), details };
     }
 
@@ -421,13 +523,25 @@ export async function executeDispatch(
     }
 
     const task = params.task!;
-    const result = await executeSingle(agent, task, cwd, variableMap, feature, signal, onUpdate);
-    const details = makeDetails('single', feature)([result]);
-    updateBudget(featureDir, currentState, [result]);
-    writeArtifacts(featureDir, agents, [result], [{ agent, task }]);
+    const result = await executeSingle(
+      agent, task, cwd, variableMap, feature, sessionDir, signal, onUpdate,
+    );
+    const details = makeDetails('single', featureLabel)([result]);
+    if (featureDir) updateBudget(featureDir, currentState, [result]);
+    writeArtifactsAndFindings(featureDir, sessionDir, agents, [result], [{ agent, task }]);
     return { content: buildContent([result]), details };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return errorResult(message, params);
   }
+}
+
+/**
+ * Extracts all agent names from dispatch params (single, parallel, or chain).
+ */
+function collectAgentNames(params: DispatchParams): string[] {
+  if (params.agent) return [params.agent];
+  if (params.parallel) return params.parallel.map((p) => p.agent);
+  if (params.chain) return params.chain.map((c) => c.agent);
+  return [];
 }

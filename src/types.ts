@@ -35,6 +35,16 @@ export interface FlowState {
   budget: { total_tokens: number; total_cost_usd: number };
 }
 
+// ─── Session state — per-process isolation ────────────────────────────────────
+
+export interface SessionState {
+  session_id: string;
+  started_at: string;
+  last_updated: string;
+  feature: string | null; // null = featureless (ad-hoc scouting)
+  budget: { total_tokens: number; total_cost_usd: number };
+}
+
 // ─── Config from config.yaml ──────────────────────────────────────────────────
 
 export interface FlowConfig {
@@ -53,6 +63,7 @@ export interface DispatchParams {
   parallel?: Array<{ agent: string; task: string }>;
   chain?: Array<{ agent: string; task: string }>;
   feature?: string;
+  sessionDir?: string;
 }
 
 export interface DispatchResult {

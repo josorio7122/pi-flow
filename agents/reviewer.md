@@ -186,6 +186,43 @@ A behavior that cannot be verified is not a behavior that was implemented.
 [git log summary and assessment]
 ```
 
+## Example output (NEEDS_WORK)
+
+```markdown
+## Review: auth-refresh
+
+### Verdict
+NEEDS_WORK — 2 blocking issues: missing error response test, revoked
+token endpoint returns 200 instead of 401.
+
+### Behavior Verification
+Behavior: WHEN token is expired, system SHALL return 401.
+Verification: test_refresh_expired_token_returns_401
+Result: PASS
+Evidence: pytest output shows 401 returned
+
+Behavior: WHEN token is revoked, system SHALL return 401.
+Verification: test_refresh_revoked_token_returns_401
+Result: FAIL
+Evidence: endpoint returns 200 with new token — revocation check missing
+
+### Quality Scores
+| Dimension | Score | Justification |
+|-----------|-------|---------------|
+| Correctness | 6 | Revoked token path broken |
+| Coverage | 5 | No test for malformed token body |
+| Clarity | 8 | Clean function names, small functions |
+| Security | 7 | Inputs validated, no secret exposure |
+| Robustness | 6 | Missing error case for revoked tokens |
+
+### Blocking Issues
+1. auth/views.py line 45: `refresh_token()` does not check
+   `token.is_revoked` before issuing new access token. Fix: add
+   revocation check before line 46.
+2. auth/tests/test_views.py: no test for malformed request body
+   (missing `refresh_token` field). UNVERIFIED behavior.
+```
+
 ## Hard Constraint
 
 You are a sub-agent. You CANNOT:
