@@ -6,7 +6,7 @@
 import type { Theme } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import type { AgentDetails } from "../../ui/formatters.js";
-import { formatMs, formatTurns, getDisplayName, SPINNER } from "../../ui/formatters.js";
+import { firstMeaningfulLine, formatMs, formatTurns, getDisplayName, SPINNER } from "../../ui/formatters.js";
 import type { Registry } from "../registry.js";
 
 function buildStats(d: AgentDetails, theme: Theme) {
@@ -57,8 +57,7 @@ export function renderAgentResult(
     let line = theme.fg("accent", frame) + (s ? " " + s : "");
     line += "\n" + theme.fg("dim", `  ⎿  ${details.activity ?? "thinking…"}`);
     if (details.responseText) {
-      const lines = details.responseText.trim().split("\n");
-      const tail = lines.slice(-10);
+      const tail = details.responseText.trim().split("\n").slice(-3);
       for (const l of tail) line += "\n" + theme.fg("dim", `     ${l}`);
     }
     return new Text(line, 0, 0);
@@ -86,8 +85,9 @@ export function renderAgentResult(
         }
       }
     } else {
-      const doneText = isSteered ? "Wrapped up (turn limit)" : "Done";
-      line += "\n" + theme.fg("dim", `  ⎿  ${doneText}`);
+      const resultText = result.content[0]?.type === "text" ? result.content[0].text : undefined;
+      const summary = isSteered ? "Wrapped up (turn limit)" : (firstMeaningfulLine(resultText ?? "") ?? "Done");
+      line += "\n" + theme.fg("dim", `  ⎿  ${summary}`);
     }
     return new Text(line, 0, 0);
   }

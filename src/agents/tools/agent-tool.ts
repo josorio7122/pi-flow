@@ -16,7 +16,6 @@ import {
   describeActivity,
   formatMs,
   getDisplayName,
-  getPromptModeLabel,
   SPINNER,
 } from "../../ui/formatters.js";
 import type { AgentWidget } from "../../ui/widget.js";
@@ -132,8 +131,6 @@ Guidelines:
           ? (model?.name ?? effectiveModelId).replace(/^Claude\s+/i, "").toLowerCase()
           : undefined;
       const agentTags: string[] = [];
-      const modeLabel = getPromptModeLabel(customConfig?.promptMode);
-      if (modeLabel) agentTags.push(modeLabel);
       if (thinking) agentTags.push(`thinking: ${thinking}`);
       if (isolated) agentTags.push("isolated");
       if (isolation === "worktree") agentTags.push("worktree");

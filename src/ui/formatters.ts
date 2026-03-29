@@ -86,6 +86,16 @@ export function getPromptModeLabel(promptMode?: "replace" | "append") {
   return promptMode === "append" ? "append" : undefined;
 }
 
+/** Extract the first non-empty, non-heading line from agent output. */
+export function firstMeaningfulLine(text: string, maxLen = 80) {
+  for (const raw of text.split("\n")) {
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    return trimmed.length > maxLen ? `${trimmed.slice(0, maxLen - 1)}…` : trimmed;
+  }
+  return undefined;
+}
+
 /** Build a human-readable activity description from active tools and response text. */
 export function describeActivity(activeTools: Map<string, string>, responseText?: string) {
   if (activeTools.size > 0) {
