@@ -237,6 +237,7 @@ Guidelines:
           durationMs: Date.now() - startedAt,
           status: "running",
           activity: describeActivity(fgState.activeTools, fgState.responseText),
+          responseText: fgState.responseText,
           spinnerFrame: spinnerFrame % SPINNER.length,
         };
         onUpdate?.({ content: [{ type: "text", text: `${fgState.toolUses} tool uses...` }], details });

@@ -56,6 +56,11 @@ export function renderAgentResult(
     const s = buildStats(details, theme);
     let line = theme.fg("accent", frame) + (s ? " " + s : "");
     line += "\n" + theme.fg("dim", `  ⎿  ${details.activity ?? "thinking…"}`);
+    if (details.responseText) {
+      const lines = details.responseText.trim().split("\n");
+      const tail = lines.slice(-10);
+      for (const l of tail) line += "\n" + theme.fg("dim", `     ${l}`);
+    }
     return new Text(line, 0, 0);
   }
 

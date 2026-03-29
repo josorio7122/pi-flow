@@ -49,6 +49,8 @@ export interface AgentDetails {
   maxTurns?: number | undefined;
   agentId?: string | undefined;
   error?: string | undefined;
+  /** Full streaming response text for live preview. */
+  responseText?: string | undefined;
 }
 
 /** Format a token count compactly: "33.8k token", "1.2M token". */
