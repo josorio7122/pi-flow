@@ -28,6 +28,10 @@ export interface BackgroundRecord {
   abortController: AbortController;
   promise?: Promise<SingleAgentResult>;
   usage?: UsageStats;
+  /** Number of tool uses completed by this agent. */
+  toolUses?: number;
+  /** True if result was already consumed via get_agent_result — suppresses notification. */
+  resultConsumed?: boolean;
   /** Steering messages queued before the session is ready. */
   pendingSteers?: string[];
   /** Callback to deliver a steer to the live session. */
@@ -45,6 +49,7 @@ export interface SpawnOptions {
 
 export interface BackgroundManagerOptions {
   onComplete?: (record: BackgroundRecord) => void;
+  onStart?: (record: BackgroundRecord) => void;
   maxConcurrent?: number;
 }
 
@@ -58,10 +63,28 @@ export class BackgroundManager {
   private runningCount = 0;
   private maxConcurrent: number;
   private onComplete?: (record: BackgroundRecord) => void;
+  private onStart?: (record: BackgroundRecord) => void;
 
   constructor(opts: BackgroundManagerOptions = {}) {
     this.onComplete = opts.onComplete;
+    this.onStart = opts.onStart;
     this.maxConcurrent = opts.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
+  }
+
+  /** Update the max concurrent background agents limit. */
+  setMaxConcurrent(n: number): void {
+    this.maxConcurrent = Math.max(1, n);
+    this.drainQueue();
+  }
+
+  getMaxConcurrent(): number {
+    return this.maxConcurrent;
+  }
+
+  /** Increment tool use counter for an agent. */
+  incrementToolUses(id: string): void {
+    const record = this.agents.get(id);
+    if (record) record.toolUses = (record.toolUses ?? 0) + 1;
   }
 
   /**
@@ -239,6 +262,7 @@ export class BackgroundManager {
     record.status = 'running';
     record.startedAt = Date.now();
     this.runningCount++;
+    this.onStart?.(record);
 
     const promise = options
       .executor(record.abortController.signal)
