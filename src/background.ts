@@ -36,6 +36,22 @@ export interface BackgroundRecord {
   pendingSteers?: string[];
   /** Callback to deliver a steer to the live session. */
   steerFn?: (message: string) => Promise<void>;
+  /** Reference to the live agent session (for resume, stats, conversation). */
+  session?: unknown;
+  /** The tool_use_id from the original dispatch tool call. */
+  toolCallId?: string;
+  /** Path to the streaming output transcript file. */
+  outputFile?: string;
+  /** Cleanup function for the output file stream subscription. */
+  outputCleanup?: () => void;
+  /** Group ID for batched notifications. */
+  groupId?: string;
+  /** Join mode for notification batching. */
+  joinMode?: 'async' | 'group' | 'smart';
+  /** Worktree info if the agent is running in isolation. */
+  worktreeInfo?: { path: string; branch: string };
+  /** Worktree cleanup result after completion. */
+  worktreeResult?: { hasChanges: boolean; branch?: string };
 }
 
 export interface SpawnOptions {
@@ -64,11 +80,23 @@ export class BackgroundManager {
   private maxConcurrent: number;
   private onComplete?: (record: BackgroundRecord) => void;
   private onStart?: (record: BackgroundRecord) => void;
+  private cleanupInterval: ReturnType<typeof setInterval>;
 
   constructor(opts: BackgroundManagerOptions = {}) {
     this.onComplete = opts.onComplete;
     this.onStart = opts.onStart;
     this.maxConcurrent = opts.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
+    // Auto-cleanup completed agents after 10 minutes
+    this.cleanupInterval = setInterval(() => this.autoCleanup(), 60_000);
+  }
+
+  private autoCleanup(): void {
+    const cutoff = Date.now() - 10 * 60_000;
+    for (const [id, record] of this.agents) {
+      if (record.status === 'running' || record.status === 'queued') continue;
+      if ((record.completedAt ?? 0) >= cutoff) continue;
+      this.agents.delete(id);
+    }
   }
 
   /** Update the max concurrent background agents limit. */
@@ -251,6 +279,7 @@ export class BackgroundManager {
   }
 
   dispose(): void {
+    clearInterval(this.cleanupInterval);
     this.abortAll();
     this.agents.clear();
     this.queue = [];
@@ -273,6 +302,15 @@ export class BackgroundManager {
         record.result = result;
         record.usage = result.usage;
         record.completedAt = Date.now();
+        // Final flush of output transcript
+        if (record.outputCleanup) {
+          try {
+            record.outputCleanup();
+          } catch {
+            /* ignore */
+          }
+          record.outputCleanup = undefined;
+        }
         this.runningCount--;
         this.onComplete?.(record);
         this.drainQueue();
@@ -284,6 +322,14 @@ export class BackgroundManager {
           record.error = err instanceof Error ? err.message : String(err);
         }
         record.completedAt = Date.now();
+        if (record.outputCleanup) {
+          try {
+            record.outputCleanup();
+          } catch {
+            /* ignore */
+          }
+          record.outputCleanup = undefined;
+        }
         this.runningCount--;
         this.onComplete?.(record);
         this.drainQueue();

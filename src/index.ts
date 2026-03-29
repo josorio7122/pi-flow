@@ -44,6 +44,7 @@ import { shouldBlockToolCall } from './tool-blocking.js';
 import type { FlowDispatchDetails, FlowState, SessionState } from './types.js';
 import { BackgroundManager, GroupJoinManager } from './background.js';
 import { getFinalOutput } from './result-utils.js';
+import { getAgentConversation } from './context.js';
 import { pruneWorktrees } from './worktree.js';
 
 // ─── Module-level state ───────────────────────────────────────────────────────
@@ -322,6 +323,9 @@ export default function piFlow(pi: ExtensionAPI) {
   const gjm = groupJoinManager;
   backgroundManager = new BackgroundManager({
     onComplete: (record) => {
+      // Skip notification if result was already consumed via get_agent_result
+      if (record.resultConsumed) return;
+
       // Route through group join or send individual notification
       if (record.result) {
         const joinResult = gjm.onAgentComplete(record.id, record.result);
@@ -362,10 +366,16 @@ export default function piFlow(pi: ExtensionAPI) {
           description: 'If true, wait for the agent to complete. Default: false.',
         }),
       ),
+      verbose: Type.Optional(
+        Type.Boolean({
+          description:
+            'If true, include the full agent conversation (messages + tool calls). Default: false.',
+        }),
+      ),
     }),
     async execute(
       _: string,
-      params: { agent_id: string; wait?: boolean },
+      params: { agent_id: string; wait?: boolean; verbose?: boolean },
       _signal: AbortSignal | undefined,
       _onUpdate: unknown,
       _ctx: ExtensionContext,
@@ -399,10 +409,17 @@ export default function piFlow(pi: ExtensionAPI) {
         record.promise &&
         (record.status === 'running' || record.status === 'queued')
       ) {
+        // Pre-mark consumed before await to suppress completion notification
+        record.resultConsumed = true;
         await record.promise.catch(() => {});
       }
 
-      const output =
+      // Mark as consumed to suppress notification
+      if (record.status !== 'running' && record.status !== 'queued') {
+        record.resultConsumed = true;
+      }
+
+      let output =
         `Agent: ${record.id}\n` +
         `Type: ${record.agent.name} | Status: ${record.status}\n` +
         `Description: ${record.description}\n\n` +
@@ -413,6 +430,16 @@ export default function piFlow(pi: ExtensionAPI) {
             : record.result
               ? getFinalOutput(record.result.messages) || 'No output.'
               : 'No output.');
+
+      // Verbose: include full conversation
+      if (params.verbose && record.result) {
+        const conversation = getAgentConversation(
+          record.result.messages as Array<{ role: string; content: unknown }>,
+        );
+        if (conversation) {
+          output += `\n\n--- Agent Conversation ---\n${conversation}`;
+        }
+      }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AgentToolResult requires details
       return { content: [{ type: 'text' as const, text: output }], details: undefined as any };
