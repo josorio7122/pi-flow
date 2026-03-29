@@ -1,9 +1,4 @@
-/**
- * viewer.ts — Live conversation overlay for viewing agent sessions.
- *
- * Displays a scrollable, live-updating view of an agent's conversation.
- * Subscribes to session events for real-time streaming updates.
- */
+/** Live conversation overlay — scrollable, live-updating view of agent sessions. */
 
 import type { AgentSession, Theme, ThemeColor } from "@mariozechner/pi-coding-agent";
 import { type Component, matchesKey, type TUI, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
@@ -16,13 +11,22 @@ import { buildConversationLines } from "./viewer-content.js";
 const CHROME_LINES = 6;
 const MIN_VIEWPORT = 3;
 
+interface ViewerParams {
+  tui: TUI;
+  session: AgentSession;
+  record: AgentRecord;
+  activity: AgentActivity | undefined;
+  theme: Theme;
+  done: (result: undefined) => void;
+  registry: Registry;
+}
+
 export class ConversationViewer implements Component {
   private scrollOffset = 0;
   private autoScroll = true;
   private unsubscribe: (() => void) | undefined;
   private lastInnerW = 0;
   private closed = false;
-
   private tui: TUI;
   private session: AgentSession;
   private record: AgentRecord;
@@ -31,31 +35,15 @@ export class ConversationViewer implements Component {
   private done: (result: undefined) => void;
   private registry: Registry;
 
-  constructor({
-    tui,
-    session,
-    record,
-    activity,
-    theme,
-    done,
-    registry,
-  }: {
-    tui: TUI;
-    session: AgentSession;
-    record: AgentRecord;
-    activity: AgentActivity | undefined;
-    theme: Theme;
-    done: (result: undefined) => void;
-    registry: Registry;
-  }) {
-    this.tui = tui;
-    this.session = session;
-    this.record = record;
-    this.activity = activity;
-    this.theme = theme;
-    this.done = done;
-    this.registry = registry;
-    this.unsubscribe = session.subscribe(() => {
+  constructor(params: ViewerParams) {
+    this.tui = params.tui;
+    this.session = params.session;
+    this.record = params.record;
+    this.activity = params.activity;
+    this.theme = params.theme;
+    this.done = params.done;
+    this.registry = params.registry;
+    this.unsubscribe = params.session.subscribe(() => {
       if (this.closed) return;
       this.tui.requestRender();
     });

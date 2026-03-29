@@ -41,6 +41,14 @@ function handleRpc<P extends { requestId: string }>({
   fn: (params: P) => unknown | Promise<unknown>;
 }) {
   return events.on(channel, async (raw: unknown) => {
+    if (
+      typeof raw !== "object" ||
+      raw === null ||
+      !("requestId" in raw) ||
+      typeof (raw as Record<string, unknown>).requestId !== "string"
+    ) {
+      return;
+    }
     const params = raw as P;
     try {
       const data = await fn(params);

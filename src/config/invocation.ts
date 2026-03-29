@@ -18,19 +18,7 @@ interface AgentInvocationParams {
   isolation?: IsolationMode | undefined;
 }
 
-export function resolveAgentInvocationConfig(
-  agentConfig: AgentConfig | undefined,
-  params: AgentInvocationParams,
-): {
-  modelInput?: string | undefined;
-  modelFromParams: boolean;
-  thinking?: ThinkingLevel | undefined;
-  maxTurns?: number | undefined;
-  inheritContext: boolean;
-  runInBackground: boolean;
-  isolated: boolean;
-  isolation?: IsolationMode | undefined;
-} {
+export function resolveAgentInvocationConfig(agentConfig: AgentConfig | undefined, params: AgentInvocationParams) {
   return {
     modelInput: agentConfig?.model ?? params.model,
     modelFromParams: agentConfig?.model == null && params.model != null,
