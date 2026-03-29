@@ -7,13 +7,8 @@ import type { AgentSession, ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { resolveAgentInvocationConfig, resolveJoinMode } from "../../config/invocation.js";
 import { resolveModel } from "../../config/model-resolver.js";
-import {
-  buildDetails,
-  createActivityTracker,
-  getStatusNote,
-  safeFormatTokens,
-  textResult,
-} from "../../extension/helpers.js";
+import { createActivityTracker } from "../../extension/activity-tracker.js";
+import { buildDetails, getStatusNote, safeFormatTokens, textResult } from "../../extension/helpers.js";
 import { createOutputFilePath, streamToOutputFile, writeInitialEntry } from "../../infra/output-file.js";
 import type { SubagentType } from "../../types.js";
 import {

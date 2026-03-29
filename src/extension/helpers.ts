@@ -2,7 +2,6 @@
  * helpers.ts — Shared helpers for tool execution and agent tracking.
  */
 
-import type { AgentSession } from "@mariozechner/pi-coding-agent";
 import type { AgentRecord, NotificationDetails } from "../types.js";
 import { type AgentActivity, type AgentDetails, formatTokens } from "../ui/formatters.js";
 
@@ -22,58 +21,6 @@ export function safeFormatTokens(session: { getSessionStats(): { tokens: { total
   } catch {
     return "";
   }
-}
-
-/**
- * Create an AgentActivity state and spawn callbacks for tracking tool usage.
- * Used by both foreground and background paths to avoid duplication.
- */
-/** Mutates state in place — applies a tool activity event. */
-function applyToolActivity(state: AgentActivity, activity: { type: "start" | "end"; toolName: string }) {
-  if (activity.type === "start") {
-    state.activeTools.set(activity.toolName + "_" + Date.now(), activity.toolName);
-  } else {
-    for (const [key, name] of state.activeTools) {
-      if (name === activity.toolName) {
-        state.activeTools.delete(key);
-        break;
-      }
-    }
-    state.toolUses++;
-  }
-}
-
-export function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => void) {
-  const state: AgentActivity = {
-    activeTools: new Map(),
-    toolUses: 0,
-    turnCount: 1,
-    maxTurns,
-    tokens: "",
-    responseText: "",
-    session: undefined,
-  };
-
-  const callbacks = {
-    onToolActivity: (activity: { type: "start" | "end"; toolName: string }) => {
-      applyToolActivity(state, activity);
-      state.tokens = safeFormatTokens(state.session);
-      onStreamUpdate?.();
-    },
-    onTextDelta: (_delta: string, fullText: string) => {
-      state.responseText = fullText;
-      onStreamUpdate?.();
-    },
-    onTurnEnd: (turnCount: number) => {
-      state.turnCount = turnCount;
-      onStreamUpdate?.();
-    },
-    onSessionCreated: (session: AgentSession) => {
-      state.session = session;
-    },
-  };
-
-  return { state, callbacks };
 }
 
 /** Human-readable status label for agent completion. */
