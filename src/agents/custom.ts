@@ -1,4 +1,3 @@
-import { parseThinking } from "../config/invocation.js";
 /**
  * custom.ts — Load user-defined agents from project (.pi/agents/) and global (~/.pi/agent/agents/) locations.
  */
@@ -7,6 +6,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
+import { parseThinking } from "../config/invocation.js";
 import type { AgentConfig } from "../types.js";
 import { BUILTIN_TOOL_NAMES } from "./registry.js";
 
