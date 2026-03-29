@@ -279,11 +279,11 @@ export function createAgentManager({
       const responseText = await resumeAgent({
         session: record.session,
         prompt,
-        options: {
-          onToolActivity: (activity) => {
+        signal,
+        callbacks: {
+          onToolActivity: (activity: ToolActivity) => {
             if (activity.type === "end") record.toolUses++;
           },
-          ...(signal ? { signal } : {}),
         },
       });
       record.status = "completed";
