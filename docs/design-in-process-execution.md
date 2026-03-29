@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposal** — ready for review.
+**Implemented** — Phases 1-5 complete. Subprocess execution deleted.
 
 ## Problem
 

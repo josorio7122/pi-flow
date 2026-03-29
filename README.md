@@ -6,7 +6,7 @@ pi-flow replaces pi-crew with a spec-driven, adversarially-reviewed, memory-augm
 
 ## Status
 
-**Architecture phase** — the implementation spec is complete. Code is not yet written.
+**Active development** — core execution engine implemented with in-process agent sessions via pi's `createAgentSession()` SDK.
 
 ## Architecture
 
