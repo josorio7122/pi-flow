@@ -10,13 +10,13 @@ import {
 
 describe('formatTokens', () => {
   it('formats small counts as-is', () => {
-    expect(formatTokens(500)).toBe('500');
+    expect(formatTokens(500)).toBe('500 token');
   });
   it('formats thousands as k', () => {
-    expect(formatTokens(33800)).toBe('33.8k');
+    expect(formatTokens(33800)).toBe('33.8k token');
   });
   it('formats millions as M', () => {
-    expect(formatTokens(1_500_000)).toBe('1.5M');
+    expect(formatTokens(1_500_000)).toBe('1.5M token');
   });
 });
 

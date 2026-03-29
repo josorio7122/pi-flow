@@ -49,6 +49,7 @@ import { pruneWorktrees } from './worktree.js';
 import { registerRpcHandlers } from './cross-extension-rpc.js';
 import { formatTaskNotification, buildNotificationDetails } from './notification.js';
 import type { NotificationDetails } from './notification.js';
+import { formatTokens, formatTurns } from './ui/agent-widget.js';
 
 // ─── Module-level state ───────────────────────────────────────────────────────
 
@@ -127,8 +128,10 @@ export default function piFlow(pi: ExtensionAPI) {
         let line = `${icon} ${theme.bold(det.description)} ${theme.fg('dim' as ThemeColor, statusText)}`;
 
         const parts: string[] = [];
+        if (det.turnCount > 0) parts.push(formatTurns(det.turnCount, det.maxTurns));
         if (det.toolUses > 0)
           parts.push(`${det.toolUses} tool use${det.toolUses === 1 ? '' : 's'}`);
+        if (det.totalTokens > 0) parts.push(formatTokens(det.totalTokens));
         if (det.durationMs > 0) parts.push(`${(det.durationMs / 1000).toFixed(1)}s`);
         if (parts.length) {
           line +=
@@ -310,6 +313,7 @@ export default function piFlow(pi: ExtensionAPI) {
               agentActivity.set(id, {
                 activeTools: new Map(),
                 toolUses: 0,
+                tokens: '',
                 responseText: '',
                 turnCount: 1,
                 maxTurns: params.max_turns,
@@ -992,19 +996,62 @@ export default function piFlow(pi: ExtensionAPI) {
           }
         }
       } else if (choice === 'Settings') {
-        const { getGraceTurns, getDefaultMaxTurns } = await import('./runner.js');
-        const settingsInfo = [
-          `Grace turns: ${getGraceTurns()}`,
-          `Default max turns: ${getDefaultMaxTurns() ?? 'unlimited'}`,
-          `Max concurrent: ${backgroundManager?.getMaxConcurrent() ?? 4}`,
-          `Session: ${sessionId ?? '(none)'}`,
-          `Feature: ${sessionFeature ?? '(none)'}`,
-        ].join('\n');
-        pi.sendMessage({
-          customType: 'pi-flow-settings',
-          content: `[Flow Settings]\n\n${settingsInfo}`,
-          display: true,
-        });
+        const { getGraceTurns, getDefaultMaxTurns, setGraceTurns, setDefaultMaxTurns } =
+          await import('./runner.js');
+
+        const settingChoice = await ctx.ui.select('Settings', [
+          `Max concurrency (current: ${backgroundManager?.getMaxConcurrent() ?? 4})`,
+          `Default max turns (current: ${getDefaultMaxTurns() ?? 'unlimited'})`,
+          `Grace turns (current: ${getGraceTurns()})`,
+        ]);
+        if (!settingChoice) return;
+
+        if (settingChoice.startsWith('Max concurrency') && ctx.ui.input) {
+          const val = await ctx.ui.input(
+            'Max concurrent background agents',
+            String(backgroundManager?.getMaxConcurrent() ?? 4),
+          );
+          if (val) {
+            const n = parseInt(val, 10);
+            if (n >= 1) {
+              backgroundManager?.setMaxConcurrent(n);
+              ctx.ui.notify?.(`Max concurrency set to ${n}`, 'info');
+            } else {
+              ctx.ui.notify?.('Must be a positive integer.', 'warning');
+            }
+          }
+        } else if (settingChoice.startsWith('Default max turns') && ctx.ui.input) {
+          const val = await ctx.ui.input(
+            'Default max turns (0 = unlimited)',
+            String(getDefaultMaxTurns() ?? 0),
+          );
+          if (val) {
+            const n = parseInt(val, 10);
+            if (n === 0) {
+              setDefaultMaxTurns(undefined);
+              ctx.ui.notify?.('Default max turns set to unlimited', 'info');
+            } else if (n >= 1) {
+              setDefaultMaxTurns(n);
+              ctx.ui.notify?.(`Default max turns set to ${n}`, 'info');
+            } else {
+              ctx.ui.notify?.('Must be 0 (unlimited) or a positive integer.', 'warning');
+            }
+          }
+        } else if (settingChoice.startsWith('Grace turns') && ctx.ui.input) {
+          const val = await ctx.ui.input(
+            'Grace turns after wrap-up steer',
+            String(getGraceTurns()),
+          );
+          if (val) {
+            const n = parseInt(val, 10);
+            if (n >= 1) {
+              setGraceTurns(n);
+              ctx.ui.notify?.(`Grace turns set to ${n}`, 'info');
+            } else {
+              ctx.ui.notify?.('Must be a positive integer.', 'warning');
+            }
+          }
+        }
       }
     },
   });
@@ -1063,6 +1110,14 @@ export default function piFlow(pi: ExtensionAPI) {
     delete (globalThis as any)[MANAGER_KEY];
     groupJoinManager?.dispose();
     backgroundManager?.dispose();
+  });
+
+  // tool_execution_start — grab UI context for widget + age finished agents
+  pi.on('tool_execution_start', async (_event: unknown, ctx: ExtensionContext) => {
+    if (ctx.hasUI) {
+      // Widget is initialized lazily; grab from first tool execution
+      updateFooterStatus(ctx.ui);
+    }
   });
 
   // tool_call — enforce coordinator write restrictions + loop detection
