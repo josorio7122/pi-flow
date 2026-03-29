@@ -10,12 +10,8 @@ import type {
 } from './types.js';
 import { loadConfig } from './config.js';
 import { discoverAgents, buildVariableMap } from './agents.js';
-import {
-  spawnAgentWithRetry,
-  mapWithConcurrencyLimit,
-  getFinalOutput,
-  emptyResult,
-} from './spawn.js';
+import { spawnAgentWithRetry } from './spawn.js';
+import { mapWithConcurrencyLimit, getFinalOutput, emptyResult } from './result-utils.js';
 import {
   readStateFile,
   writeDispatchLog,

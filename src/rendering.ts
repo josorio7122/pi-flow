@@ -3,7 +3,7 @@ import { DynamicBorder, getMarkdownTheme, keyHint } from '@mariozechner/pi-codin
 import { Container, Markdown, Spacer, Text } from '@mariozechner/pi-tui';
 import type { Theme, ThemeColor } from '@mariozechner/pi-coding-agent';
 import type { SingleAgentResult, UsageStats, FlowDispatchDetails } from './types.js';
-import { getDisplayItems, getFinalOutput, aggregateUsage } from './spawn.js';
+import { getDisplayItems, getFinalOutput, aggregateUsage } from './result-utils.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
