@@ -51,53 +51,50 @@ interface SpawnOptions {
   onTurnEnd?: ((turnCount: number) => void) | undefined;
 }
 
-export class AgentManager {
-  private agents = new Map<string, AgentRecord>();
-  private cleanupInterval: ReturnType<typeof setInterval>;
-  private onComplete: OnComplete;
-  private onStart: OnStart;
-  private maxConcurrent: number;
+export function createAgentManager({ onComplete, maxConcurrent: initMaxConcurrent = DEFAULT_MAX_CONCURRENT, onStart }: {
+  onComplete?: OnAgentComplete | undefined;
+  maxConcurrent?: number;
+  onStart?: OnAgentStart | undefined;
+} = {}) {
+  const agents = new Map<string, AgentRecord>();
 
-  /** Queue of background agents waiting to start. */
-  private queue: { id: string; args: SpawnArgs }[] = [];
-  /** Number of currently running background agents. */
-  private runningBackground = 0;
 
-  private settings: RunnerSettings | undefined;
-  private registry: Registry | undefined;
 
-  constructor(onComplete?: OnAgentComplete | undefined, maxConcurrent = DEFAULT_MAX_CONCURRENT, onStart?: OnAgentStart | undefined) {
-    this.onComplete = onComplete;
-    this.onStart = onStart;
-    this.maxConcurrent = maxConcurrent;
-    // Cleanup completed agents after 10 minutes (but keep sessions for resume)
-    this.cleanupInterval = setInterval(() => this.cleanup(), 60_000);
+  let maxConcurrent = initMaxConcurrent;
+
+  let queue: { id: string; args: SpawnArgs }[] = [];
+  let runningBackground = 0;
+
+  let settings: RunnerSettings | undefined;
+  let registry: Registry | undefined;
+
+  const cleanupInterval = setInterval(() => cleanup(), 60_000);
+
+  function setRunnerSettings(s: RunnerSettings) {
+    settings = s;
   }
 
-  setRunnerSettings(s: RunnerSettings) {
-    this.settings = s;
+
+  function setRegistry(r: Registry) {
+    registry = r;
   }
 
-  setRegistry(r: Registry) {
-    this.registry = r;
-  }
 
-  /** Update the max concurrent background agents limit. */
-  setMaxConcurrent(n: number) {
-    this.maxConcurrent = Math.max(1, n);
+  function setMaxConcurrent(n: number) {
+    maxConcurrent = Math.max(1, n);
     // Start queued agents if the new limit allows
-    this.drainQueue();
+    drainQueue();
   }
 
-  getMaxConcurrent() {
-    return this.maxConcurrent;
+  function getMaxConcurrent() {
+    return maxConcurrent;
   }
 
   /**
    * Spawn an agent and return its ID immediately (for background use).
    * If the concurrency limit is reached, the agent is queued.
    */
-  spawn({ pi, ctx, type, prompt, options }: SpawnArgs) {
+  function spawn({ pi, ctx, type, prompt, options }: SpawnArgs) {
     const id = randomUUID().slice(0, 17);
     const abortController = new AbortController();
     const record: AgentRecord = {
@@ -109,27 +106,26 @@ export class AgentManager {
       startedAt: Date.now(),
       abortController,
     };
-    this.agents.set(id, record);
+    agents.set(id, record);
 
     const args: SpawnArgs = { pi, ctx, type, prompt, options };
 
-    if (options.isBackground && this.runningBackground >= this.maxConcurrent) {
+    if (options.isBackground && runningBackground >= maxConcurrent) {
       // Queue it — will be started when a running agent completes
-      this.queue.push({ id, args });
+      queue.push({ id, args });
       return id;
     }
 
-    this.startAgent({ id, record, args });
+    startAgent({ id, record, args });
     return id;
   }
 
-  /** Actually start an agent (called immediately or from queue drain). */
-  private startAgent({ id, record, args }: { id: string; record: AgentRecord; args: SpawnArgs }) {
+  function startAgent({ id, record, args }: { id: string; record: AgentRecord; args: SpawnArgs }) {
     const { pi, ctx, type, prompt, options } = args;
     record.status = "running";
     record.startedAt = Date.now();
-    if (options.isBackground) this.runningBackground++;
-    this.onStart?.(record);
+    if (options.isBackground) runningBackground++;
+    onStart?.(record);
 
     // Worktree isolation: create a temporary git worktree if requested
     let worktreeCwd: string | undefined;
@@ -148,8 +144,8 @@ export class AgentManager {
     const effectivePrompt = worktreeWarning ? worktreeWarning + "\n\n" + prompt : prompt;
 
     const promise = runAgent({ ctx, type, prompt: effectivePrompt, options: {
-      settings: this.settings,
-      registry: this.registry,
+      settings: settings,
+      registry: registry,
       pi,
       model: options.model,
       maxTurns: options.maxTurns,
@@ -182,7 +178,7 @@ export class AgentManager {
         }
         record.result = responseText;
         record.session = session;
-        this.finalizeAgent(record, ctx.cwd, options);
+        finalizeAgent(record, ctx.cwd, options);
         return responseText;
       })
       .catch((err) => {
@@ -190,15 +186,14 @@ export class AgentManager {
           record.status = "error";
         }
         record.error = err instanceof Error ? err.message : String(err);
-        this.finalizeAgent(record, ctx.cwd, options);
+        finalizeAgent(record, ctx.cwd, options);
         return "";
       });
 
     record.promise = promise;
   }
 
-  /** Shared cleanup for both success and error paths. */
-  private finalizeAgent(record: AgentRecord, cwd: string, options: SpawnOptions) {
+  function finalizeAgent(record: AgentRecord, cwd: string, options: SpawnOptions) {
     record.completedAt ??= Date.now();
 
     if (record.outputCleanup) {
@@ -218,19 +213,18 @@ export class AgentManager {
     }
 
     if (options.isBackground) {
-      this.runningBackground--;
-      this.onComplete?.(record);
-      this.drainQueue();
+      runningBackground--;
+      onComplete?.(record);
+      drainQueue();
     }
   }
 
-  /** Start queued agents up to the concurrency limit. */
-  private drainQueue() {
-    while (this.queue.length > 0 && this.runningBackground < this.maxConcurrent) {
-      const next = this.queue.shift()!;
-      const record = this.agents.get(next.id);
+  function drainQueue() {
+    while (queue.length > 0 && runningBackground < maxConcurrent) {
+      const next = queue.shift()!;
+      const record = agents.get(next.id);
       if (!record || record.status !== "queued") continue;
-      this.startAgent({ id: next.id, record, args: next.args });
+      startAgent({ id: next.id, record, args: next.args });
     }
   }
 
@@ -238,7 +232,7 @@ export class AgentManager {
    * Spawn an agent and wait for completion (foreground use).
    * Foreground agents bypass the concurrency queue.
    */
-  async spawnAndWait(
+  async function spawnAndWait(
     { pi, ctx, type, prompt, options }: {
       pi: ExtensionAPI;
       ctx: ExtensionContext;
@@ -247,8 +241,8 @@ export class AgentManager {
       options: Omit<SpawnOptions, "isBackground">;
     },
   ) {
-    const id = this.spawn({ pi, ctx, type, prompt, options: { ...options, isBackground: false } });
-    const record = this.agents.get(id)!;
+    const id = spawn({ pi, ctx, type, prompt, options: { ...options, isBackground: false } });
+    const record = agents.get(id)!;
     await record.promise;
     return record;
   }
@@ -256,12 +250,12 @@ export class AgentManager {
   /**
    * Resume an existing agent session with a new prompt.
    */
-  async resume({ id, prompt, signal }: {
+  async function resume({ id, prompt, signal }: {
     id: string;
     prompt: string;
     signal?: AbortSignal | undefined;
   }) {
-    const record = this.agents.get(id);
+    const record = agents.get(id);
     if (!record?.session) return undefined;
 
     record.status = "running";
@@ -293,23 +287,23 @@ export class AgentManager {
     return record;
   }
 
-  getRecord(id: string) {
-    return this.agents.get(id);
+  function getRecord(id: string) {
+    return agents.get(id);
   }
 
-  listAgents() {
-    return [...this.agents.values()].sort(
+  function listAgents() {
+    return [...agents.values()].sort(
       (a, b) => b.startedAt - a.startedAt,
     );
   }
 
-  abort(id: string) {
-    const record = this.agents.get(id);
+  function abort(id: string) {
+    const record = agents.get(id);
     if (!record) return false;
 
     // Remove from queue if queued
     if (record.status === "queued") {
-      this.queue = this.queue.filter(q => q.id !== id);
+      queue = queue.filter(q => q.id !== id);
       record.status = "stopped";
       record.completedAt = Date.now();
       return true;
@@ -322,19 +316,18 @@ export class AgentManager {
     return true;
   }
 
-  /** Dispose a record's session and remove it from the map. */
-  private removeRecord(id: string, record: AgentRecord) {
+  function removeRecord(id: string, record: AgentRecord) {
     record.session?.dispose?.();
     record.session = undefined;
-    this.agents.delete(id);
+    agents.delete(id);
   }
 
-  private cleanup() {
+  function cleanup() {
     const cutoff = Date.now() - 10 * 60_000;
-    for (const [id, record] of this.agents) {
+    for (const [id, record] of agents) {
       if (record.status === "running" || record.status === "queued") continue;
       if ((record.completedAt ?? 0) >= cutoff) continue;
-      this.removeRecord(id, record);
+      removeRecord(id, record);
     }
   }
 
@@ -342,35 +335,33 @@ export class AgentManager {
    * Remove all completed/stopped/errored records immediately.
    * Called on session start/switch so tasks from a prior session don't persist.
    */
-  clearCompleted() {
-    for (const [id, record] of this.agents) {
+  function clearCompleted() {
+    for (const [id, record] of agents) {
       if (record.status === "running" || record.status === "queued") continue;
-      this.removeRecord(id, record);
+      removeRecord(id, record);
     }
   }
 
-  /** Whether any agents are still running or queued. */
-  hasRunning() {
-    return [...this.agents.values()].some(
+  function hasRunning() {
+    return [...agents.values()].some(
       r => r.status === "running" || r.status === "queued",
     );
   }
 
-  /** Abort all running and queued agents immediately. */
-  abortAll() {
+  function abortAll() {
     let count = 0;
     // Clear queued agents first
-    for (const queued of this.queue) {
-      const record = this.agents.get(queued.id);
+    for (const queued of queue) {
+      const record = agents.get(queued.id);
       if (record) {
         record.status = "stopped";
         record.completedAt = Date.now();
         count++;
       }
     }
-    this.queue = [];
+    queue = [];
     // Abort running agents
-    for (const record of this.agents.values()) {
+    for (const record of agents.values()) {
       if (record.status === "running") {
         record.abortController?.abort();
         record.status = "stopped";
@@ -381,13 +372,12 @@ export class AgentManager {
     return count;
   }
 
-  /** Wait for all running and queued agents to complete (including queued ones). */
-  async waitForAll() {
+  async function waitForAll() {
     // Loop because drainQueue respects the concurrency limit — as running
     // agents finish they start queued ones, which need awaiting too.
     while (true) {
-      this.drainQueue();
-      const pending = [...this.agents.values()]
+      drainQueue();
+      const pending = [...agents.values()]
         .filter(r => r.status === "running" || r.status === "queued")
         .map(r => r.promise)
         .filter(Boolean);
@@ -396,15 +386,23 @@ export class AgentManager {
     }
   }
 
-  dispose() {
-    clearInterval(this.cleanupInterval);
+  function dispose() {
+    clearInterval(cleanupInterval);
     // Clear queue
-    this.queue = [];
-    for (const record of this.agents.values()) {
+    queue = [];
+    for (const record of agents.values()) {
       record.session?.dispose();
     }
-    this.agents.clear();
+    agents.clear();
     // Prune any orphaned git worktrees (crash recovery)
     try { pruneWorktrees(process.cwd()); } catch { /* ignore */ }
   }
+
+  return {
+    setRunnerSettings, setRegistry, setMaxConcurrent, getMaxConcurrent,
+    spawn, spawnAndWait, resume, getRecord, listAgents,
+    abort, clearCompleted, hasRunning, abortAll, waitForAll, dispose,
+  };
 }
+
+export type AgentManager = ReturnType<typeof createAgentManager>;

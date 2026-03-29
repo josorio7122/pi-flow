@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentRecord } from "../types.js";
-import { AgentManager } from "./manager.js";
+import { type AgentManager, createAgentManager } from "./manager.js";
 
 vi.mock("./runner.js", () => ({
   runAgent: vi.fn(),
@@ -37,9 +37,9 @@ describe("AgentManager — Bug 1 race condition (resultConsumed vs onComplete)",
 
   it("reproduces bug: onComplete fires with resultConsumed=false when set after await", async () => {
     let seenConsumed: boolean | undefined;
-    manager = new AgentManager((r) => {
+    manager = createAgentManager({ onComplete: (r) => {
       seenConsumed = r.resultConsumed;
-    });
+    }});
     resolvedRun();
 
     const id = manager.spawn({ pi: mockPi, ctx: mockCtx, type: "general-purpose", prompt: "test", options: {
@@ -58,9 +58,9 @@ describe("AgentManager — Bug 1 race condition (resultConsumed vs onComplete)",
 
   it("fix: onComplete sees resultConsumed=true when pre-marked before await", async () => {
     let seenConsumed: boolean | undefined;
-    manager = new AgentManager((r) => {
+    manager = createAgentManager({ onComplete: (r) => {
       seenConsumed = r.resultConsumed;
-    });
+    }});
     resolvedRun();
 
     const id = manager.spawn({ pi: mockPi, ctx: mockCtx, type: "general-purpose", prompt: "test", options: {
@@ -78,9 +78,9 @@ describe("AgentManager — Bug 1 race condition (resultConsumed vs onComplete)",
 
   it("normal case: onComplete fires with resultConsumed falsy when no explicit polling", async () => {
     let completedRecord: AgentRecord | undefined;
-    manager = new AgentManager((r) => {
+    manager = createAgentManager({ onComplete: (r) => {
       completedRecord = r;
-    });
+    }});
     resolvedRun();
 
     const id = manager.spawn({ pi: mockPi, ctx: mockCtx, type: "general-purpose", prompt: "test", options: {
@@ -95,9 +95,9 @@ describe("AgentManager — Bug 1 race condition (resultConsumed vs onComplete)",
 
   it("onComplete is not called for foreground agents", async () => {
     let onCompleteCalled = false;
-    manager = new AgentManager(() => {
+    manager = createAgentManager({ onComplete: () => {
       onCompleteCalled = true;
-    });
+    }});
     resolvedRun();
 
     await manager.spawnAndWait({ pi: mockPi, ctx: mockCtx, type: "general-purpose", prompt: "test", options: {
@@ -116,7 +116,7 @@ describe("AgentManager — Bug 3 clearCompleted", () => {
   });
 
   it("clearCompleted removes completed records", async () => {
-    manager = new AgentManager();
+    manager = createAgentManager();
     resolvedRun();
 
     const id = manager.spawn({ pi: mockPi, ctx: mockCtx, type: "general-purpose", prompt: "test", options: {
@@ -132,7 +132,7 @@ describe("AgentManager — Bug 3 clearCompleted", () => {
 
   it("clearCompleted does not remove running or queued agents", async () => {
     // Use maxConcurrent=0 to keep agents queued, then spawn one running via foreground
-    manager = new AgentManager(undefined, 1);
+    manager = createAgentManager({ maxConcurrent: 1 });
 
     // Mock runAgent to never resolve (keeps agent "running")
     vi.mocked(runAgent).mockImplementation(
@@ -164,7 +164,7 @@ describe("AgentManager — Bug 3 clearCompleted", () => {
   });
 
   it("clearCompleted calls dispose on sessions of removed records", async () => {
-    manager = new AgentManager();
+    manager = createAgentManager();
     const disposeSpy = vi.fn();
     const sess = { dispose: disposeSpy };
     vi.mocked(runAgent).mockResolvedValue({
@@ -186,7 +186,7 @@ describe("AgentManager — Bug 3 clearCompleted", () => {
   });
 
   it("clearCompleted removes error and stopped records", async () => {
-    manager = new AgentManager();
+    manager = createAgentManager();
     vi.mocked(runAgent).mockRejectedValue(new Error("boom"));
 
     const id = manager.spawn({ pi: mockPi, ctx: mockCtx, type: "general-purpose", prompt: "test", options: {

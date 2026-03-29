@@ -17,7 +17,7 @@ import type { AgentSession, ExtensionAPI, ExtensionCommandContext, ExtensionCont
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { loadCustomAgents } from "./agents/custom.js";
-import { AgentManager } from "./agents/manager.js";
+import { createAgentManager } from "./agents/manager.js";
 import { BUILTIN_TOOL_NAMES, createRegistry } from "./agents/registry.js";
 import { createRunnerSettings, getAgentConversation, normalizeMaxTurns, steerAgent } from "./agents/runner.js";
 import { resolveAgentInvocationConfig, resolveJoinMode } from "./config/invocation.js";
@@ -214,7 +214,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   // Background completion: route through group join or send individual nudge
-  const manager = new AgentManager((record) => {
+  const manager = createAgentManager({ onComplete: (record) => {
     // Emit lifecycle event based on terminal status
     const isError = record.status === "error" || record.status === "stopped" || record.status === "aborted";
     const eventData = buildEventData(record);
@@ -253,14 +253,14 @@ export default function (pi: ExtensionAPI) {
     // 'held' → do nothing, group will fire later
     // 'delivered' → group callback already fired
     widget.update();
-  }, undefined, (record) => {
+  }, onStart: (record) => {
     // Emit started event when agent transitions to running (including from queue)
     pi.events.emit("subagents:started", {
       id: record.id,
       type: record.type,
       description: record.description,
     });
-  });
+  }});
   manager.setRunnerSettings(runnerSettings);
   manager.setRegistry(registry);
 
