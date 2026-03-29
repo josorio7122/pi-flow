@@ -61,6 +61,8 @@ let sessionDir: string | null = null;
 let sessionFeature: string | null = null;
 let backgroundManager: BackgroundManager | null = null;
 let groupJoinManager: GroupJoinManager | null = null;
+import type { AgentActivity } from './ui/agent-widget.js';
+const agentActivity = new Map<string, AgentActivity>();
 
 // ─── Session initialization ──────────────────────────────────────────────────
 
@@ -606,14 +608,147 @@ export default function piFlow(pi: ExtensionAPI) {
   // ─── 3. Commands ────────────────────────────────────────────────────────────
 
   pi.registerCommand('flow', {
-    description: 'Show pi-flow session status',
-    handler: async () => {
-      const summary = formatSessionStatus();
-      pi.sendMessage({
-        customType: 'pi-flow-status',
-        content: `[Flow Status]\n\n${summary}`,
-        display: true,
-      });
+    description: 'pi-flow status and agent management',
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ExtensionCommandContext has rich UI APIs
+    handler: async (_args: string, ctx: any) => {
+      const options: string[] = [];
+
+      // Session status always shown
+      const statusLine = formatSessionStatus();
+
+      // Running agents
+      const agents = backgroundManager?.listAgents() ?? [];
+      const running = agents.filter((a) => a.status === 'running' || a.status === 'queued');
+      const completed = agents.filter((a) => a.status !== 'running' && a.status !== 'queued');
+
+      if (running.length > 0 || completed.length > 0) {
+        options.push(
+          `Running agents (${agents.length}) — ${running.length} active, ${completed.length} done`,
+        );
+      }
+
+      // Agent types
+      const allAgents = discoverAgents(rootDir, ctx.cwd);
+      options.push(`Agent types (${allAgents.length})`);
+
+      // Settings
+      options.push('Settings');
+
+      const header = `[Flow Status]\n${statusLine}\n`;
+
+      if (!ctx.ui?.select) {
+        // No UI context — just show status
+        pi.sendMessage({
+          customType: 'pi-flow-status',
+          content: header,
+          display: true,
+        });
+        return;
+      }
+
+      const choice = await ctx.ui.select('pi-flow', options);
+      if (!choice) return;
+
+      if (choice.startsWith('Running agents')) {
+        // Show running agents list
+        if (agents.length === 0) {
+          ctx.ui.notify?.('No agents.', 'info');
+          return;
+        }
+        const agentOptions = agents.map((a) => {
+          const dur = a.completedAt
+            ? `${((a.completedAt - a.startedAt) / 1000).toFixed(1)}s`
+            : `${((Date.now() - a.startedAt) / 1000).toFixed(1)}s (running)`;
+          return `${a.agent.name} (${a.description}) · ${a.status} · ${dur}`;
+        });
+        const agentChoice = await ctx.ui.select('Running agents', agentOptions);
+        if (!agentChoice) return;
+
+        // Find selected agent
+        const idx = agentOptions.indexOf(agentChoice);
+        if (idx >= 0) {
+          const record = agents[idx];
+          if (record.session && ctx.ui.custom) {
+            // Open conversation viewer
+            const { FlowConversationViewer } = await import('./ui/conversation-viewer.js');
+            const widgetActivity = agentActivity.get(record.id);
+            await ctx.ui.custom(
+              (tui: unknown, theme: unknown, _: unknown, done: (r: undefined) => void) => {
+                return new FlowConversationViewer(
+                  tui as { terminal: { columns: number; rows: number }; requestRender(): void },
+                  record.session as {
+                    messages: Array<{ role: string; content: unknown }>;
+                    subscribe(fn: (e: { type: string }) => void): () => void;
+                  },
+                  record,
+                  widgetActivity,
+                  theme as { fg(c: string, t: string): string; bold(t: string): string },
+                  done,
+                );
+              },
+              { overlay: true, overlayOptions: { anchor: 'center', width: '90%' } },
+            );
+          } else {
+            // Show result as text
+            const output = record.result
+              ? getFinalOutput(record.result.messages)
+              : (record.error ?? 'No output.');
+            pi.sendMessage({
+              customType: 'pi-flow-agent-result',
+              content: `Agent: ${record.agent.name}\nStatus: ${record.status}\n\n${output.slice(0, 2000)}`,
+              display: true,
+            });
+          }
+        }
+      } else if (choice.startsWith('Agent types')) {
+        const typeOptions = allAgents.map((a) => {
+          const model = a.model || 'inherit';
+          return `${a.name} · ${model} — ${a.description.split('.')[0]}`;
+        });
+        const typeChoice = await ctx.ui.select('Agent types', typeOptions);
+        if (!typeChoice) return;
+
+        // Show agent detail
+        const agentName = typeChoice.split(' · ')[0];
+        const agent = allAgents.find((a) => a.name === agentName);
+        if (agent) {
+          const detail = [
+            `Name: ${agent.name}`,
+            `Label: ${agent.label}`,
+            `Model: ${agent.model || 'inherit'}`,
+            `Thinking: ${agent.thinking}`,
+            `Tools: ${agent.tools.join(', ')}`,
+            `Writable: ${agent.writable}`,
+            `Source: ${agent.source}`,
+            agent.memory ? `Memory: ${agent.memory}` : null,
+            agent.isolation ? `Isolation: ${agent.isolation}` : null,
+            agent.promptMode ? `Prompt mode: ${agent.promptMode}` : null,
+            '',
+            agent.description,
+          ]
+            .filter(Boolean)
+            .join('\n');
+          pi.sendMessage({
+            customType: 'pi-flow-agent-detail',
+            content: detail,
+            display: true,
+          });
+        }
+      } else if (choice === 'Settings') {
+        const { getGraceTurns, getDefaultMaxTurns } = await import('./runner.js');
+        const settingsInfo = [
+          `Grace turns: ${getGraceTurns()}`,
+          `Default max turns: ${getDefaultMaxTurns() ?? 'unlimited'}`,
+          `Max concurrent: ${backgroundManager?.getMaxConcurrent() ?? 4}`,
+          `Session: ${sessionId ?? '(none)'}`,
+          `Feature: ${sessionFeature ?? '(none)'}`,
+        ].join('\n');
+        pi.sendMessage({
+          customType: 'pi-flow-settings',
+          content: `[Flow Settings]\n\n${settingsInfo}`,
+          display: true,
+        });
+      }
     },
   });
 
