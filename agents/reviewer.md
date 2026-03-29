@@ -15,6 +15,7 @@ tools:
   - find
   - ls
 writable: false
+memory: global
 limits:
   max_tokens: 30000
   max_steps: 40

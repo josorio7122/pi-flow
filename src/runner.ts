@@ -21,6 +21,7 @@ import {
 import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
 import type { FlowAgentConfig, SingleAgentResult, UsageStats } from './types.js';
 import { injectVariables } from './agents.js';
+import { buildMemoryBlock, buildReadOnlyMemoryBlock } from './memory.js';
 import { emptyUsage } from './result-utils.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -106,8 +107,16 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
   const { ctx, agent, task, variableMap, signal, callbacks } = options;
   const startedAt = Date.now();
 
-  // 1. Build system prompt with variable injection
-  const systemPrompt = injectVariables(agent.systemPrompt, variableMap, agent.variables);
+  // 1. Build system prompt with variable injection + memory block
+  let systemPrompt = injectVariables(agent.systemPrompt, variableMap, agent.variables);
+
+  // 1b. Inject per-agent memory block if configured
+  if (agent.memory) {
+    const memoryBlock = agent.writable
+      ? buildMemoryBlock(agent.name, agent.memory, ctx.cwd)
+      : buildReadOnlyMemoryBlock(agent.name, agent.memory, ctx.cwd);
+    systemPrompt = systemPrompt + '\n\n' + memoryBlock;
+  }
 
   // 2. Create resource loader (no extensions, no skills — we inject via prompt)
   const loader = new DefaultResourceLoader({

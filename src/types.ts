@@ -14,6 +14,8 @@ export interface FlowAgentConfig {
   systemPrompt: string; // markdown body after frontmatter
   source: 'builtin' | 'custom';
   filePath: string;
+  /** Persistent memory scope — agents with memory get a MEMORY.md directory */
+  memory?: 'project' | 'global';
 }
 
 // ─── Skill config parsed from .md frontmatter ────────────────────────────────

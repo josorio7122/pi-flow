@@ -12,6 +12,7 @@ tools:
   - grep
   - find
 writable: false
+memory: project
 limits:
   max_tokens: 30000
   max_steps: 30
