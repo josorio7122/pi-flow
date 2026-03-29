@@ -70,8 +70,7 @@ export function registerAgentTool(deps: AgentToolDeps) {
     promptSnippet:
       "Agent — Spawn a specialized agent (scout, builder, reviewer, planner, test-writer) for a single focused task",
     promptGuidelines: [
-      "Use Agent for single-phase tasks: just a scout, just a review, just a build. For multi-phase tasks (explore→fix, plan→build→review), prefer the Workflow tool instead.",
-      "Delegate codebase exploration and analysis to a scout agent — scouts are read-only and use a cheaper model, freeing you to orchestrate.",
+      "Agent is for single-phase tasks only: just a scout, just a review, just a build. If the task involves exploration followed by changes (scout then fix/clean/build), use the Workflow tool instead — never spawn a scout via Agent and then do the changes yourself.",
       "Use run_in_background: true to run multiple agents in parallel for independent subtasks. Foreground calls block until the agent completes.",
     ],
     description: `Launch a specialized agent to handle a focused task autonomously.

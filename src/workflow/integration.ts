@@ -83,8 +83,9 @@ export function registerWorkflowExtension(
     promptSnippet:
       "Workflow — Run multi-phase agent pipelines: fix (scout→approve→build→review), feature (plan→test→build→review), explore (scout→plan), research (scout)",
     promptGuidelines: [
-      '"find/scout X then fix/clean/refactor" → Workflow with workflow_type: "fix". "build/implement feature X" → "feature". "explore/understand then plan" → "explore". "research/map/trace X" → "research".',
-      "Prefer Workflow over manually spawning agents when the task involves exploration followed by action, or multiple phases. Workflows use cheaper models for scouting and reserve expensive models for planning and building.",
+      'When the user asks to find/scout/trace something AND fix/clean/refactor/remove it, always use Workflow with workflow_type: "fix". Never spawn a scout via Agent and do the fix yourself — the fix workflow includes approval gates and code review that you would skip.',
+      '"build/implement feature X" or "implement with tests" → Workflow "feature". "explore/understand then plan/recommend" → "explore". "research/map/trace how X works" → "research".',
+      "Workflows use cheaper models for scouting and expensive models for building. Doing the work yourself skips this cost optimization.",
     ],
     description: buildToolDescription(),
     parameters: Type.Object({
