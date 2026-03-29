@@ -104,7 +104,9 @@ async function viewAgentConversation({
   const { ConversationViewer } = await import("../../ui/viewer.js");
   const activity = deps.agentActivity.get(record.id);
   await ctx.ui.custom<undefined>(
-    (tui, theme, _, done) => new ConversationViewer(tui, record.session!, record, activity, theme, done, deps.registry),
+    // biome-ignore lint/complexity/useMaxParams: pi ui.custom callback signature is fixed
+    (tui, theme, _, done) =>
+      new ConversationViewer({ tui, session: record.session!, record, activity, theme, done, registry: deps.registry }),
     { overlay: true, overlayOptions: { anchor: "center", width: "90%" } },
   );
 }

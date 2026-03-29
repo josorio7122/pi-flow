@@ -15,7 +15,7 @@ describe("preloadSkills", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  function writeSkill(name: string, content: string, ext = ".md") {
+  function writeSkill({ name, content, ext = ".md" }: { name: string; content: string; ext?: string }) {
     const dir = join(tmpDir, ".pi", "skills");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, name + ext), content);
@@ -27,7 +27,7 @@ describe("preloadSkills", () => {
   });
 
   it("loads a .md skill file", () => {
-    writeSkill("api-conventions", "# API Conventions\nUse REST.");
+    writeSkill({ name: "api-conventions", content: "# API Conventions\nUse REST." });
     const result = preloadSkills(["api-conventions"], tmpDir);
     expect(result).toHaveLength(1);
     expect(result[0]!.name).toBe("api-conventions");
@@ -35,15 +35,15 @@ describe("preloadSkills", () => {
   });
 
   it("loads a .txt skill file", () => {
-    writeSkill("error-handling", "Handle errors gracefully.", ".txt");
+    writeSkill({ name: "error-handling", content: "Handle errors gracefully.", ext: ".txt" });
     const result = preloadSkills(["error-handling"], tmpDir);
     expect(result).toHaveLength(1);
     expect(result[0]!.content).toContain("Handle errors gracefully");
   });
 
   it("prefers .md over .txt", () => {
-    writeSkill("dual", "MD content", ".md");
-    writeSkill("dual", "TXT content", ".txt");
+    writeSkill({ name: "dual", content: "MD content", ext: ".md" });
+    writeSkill({ name: "dual", content: "TXT content", ext: ".txt" });
     const result = preloadSkills(["dual"], tmpDir);
     expect(result[0]!.content).toBe("MD content");
   });
@@ -56,8 +56,8 @@ describe("preloadSkills", () => {
   });
 
   it("loads multiple skills", () => {
-    writeSkill("skill-a", "Content A");
-    writeSkill("skill-b", "Content B");
+    writeSkill({ name: "skill-a", content: "Content A" });
+    writeSkill({ name: "skill-b", content: "Content B" });
     const result = preloadSkills(["skill-a", "skill-b"], tmpDir);
     expect(result).toHaveLength(2);
     expect(result[0]!.content).toContain("Content A");
@@ -65,7 +65,7 @@ describe("preloadSkills", () => {
   });
 
   it("loads skills without extension", () => {
-    writeSkill("bare-skill", "Bare content", "");
+    writeSkill({ name: "bare-skill", content: "Bare content", ext: "" });
     const result = preloadSkills(["bare-skill"], tmpDir);
     expect(result[0]!.content).toBe("Bare content");
   });
@@ -89,7 +89,7 @@ describe("preloadSkills", () => {
   });
 
   it("loads valid skills alongside skipped unsafe ones", () => {
-    writeSkill("legit", "Good content");
+    writeSkill({ name: "legit", content: "Good content" });
     const result = preloadSkills(["../evil", "legit"], tmpDir);
     expect(result).toHaveLength(2);
     expect(result[0]!.content).toContain("path traversal");

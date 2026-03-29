@@ -42,8 +42,7 @@ export function renderAgentCall({
 
 export function renderAgentResult(
   result: { content: { type: string; text?: string }[]; details?: unknown },
-  { expanded, isPartial }: { expanded: boolean; isPartial: boolean },
-  theme: Theme,
+  { expanded, isPartial, theme }: { expanded: boolean; isPartial: boolean; theme: Theme },
 ) {
   const details = result.details as AgentDetails | undefined;
   if (!details) {

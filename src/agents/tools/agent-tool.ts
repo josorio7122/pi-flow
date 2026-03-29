@@ -95,8 +95,10 @@ Guidelines:
       isolation: Type.Optional(Type.Literal("worktree", { description: "Git worktree isolation." })),
     }),
     renderCall: (args, theme) => renderAgentCall({ args, theme, registry }),
-    renderResult: (result, opts, theme) => renderAgentResult(result, opts, theme),
+    // biome-ignore lint/complexity/useMaxParams: pi renderResult callback signature is fixed
+    renderResult: (result, opts, theme) => renderAgentResult(result, { ...opts, theme }),
 
+    // biome-ignore lint/complexity/useMaxParams: pi tool execute callback signature is fixed
     async execute(toolCallId, params, signal, onUpdate, ctx) {
       widget.setUICtx(ctx.ui);
       deps.reloadCustomAgents();

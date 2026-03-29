@@ -1,11 +1,34 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.4.8/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.4.9/schema.json",
 	"linter": {
 		"enabled": true,
 		"rules": {
 			"recommended": true,
 			"style": {
-				"recommended": false
+				"recommended": false,
+				"useImportType": "error",
+				"useFilenamingConvention": {
+					"level": "error",
+					"options": {
+						"filenameCases": ["kebab-case"]
+					}
+				}
+			},
+			"performance": {
+				"noBarrelFile": "error",
+				"noNamespaceImport": "error"
+			},
+			"complexity": {
+				"useMaxParams": {
+					"level": "error",
+					"options": {
+						"max": 2
+					}
+				}
+			},
+			"correctness": {
+				"noUnusedImports": "error",
+				"noUnusedVariables": "error"
 			},
 			"suspicious": {
 				"noExplicitAny": "error",
@@ -32,6 +55,9 @@
 				"rules": {
 					"suspicious": {
 						"noExplicitAny": "off"
+					},
+					"correctness": {
+						"noUnusedVariables": "off"
 					}
 				}
 			}

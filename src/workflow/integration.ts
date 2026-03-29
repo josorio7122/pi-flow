@@ -28,8 +28,7 @@ import type { WorkflowDefinition, WorkflowEvent } from "./types.js";
 
 export function registerWorkflowExtension(
   pi: ExtensionAPI,
-  builtinWorkflowsDir?: string,
-  deps?: { manager?: AgentManager },
+  { builtinWorkflowsDir, deps }: { builtinWorkflowsDir?: string; deps?: { manager?: AgentManager } } = {},
 ) {
   let workflows = new Map<string, WorkflowDefinition>();
   let activeWorkflowId: string | undefined;
@@ -66,6 +65,7 @@ export function registerWorkflowExtension(
       workflow_type: Type.Optional(Type.String({ description: "Which workflow (required for start)" })),
       description: Type.Optional(Type.String({ description: "What the user wants done (required for start)" })),
     }),
+    // biome-ignore lint/complexity/useMaxParams: pi tool execute callback signature is fixed
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       if (params.action === "status") return buildWorkflowStatusText({ ctx, activeWorkflowId });
       if (params.action === "continue") return continueWorkflow(ctx);

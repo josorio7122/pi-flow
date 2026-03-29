@@ -23,15 +23,38 @@ export class ConversationViewer implements Component {
   private lastInnerW = 0;
   private closed = false;
 
-  constructor(
-    private tui: TUI,
-    private session: AgentSession,
-    private record: AgentRecord,
-    private activity: AgentActivity | undefined,
-    private theme: Theme,
-    private done: (result: undefined) => void,
-    private registry: Registry,
-  ) {
+  private tui: TUI;
+  private session: AgentSession;
+  private record: AgentRecord;
+  private activity: AgentActivity | undefined;
+  private theme: Theme;
+  private done: (result: undefined) => void;
+  private registry: Registry;
+
+  constructor({
+    tui,
+    session,
+    record,
+    activity,
+    theme,
+    done,
+    registry,
+  }: {
+    tui: TUI;
+    session: AgentSession;
+    record: AgentRecord;
+    activity: AgentActivity | undefined;
+    theme: Theme;
+    done: (result: undefined) => void;
+    registry: Registry;
+  }) {
+    this.tui = tui;
+    this.session = session;
+    this.record = record;
+    this.activity = activity;
+    this.theme = theme;
+    this.done = done;
+    this.registry = registry;
     this.unsubscribe = session.subscribe(() => {
       if (this.closed) return;
       this.tui.requestRender();

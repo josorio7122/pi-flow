@@ -8,8 +8,8 @@
  * I/O helpers adapted from pi-messenger crew/store.ts.
  */
 
-import * as fs from "node:fs";
-import * as path from "node:path";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { AgentHandoff, WorkflowEvent, WorkflowState } from "./types.js";
 
 // ── Path Helpers ─────────────────────────────────────────────────────
@@ -17,26 +17,26 @@ import type { AgentHandoff, WorkflowEvent, WorkflowState } from "./types.js";
 const FLOW_ROOT = ".pi/flow";
 
 export function getFlowDir(cwd: string, workflowId: string) {
-  return path.join(cwd, FLOW_ROOT, workflowId);
+  return join(cwd, FLOW_ROOT, workflowId);
 }
 
 function handoffsDir(cwd: string, workflowId: string) {
-  return path.join(getFlowDir(cwd, workflowId), "handoffs");
+  return join(getFlowDir(cwd, workflowId), "handoffs");
 }
 
 function statePath(cwd: string, workflowId: string) {
-  return path.join(getFlowDir(cwd, workflowId), "state.json");
+  return join(getFlowDir(cwd, workflowId), "state.json");
 }
 
 function eventsPath(cwd: string, workflowId: string) {
-  return path.join(getFlowDir(cwd, workflowId), "events.jsonl");
+  return join(getFlowDir(cwd, workflowId), "events.jsonl");
 }
 
 // ── Generic I/O ─────────────────────────────────────────────────────
 
 function ensureDir(dir: string) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
   }
 }
 
@@ -45,9 +45,9 @@ function ensureDir(dir: string) {
  * The caller is responsible for further type narrowing — this only guarantees valid JSON.
  */
 export function readJson<T>(filePath: string, guard?: (v: unknown) => v is T): T | null {
-  if (!fs.existsSync(filePath)) return null;
+  if (!existsSync(filePath)) return null;
   try {
-    const raw: unknown = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    const raw: unknown = JSON.parse(readFileSync(filePath, "utf-8"));
     if (guard) return guard(raw) ? raw : null;
     if (typeof raw !== "object" || raw === null) return null;
     return raw as T;
@@ -57,10 +57,10 @@ export function readJson<T>(filePath: string, guard?: (v: unknown) => v is T): T
 }
 
 export function writeJson(filePath: string, data: unknown) {
-  ensureDir(path.dirname(filePath));
+  ensureDir(dirname(filePath));
   const temp = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-  fs.writeFileSync(temp, JSON.stringify(data, null, 2));
-  fs.renameSync(temp, filePath);
+  writeFileSync(temp, JSON.stringify(data, null, 2));
+  renameSync(temp, filePath);
 }
 
 // ── Workflow Directory ───────────────────────────────────────────────
@@ -98,7 +98,7 @@ export function writeHandoff({ cwd, workflowId, handoff }: { cwd: string; workfl
   const existing = listHandoffFiles(dir);
   const num = existing.length + 1;
   const filename = `${String(num).padStart(3, "0")}-${handoff.role}.json`;
-  writeJson(path.join(dir, filename), handoff);
+  writeJson(join(dir, filename), handoff);
   return filename;
 }
 
@@ -107,17 +107,16 @@ export function listHandoffs({ cwd, workflowId }: { cwd: string; workflowId: str
   const files = listHandoffFiles(dir);
   const handoffs: AgentHandoff[] = [];
   for (const file of files) {
-    const h = readJson<AgentHandoff>(path.join(dir, file), isAgentHandoff);
+    const h = readJson<AgentHandoff>(join(dir, file), isAgentHandoff);
     if (h) handoffs.push(h);
   }
   return handoffs;
 }
 
 function listHandoffFiles(dir: string) {
-  if (!fs.existsSync(dir)) return [];
+  if (!existsSync(dir)) return [];
   try {
-    return fs
-      .readdirSync(dir)
+    return readdirSync(dir)
       .filter((f) => f.endsWith(".json"))
       .sort();
   } catch {
@@ -129,8 +128,8 @@ function listHandoffFiles(dir: string) {
 
 export function appendEvent({ cwd, workflowId, event }: { cwd: string; workflowId: string; event: WorkflowEvent }) {
   const fp = eventsPath(cwd, workflowId);
-  ensureDir(path.dirname(fp));
-  fs.appendFileSync(fp, JSON.stringify(event) + "\n");
+  ensureDir(dirname(fp));
+  appendFileSync(fp, JSON.stringify(event) + "\n");
 }
 
 function isWorkflowEvent(val: unknown): val is WorkflowEvent {
@@ -144,9 +143,9 @@ function isWorkflowEvent(val: unknown): val is WorkflowEvent {
 
 export function readEvents(cwd: string, workflowId: string) {
   const fp = eventsPath(cwd, workflowId);
-  if (!fs.existsSync(fp)) return [];
+  if (!existsSync(fp)) return [];
   try {
-    const content = fs.readFileSync(fp, "utf-8").trim();
+    const content = readFileSync(fp, "utf-8").trim();
     if (!content) return [];
     const events: WorkflowEvent[] = [];
     for (const line of content.split("\n")) {

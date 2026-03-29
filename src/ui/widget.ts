@@ -20,11 +20,19 @@ export class AgentWidget {
   private tui: TUI | undefined;
   private lastStatusText: string | undefined;
 
-  constructor(
-    private manager: AgentManager,
-    private agentActivity: Map<string, AgentActivity>,
-    private registry: Registry,
-  ) {}
+  private manager: AgentManager;
+  private agentActivity: Map<string, AgentActivity>;
+  private registry: Registry;
+
+  constructor({
+    manager,
+    agentActivity,
+    registry,
+  }: { manager: AgentManager; agentActivity: Map<string, AgentActivity>; registry: Registry }) {
+    this.manager = manager;
+    this.agentActivity = agentActivity;
+    this.registry = registry;
+  }
 
   setUICtx(ctx: ExtensionUIContext) {
     if (ctx !== this.uiCtx) {

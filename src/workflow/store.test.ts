@@ -1,6 +1,6 @@
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
+import { appendFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   appendEvent,
@@ -18,19 +18,19 @@ let tmpDir: string;
 const WF_ID = "flow-test-001";
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-flow-store-"));
+  tmpDir = mkdtempSync(join(tmpdir(), "pi-flow-store-"));
 });
 
 afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  rmSync(tmpDir, { recursive: true, force: true });
 });
 
 describe("initWorkflowDir", () => {
   it("creates the directory structure", () => {
     initWorkflowDir(tmpDir, WF_ID);
     const flowDir = getFlowDir(tmpDir, WF_ID);
-    expect(fs.existsSync(flowDir)).toBe(true);
-    expect(fs.existsSync(path.join(flowDir, "handoffs"))).toBe(true);
+    expect(existsSync(flowDir)).toBe(true);
+    expect(existsSync(join(flowDir, "handoffs"))).toBe(true);
   });
 });
 
@@ -64,8 +64,8 @@ describe("state operations", () => {
 
   it("returns null for structurally invalid state JSON", () => {
     initWorkflowDir(tmpDir, WF_ID);
-    const statePath = path.join(getFlowDir(tmpDir, WF_ID), "state.json");
-    fs.writeFileSync(statePath, JSON.stringify({ notAState: true }));
+    const statePath = join(getFlowDir(tmpDir, WF_ID), "state.json");
+    writeFileSync(statePath, JSON.stringify({ notAState: true }));
     expect(readState({ cwd: tmpDir, workflowId: WF_ID })).toBeNull();
   });
 });
@@ -99,8 +99,8 @@ describe("handoff operations", () => {
 
   it("returns empty list when handoff JSON is structurally invalid", () => {
     initWorkflowDir(tmpDir, WF_ID);
-    const dir = path.join(getFlowDir(tmpDir, WF_ID), "handoffs");
-    fs.writeFileSync(path.join(dir, "001-bad.json"), JSON.stringify({ notAHandoff: true }));
+    const dir = join(getFlowDir(tmpDir, WF_ID), "handoffs");
+    writeFileSync(join(dir, "001-bad.json"), JSON.stringify({ notAHandoff: true }));
     expect(listHandoffs({ cwd: tmpDir, workflowId: WF_ID })).toHaveLength(0);
   });
 
@@ -142,9 +142,9 @@ describe("event operations", () => {
     const e1: WorkflowEvent = { type: "phase_start", phase: "scout", ts: 1001 };
     appendEvent({ cwd: tmpDir, workflowId: WF_ID, event: e1 });
     // Append a corrupt line directly
-    const eventsFile = path.join(getFlowDir(tmpDir, WF_ID), "events.jsonl");
-    fs.appendFileSync(eventsFile, "not valid json\n");
-    fs.appendFileSync(eventsFile, '{"no_type_field": true}\n');
+    const eventsFile = join(getFlowDir(tmpDir, WF_ID), "events.jsonl");
+    appendFileSync(eventsFile, "not valid json\n");
+    appendFileSync(eventsFile, '{"no_type_field": true}\n');
     const e2: WorkflowEvent = { type: "phase_complete", phase: "scout", duration: 100, tokens: 50, ts: 1002 };
     appendEvent({ cwd: tmpDir, workflowId: WF_ID, event: e2 });
     const events = readEvents(tmpDir, WF_ID);

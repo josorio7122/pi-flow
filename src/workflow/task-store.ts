@@ -5,8 +5,8 @@
  * Adapted from pi-messenger crew/store.ts task operations.
  */
 
-import * as fs from "node:fs";
-import * as path from "node:path";
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { getFlowDir, readJson, writeJson } from "./store.js";
 import type { Task } from "./types.js";
 
@@ -17,11 +17,11 @@ function isTask(val: unknown): val is Task {
 // ── Path Helpers ─────────────────────────────────────────────────────
 
 function tasksDir(cwd: string, workflowId: string) {
-  return path.join(getFlowDir(cwd, workflowId), "tasks");
+  return join(getFlowDir(cwd, workflowId), "tasks");
 }
 
 function taskPath({ cwd, workflowId, taskId }: { cwd: string; workflowId: string; taskId: string }) {
-  return path.join(tasksDir(cwd, workflowId), `${taskId}.json`);
+  return join(tasksDir(cwd, workflowId), `${taskId}.json`);
 }
 
 // ── CRUD ─────────────────────────────────────────────────────────────
@@ -55,12 +55,12 @@ export function getTask({ cwd, workflowId, taskId }: { cwd: string; workflowId: 
 
 export function getTasks({ cwd, workflowId }: { cwd: string; workflowId: string }) {
   const dir = tasksDir(cwd, workflowId);
-  if (!fs.existsSync(dir)) return [];
+  if (!existsSync(dir)) return [];
   try {
-    const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
+    const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
     const tasks: Task[] = [];
     for (const file of files) {
-      const task = readJson<Task>(path.join(dir, file), isTask);
+      const task = readJson<Task>(join(dir, file), isTask);
       if (task) tasks.push(task);
     }
     return tasks;

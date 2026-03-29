@@ -9,6 +9,7 @@ import { detectEnv } from "./env.js";
 /** Minimal mock of pi.exec() that shells out via child_process. */
 function mockPi(): ExtensionAPI {
   return {
+    // biome-ignore lint/complexity/useMaxParams: mock matches pi.exec(command, args, options) signature
     exec: async (command: string, args: string[], options?: { cwd?: string; timeout?: number }) => {
       try {
         const stdout = execSync(`${command} ${args.join(" ")}`, {

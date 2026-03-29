@@ -26,7 +26,7 @@ import { registerSteerTool } from "./agents/tools/steer-tool.js";
 import { registerAgentsCommand } from "./extension/command/command.js";
 import { createGroupJoinManager } from "./extension/group-join.js";
 import { registerRpcHandlers } from "./extension/rpc.js";
-import { type AgentActivity } from "./ui/formatters.js";
+import type { AgentActivity } from "./ui/formatters.js";
 import { AgentWidget } from "./ui/widget.js";
 import { registerWorkflowExtension } from "./workflow/integration.js";
 
@@ -87,6 +87,7 @@ export default function (pi: ExtensionAPI) {
   (globalThis as Record<symbol, unknown>)[MANAGER_KEY] = {
     waitForAll: () => manager.waitForAll(),
     hasRunning: () => manager.hasRunning(),
+    // biome-ignore lint/complexity/useMaxParams: cross-package API contract — consumers call spawn(pi, ctx, type, prompt, options)
     spawn: (piRef: unknown, ctx: unknown, type: string, prompt: string, options: unknown) =>
       manager.spawn({ pi: piRef as ExtensionAPI, ctx: ctx as ExtensionContext, type, prompt, options } as Parameters<
         typeof manager.spawn
@@ -135,7 +136,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   // Live widget: show running agents above editor
-  const widget = new AgentWidget(manager, agentActivity, registry);
+  const widget = new AgentWidget({ manager, agentActivity, registry });
   notifications = createNotificationSystem({ pi, widget, agentActivity });
 
   // ---- Batch tracking ----
@@ -165,5 +166,5 @@ export default function (pi: ExtensionAPI) {
   });
 
   // ---- Workflow engine ----
-  registerWorkflowExtension(pi, join(extensionRoot, "workflows"), { manager });
+  registerWorkflowExtension(pi, { builtinWorkflowsDir: join(extensionRoot, "workflows"), deps: { manager } });
 }

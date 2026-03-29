@@ -31,11 +31,15 @@ export interface RpcDeps {
  * Wire a single RPC handler: listen on `channel`, run `fn(params)`,
  * emit the reply envelope on `channel:reply:${requestId}`.
  */
-function handleRpc<P extends { requestId: string }>(
-  events: EventBus,
-  channel: string,
-  fn: (params: P) => unknown | Promise<unknown>,
-): () => void {
+function handleRpc<P extends { requestId: string }>({
+  events,
+  channel,
+  fn,
+}: {
+  events: EventBus;
+  channel: string;
+  fn: (params: P) => unknown | Promise<unknown>;
+}) {
   return events.on(channel, async (raw: unknown) => {
     const params = raw as P;
     try {
@@ -59,22 +63,28 @@ function handleRpc<P extends { requestId: string }>(
 export function registerRpcHandlers(deps: RpcDeps) {
   const { events, pi, getCtx, manager } = deps;
 
-  const unsubPing = handleRpc(events, "subagents:rpc:ping", () => {
-    return { version: PROTOCOL_VERSION };
+  const unsubPing = handleRpc({
+    events,
+    channel: "subagents:rpc:ping",
+    fn: () => ({ version: PROTOCOL_VERSION }),
   });
 
-  const unsubSpawn = handleRpc<{ requestId: string; type: string; prompt: string; options?: unknown }>(
+  const unsubSpawn = handleRpc<{ requestId: string; type: string; prompt: string; options?: unknown }>({
     events,
-    "subagents:rpc:spawn",
-    ({ type, prompt, options }) => {
+    channel: "subagents:rpc:spawn",
+    fn: ({ type, prompt, options }) => {
       const ctx = getCtx();
       if (!ctx) throw new Error("No active session");
       return { id: manager.spawn({ pi, ctx, type, prompt, options: options ?? {} }) };
     },
-  );
+  });
 
-  const unsubStop = handleRpc<{ requestId: string; agentId: string }>(events, "subagents:rpc:stop", ({ agentId }) => {
-    if (!manager.abort(agentId)) throw new Error("Agent not found");
+  const unsubStop = handleRpc<{ requestId: string; agentId: string }>({
+    events,
+    channel: "subagents:rpc:stop",
+    fn: ({ agentId }) => {
+      if (!manager.abort(agentId)) throw new Error("Agent not found");
+    },
   });
 
   return { unsubPing, unsubSpawn, unsubStop };

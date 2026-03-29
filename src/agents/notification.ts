@@ -80,6 +80,7 @@ export function createNotificationSystem({
 export type NotificationSystem = ReturnType<typeof createNotificationSystem>;
 
 export function registerMessageRenderer(pi: ExtensionAPI) {
+  // biome-ignore lint/complexity/useMaxParams: pi registerMessageRenderer callback signature is fixed
   pi.registerMessageRenderer<NotificationDetails>("subagent-notification", (message, { expanded }, theme) => {
     const d = message.details;
     if (!d) return undefined;

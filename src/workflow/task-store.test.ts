@@ -1,6 +1,6 @@
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { initWorkflowDir } from "./store.js";
 import { blockTask, completeTask, createTask, getReadyTasks, getTask, getTasks } from "./task-store.js";
@@ -9,12 +9,12 @@ let tmpDir: string;
 const WF_ID = "flow-tasks-test";
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-flow-tasks-"));
+  tmpDir = mkdtempSync(join(tmpdir(), "pi-flow-tasks-"));
   initWorkflowDir(tmpDir, WF_ID);
 });
 
 afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  rmSync(tmpDir, { recursive: true, force: true });
 });
 
 describe("createTask / getTask", () => {
@@ -32,9 +32,9 @@ describe("createTask / getTask", () => {
   });
 
   it("returns null for structurally invalid task JSON", () => {
-    const dir = path.join(tmpDir, ".pi", "flow", WF_ID, "tasks");
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, "bad-task.json"), JSON.stringify({ notATask: true }));
+    const dir = join(tmpDir, ".pi", "flow", WF_ID, "tasks");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "bad-task.json"), JSON.stringify({ notATask: true }));
     expect(getTask({ cwd: tmpDir, workflowId: WF_ID, taskId: "bad-task" })).toBeNull();
   });
 });

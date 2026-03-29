@@ -1,17 +1,17 @@
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadWorkflowsFromDir } from "./loader.js";
 
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-flow-loader-"));
+  tmpDir = mkdtempSync(join(tmpdir(), "pi-flow-loader-"));
 });
 
 afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  rmSync(tmpDir, { recursive: true, force: true });
 });
 
 const RESEARCH_MD = `---
@@ -63,7 +63,7 @@ config:
 
 describe("loadWorkflowsFromDir", () => {
   it("loads workflow definitions from .md files", () => {
-    fs.writeFileSync(path.join(tmpDir, "research.md"), RESEARCH_MD);
+    writeFileSync(join(tmpDir, "research.md"), RESEARCH_MD);
     const workflows = loadWorkflowsFromDir(tmpDir, "builtin");
     expect(workflows.size).toBe(1);
     const w = workflows.get("research");
@@ -78,7 +78,7 @@ describe("loadWorkflowsFromDir", () => {
   });
 
   it("parses complex workflow with multiple phases", () => {
-    fs.writeFileSync(path.join(tmpDir, "fix.md"), FIX_MD);
+    writeFileSync(join(tmpDir, "fix.md"), FIX_MD);
     const workflows = loadWorkflowsFromDir(tmpDir, "builtin");
     const w = workflows.get("fix");
     expect(w?.phases).toHaveLength(4);
@@ -96,8 +96,8 @@ describe("loadWorkflowsFromDir", () => {
   });
 
   it("skips non-.md files", () => {
-    fs.writeFileSync(path.join(tmpDir, "notes.txt"), "not a workflow");
-    fs.writeFileSync(path.join(tmpDir, "research.md"), RESEARCH_MD);
+    writeFileSync(join(tmpDir, "notes.txt"), "not a workflow");
+    writeFileSync(join(tmpDir, "research.md"), RESEARCH_MD);
     const workflows = loadWorkflowsFromDir(tmpDir, "builtin");
     expect(workflows.size).toBe(1);
   });
