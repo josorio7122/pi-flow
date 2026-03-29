@@ -49,6 +49,7 @@ function run(params: { name: string; model: string; timeout: number }) {}
 - Feature folders over layer folders — group by domain (`agents/`, `dispatch/`), not by role (`utils/`, `services/`)
 - No barrel files (`index.ts` re-exports) — they break tree-shaking, hide circular deps, and slow builds. Use direct imports
 - Export only what other modules consume — internal helpers stay unexported
+- After any refactor that changes APIs, removes return types, or converts patterns — grep for orphaned types/interfaces/consts that lost all references
 - Split triggers: file > 200 lines, 2+ unrelated concepts, or a function reused from another module
 
 ### Strict tsconfig is non-negotiable
