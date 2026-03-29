@@ -64,11 +64,7 @@ export function loadWorkflowsFromDir(dir: string, source: WorkflowDefinition["so
   return workflows;
 }
 
-function parseWorkflowFile(
-  content: string,
-  fallbackName: string,
-  source: WorkflowDefinition["source"],
-): WorkflowDefinition | null {
+function parseWorkflowFile(content: string, fallbackName: string, source: WorkflowDefinition["source"]) {
   const { frontmatter: fm, body } = parseFrontmatter<Record<string, unknown>>(content);
 
   const name = typeof fm.name === "string" ? fm.name : fallbackName;
@@ -100,7 +96,7 @@ function parseStringArray(val: unknown): string[] {
 
 const VALID_MODES = new Set<PhaseMode>(["single", "parallel", "gate", "review-loop"]);
 
-function parsePhases(val: unknown): PhaseDefinition[] {
+function parsePhases(val: unknown) {
   if (!Array.isArray(val)) return [];
   const phases: PhaseDefinition[] = [];
 

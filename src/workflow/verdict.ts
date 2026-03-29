@@ -5,7 +5,7 @@
 
 import type { ParsedReview, ReviewVerdict } from "./types.js";
 
-export function parseVerdict(output: string): ParsedReview {
+export function parseVerdict(output: string) {
   const result: ParsedReview = {
     verdict: "NEEDS_WORK",
     summary: "",

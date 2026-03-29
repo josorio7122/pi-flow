@@ -53,7 +53,7 @@ describe("getReadyTasks", () => {
   it("unblocks dependent tasks when dependency completes", () => {
     createTask(tmpDir, WF_ID, { id: "task-1", title: "A", dependsOn: [] });
     createTask(tmpDir, WF_ID, { id: "task-2", title: "B", dependsOn: ["task-1"] });
-    completeTask(tmpDir, WF_ID, "task-1", "done");
+    completeTask({ cwd: tmpDir, workflowId: WF_ID, taskId: "task-1", summary: "done" });
     const ready = getReadyTasks(tmpDir, WF_ID);
     expect(ready).toHaveLength(1);
     expect(ready[0]?.id).toBe("task-2");
@@ -63,7 +63,7 @@ describe("getReadyTasks", () => {
 describe("completeTask", () => {
   it("marks task as done with summary", () => {
     createTask(tmpDir, WF_ID, { id: "task-1", title: "A", dependsOn: [] });
-    completeTask(tmpDir, WF_ID, "task-1", "all good");
+    completeTask({ cwd: tmpDir, workflowId: WF_ID, taskId: "task-1", summary: "all good" });
     const task = getTask(tmpDir, WF_ID, "task-1");
     expect(task?.status).toBe("done");
     expect(task?.summary).toBe("all good");
@@ -73,7 +73,7 @@ describe("completeTask", () => {
 describe("blockTask", () => {
   it("marks task as blocked with reason", () => {
     createTask(tmpDir, WF_ID, { id: "task-1", title: "A", dependsOn: [] });
-    blockTask(tmpDir, WF_ID, "task-1", "missing dependency");
+    blockTask({ cwd: tmpDir, workflowId: WF_ID, taskId: "task-1", reason: "missing dependency" });
     const task = getTask(tmpDir, WF_ID, "task-1");
     expect(task?.status).toBe("blocked");
     expect(task?.blockedReason).toBe("missing dependency");
@@ -83,7 +83,7 @@ describe("blockTask", () => {
 describe("resetTask", () => {
   it("resets a done task back to todo", () => {
     createTask(tmpDir, WF_ID, { id: "task-1", title: "A", dependsOn: [] });
-    completeTask(tmpDir, WF_ID, "task-1", "done");
+    completeTask({ cwd: tmpDir, workflowId: WF_ID, taskId: "task-1", summary: "done" });
     resetTask(tmpDir, WF_ID, "task-1");
     const task = getTask(tmpDir, WF_ID, "task-1");
     expect(task?.status).toBe("todo");

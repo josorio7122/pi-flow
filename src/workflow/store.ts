@@ -40,7 +40,7 @@ function ensureDir(dir: string) {
   }
 }
 
-function readJson<T>(filePath: string): T | null {
+export function readJson<T>(filePath: string): T | null {
   if (!fs.existsSync(filePath)) return null;
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
@@ -49,7 +49,7 @@ function readJson<T>(filePath: string): T | null {
   }
 }
 
-function writeJson(filePath: string, data: unknown) {
+export function writeJson(filePath: string, data: unknown) {
   ensureDir(path.dirname(filePath));
   const temp = `${filePath}.tmp-${process.pid}-${Date.now()}`;
   fs.writeFileSync(temp, JSON.stringify(data, null, 2));

@@ -7,7 +7,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { getFlowDir } from "./store.js";
+import { getFlowDir, readJson, writeJson } from "./store.js";
 import type { Task } from "./types.js";
 
 // ── Path Helpers ─────────────────────────────────────────────────────
@@ -18,25 +18,6 @@ function tasksDir(cwd: string, workflowId: string) {
 
 function taskPath(cwd: string, workflowId: string, taskId: string) {
   return path.join(tasksDir(cwd, workflowId), `${taskId}.json`);
-}
-
-// ── I/O Helpers ──────────────────────────────────────────────────────
-
-function readJson<T>(filePath: string): T | null {
-  if (!fs.existsSync(filePath)) return null;
-  try {
-    return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
-  } catch {
-    return null;
-  }
-}
-
-function writeJson(filePath: string, data: unknown) {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const temp = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-  fs.writeFileSync(temp, JSON.stringify(data, null, 2));
-  fs.renameSync(temp, filePath);
 }
 
 // ── CRUD ─────────────────────────────────────────────────────────────
@@ -92,7 +73,17 @@ export function getReadyTasks(cwd: string, workflowId: string) {
 
 // ── State Transitions ────────────────────────────────────────────────
 
-function updateTask(cwd: string, workflowId: string, taskId: string, updates: Partial<Task>) {
+function updateTask({
+  cwd,
+  workflowId,
+  taskId,
+  updates,
+}: {
+  cwd: string;
+  workflowId: string;
+  taskId: string;
+  updates: Partial<Task>;
+}) {
   const task = getTask(cwd, workflowId, taskId);
   if (!task) return null;
   const updated = { ...task, ...updates, updatedAt: new Date().toISOString() };
@@ -100,21 +91,46 @@ function updateTask(cwd: string, workflowId: string, taskId: string, updates: Pa
   return updated;
 }
 
-export function completeTask(cwd: string, workflowId: string, taskId: string, summary: string) {
-  return updateTask(cwd, workflowId, taskId, { status: "done", summary });
+export function completeTask({
+  cwd,
+  workflowId,
+  taskId,
+  summary,
+}: {
+  cwd: string;
+  workflowId: string;
+  taskId: string;
+  summary: string;
+}) {
+  return updateTask({ cwd, workflowId, taskId, updates: { status: "done", summary } });
 }
 
-export function blockTask(cwd: string, workflowId: string, taskId: string, reason: string) {
-  return updateTask(cwd, workflowId, taskId, { status: "blocked", blockedReason: reason });
+export function blockTask({
+  cwd,
+  workflowId,
+  taskId,
+  reason,
+}: {
+  cwd: string;
+  workflowId: string;
+  taskId: string;
+  reason: string;
+}) {
+  return updateTask({ cwd, workflowId, taskId, updates: { status: "blocked", blockedReason: reason } });
 }
 
 export function resetTask(cwd: string, workflowId: string, taskId: string) {
   const task = getTask(cwd, workflowId, taskId);
   if (!task) return null;
-  return updateTask(cwd, workflowId, taskId, {
-    status: "todo",
-    summary: undefined,
-    blockedReason: undefined,
-    attemptCount: task.attemptCount + 1,
+  return updateTask({
+    cwd,
+    workflowId,
+    taskId,
+    updates: {
+      status: "todo",
+      summary: undefined,
+      blockedReason: undefined,
+      attemptCount: task.attemptCount + 1,
+    },
   });
 }

@@ -9,7 +9,6 @@
  */
 
 import type {
-  ExitReason,
   PhaseResult,
   PhaseStatus,
   ReviewIssue,
@@ -59,7 +58,7 @@ export function createWorkflowState({
   return state;
 }
 
-export function createTokenState(limit: number): TokenState {
+export function createTokenState(limit: number) {
   return {
     total: 0,
     byPhase: {},
@@ -163,7 +162,7 @@ export async function runReviewFixLoop({
   onReview: () => Promise<{ verdict: string; issues: ReviewIssue[] }>;
   onFix: (issues: readonly ReviewIssue[]) => Promise<void>;
   onEvent: (event: WorkflowEvent) => void;
-}): Promise<ExitReason> {
+}) {
   while (state.reviewCycle < maxCycles) {
     if (checkTokenLimit(state.tokens)) return "token_limit";
 
