@@ -100,4 +100,20 @@ describe("event operations", () => {
     initWorkflowDir(tmpDir, WF_ID);
     expect(readEvents(tmpDir, WF_ID)).toEqual([]);
   });
+
+  it("skips malformed JSONL lines", () => {
+    initWorkflowDir(tmpDir, WF_ID);
+    const e1: WorkflowEvent = { type: "phase_start", phase: "scout", ts: 1001 };
+    appendEvent(tmpDir, WF_ID, e1);
+    // Append a corrupt line directly
+    const eventsFile = path.join(getFlowDir(tmpDir, WF_ID), "events.jsonl");
+    fs.appendFileSync(eventsFile, "not valid json\n");
+    fs.appendFileSync(eventsFile, '{"no_type_field": true}\n');
+    const e2: WorkflowEvent = { type: "phase_complete", phase: "scout", duration: 100, tokens: 50, ts: 1002 };
+    appendEvent(tmpDir, WF_ID, e2);
+    const events = readEvents(tmpDir, WF_ID);
+    expect(events).toHaveLength(2);
+    expect(events[0]?.type).toBe("phase_start");
+    expect(events[1]?.type).toBe("phase_complete");
+  });
 });

@@ -123,16 +123,32 @@ export function appendEvent(cwd: string, workflowId: string, event: WorkflowEven
   fs.appendFileSync(fp, JSON.stringify(event) + "\n");
 }
 
+function isWorkflowEvent(val: unknown): val is WorkflowEvent {
+  return (
+    typeof val === "object" &&
+    val !== null &&
+    "type" in val &&
+    typeof (val as Record<string, unknown>).type === "string"
+  );
+}
+
 export function readEvents(cwd: string, workflowId: string) {
   const fp = eventsPath(cwd, workflowId);
   if (!fs.existsSync(fp)) return [];
   try {
     const content = fs.readFileSync(fp, "utf-8").trim();
     if (!content) return [];
-    return content
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => JSON.parse(line) as WorkflowEvent);
+    const events: WorkflowEvent[] = [];
+    for (const line of content.split("\n")) {
+      if (!line) continue;
+      try {
+        const parsed: unknown = JSON.parse(line);
+        if (isWorkflowEvent(parsed)) events.push(parsed);
+      } catch {
+        // Skip malformed JSONL lines
+      }
+    }
+    return events;
   } catch {
     return [];
   }
