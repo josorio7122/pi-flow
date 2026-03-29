@@ -13,7 +13,7 @@ import { resolveModel } from "../config/model-resolver.js";
 import type { AgentConfig, AgentRecord, JoinMode } from "../types.js";
 import { type AgentActivity, formatDuration, getDisplayName } from "../ui/formatters.js";
 
-export interface AgentsCommandDeps {
+interface AgentsCommandDeps {
   pi: ExtensionAPI;
   manager: AgentManager;
   agentActivity: Map<string, AgentActivity>;

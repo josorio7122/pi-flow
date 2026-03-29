@@ -77,7 +77,7 @@ export interface ToolActivity {
   toolName: string;
 }
 
-export interface RunOptions {
+interface RunOptions {
   /** ExtensionAPI instance — used for pi.exec() instead of execSync. */
   pi: ExtensionAPI;
   model?: Model<Api> | undefined;
@@ -101,7 +101,7 @@ export interface RunOptions {
   registry?: Registry | undefined;
 }
 
-export interface RunResult {
+interface RunResult {
   responseText: string;
   session: AgentSession;
   /** True if the agent was hard-aborted (max_turns + grace exceeded). */

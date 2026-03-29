@@ -114,7 +114,7 @@ export function buildMemoryBlock({ agentName, scope, cwd }: { agentName: string;
 }
 
 /** Pure — builds the memory prompt string from already-read data. */
-export function buildMemoryPrompt({ memoryDir, scope, existingMemory }: { memoryDir: string; scope: MemoryScope; existingMemory: string | undefined }) {
+function buildMemoryPrompt({ memoryDir, scope, existingMemory }: { memoryDir: string; scope: MemoryScope; existingMemory: string | undefined }) {
 
   const header = `# Agent Memory
 
@@ -158,7 +158,7 @@ export function buildReadOnlyMemoryBlock({ agentName, scope, cwd }: { agentName:
 }
 
 /** Pure — builds the read-only memory prompt string from already-read data. */
-export function buildReadOnlyMemoryPrompt({ scope, existingMemory }: { scope: MemoryScope; existingMemory: string | undefined }) {
+function buildReadOnlyMemoryPrompt({ scope, existingMemory }: { scope: MemoryScope; existingMemory: string | undefined }) {
 
   const header = `# Agent Memory (read-only)
 

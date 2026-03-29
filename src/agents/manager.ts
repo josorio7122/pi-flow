@@ -15,8 +15,8 @@ import type { AgentRecord, IsolationMode, SubagentType } from "../types.js";
 import type { Registry } from "./registry.js";
 import { type RunnerSettings, resumeAgent, runAgent, type ToolActivity } from "./runner.js";
 
-export type OnAgentComplete = (record: AgentRecord) => void;
-export type OnAgentStart = (record: AgentRecord) => void;
+type OnAgentComplete = (record: AgentRecord) => void;
+type OnAgentStart = (record: AgentRecord) => void;
 
 /** Default max concurrent background agents. */
 const DEFAULT_MAX_CONCURRENT = 4;

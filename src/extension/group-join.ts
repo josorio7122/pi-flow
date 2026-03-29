@@ -8,7 +8,7 @@
 
 import type { AgentRecord } from "../types.js";
 
-export type DeliveryCallback = (records: AgentRecord[], partial: boolean) => void;
+type DeliveryCallback = (records: AgentRecord[], partial: boolean) => void;
 
 interface AgentGroup {
   groupId: string;
@@ -24,18 +24,18 @@ const DEFAULT_TIMEOUT = 30_000;
 /** Straggler re-batch timeout: 15s. */
 const STRAGGLER_TIMEOUT = 15_000;
 
-export interface GroupJoinState {
+interface GroupJoinState {
   groups: Map<string, AgentGroup>;
   agentToGroup: Map<string, string>;
 }
 
-export type CompleteResult =
+type CompleteResult =
   | { action: "pass" }
   | { action: "held" }
   | { action: "deliver"; records: AgentRecord[]; partial: boolean };
 
 /** Pure — register a group of agent IDs. */
-export function registerGroup(state: GroupJoinState, groupId: string, agentIds: string[]) {
+function registerGroup(state: GroupJoinState, groupId: string, agentIds: string[]) {
   const group: AgentGroup = {
     groupId,
     agentIds: new Set(agentIds),
@@ -50,7 +50,7 @@ export function registerGroup(state: GroupJoinState, groupId: string, agentIds: 
 }
 
 /** Pure — process an agent completion, return what action should be taken. */
-export function processCompletion(state: GroupJoinState, record: AgentRecord): CompleteResult {
+function processCompletion(state: GroupJoinState, record: AgentRecord): CompleteResult {
   const groupId = state.agentToGroup.get(record.id);
   if (!groupId) return { action: "pass" };
 
@@ -67,7 +67,7 @@ export function processCompletion(state: GroupJoinState, record: AgentRecord): C
 }
 
 /** Pure — process a timeout, return partial delivery result. */
-export function processTimeout(state: GroupJoinState, groupId: string): CompleteResult {
+function processTimeout(state: GroupJoinState, groupId: string): CompleteResult {
   const group = state.groups.get(groupId);
   if (!group || group.delivered) return { action: "pass" };
 
@@ -91,7 +91,7 @@ export function processTimeout(state: GroupJoinState, groupId: string): Complete
 }
 
 /** Pure — mark a group as fully delivered and clean up state. */
-export function markDelivered(state: GroupJoinState, groupId: string) {
+function markDelivered(state: GroupJoinState, groupId: string) {
   const group = state.groups.get(groupId);
   if (!group) return;
   if (group.timeoutHandle) {
@@ -106,7 +106,7 @@ export function markDelivered(state: GroupJoinState, groupId: string) {
 }
 
 /** Check if an agent is in a group. */
-export function isGrouped(state: GroupJoinState, agentId: string) {
+function isGrouped(state: GroupJoinState, agentId: string) {
   return state.agentToGroup.has(agentId);
 }
 

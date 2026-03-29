@@ -36,7 +36,7 @@ const STATUS_DISPLAY: Record<string, { color: ThemeColor; char: string; label: s
 };
 
 /** Pure — render a single finished agent line. */
-export function renderFinishedLine(
+function renderFinishedLine(
   a: { id: string; type: SubagentType; status: string; description: string; toolUses: number; startedAt: number; completedAt?: number | undefined; error?: string | undefined },
   theme: Theme,
   activity?: AgentActivity,

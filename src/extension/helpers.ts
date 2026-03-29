@@ -22,7 +22,7 @@ export function safeFormatTokens(session: { getSessionStats(): { tokens: { total
  * Used by both foreground and background paths to avoid duplication.
  */
 /** Mutates state in place — applies a tool activity event. */
-export function applyToolActivity(state: AgentActivity, activity: { type: "start" | "end"; toolName: string }) {
+function applyToolActivity(state: AgentActivity, activity: { type: "start" | "end"; toolName: string }) {
   if (activity.type === "start") {
     state.activeTools.set(activity.toolName + "_" + Date.now(), activity.toolName);
   } else {
@@ -59,7 +59,7 @@ export function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => 
 }
 
 /** Human-readable status label for agent completion. */
-export function getStatusLabel(status: string, error?: string) {
+function getStatusLabel(status: string, error?: string) {
   switch (status) {
     case "error": return `Error: ${error ?? "unknown"}`;
     case "aborted": return "Aborted (max turns exceeded)";
@@ -80,7 +80,7 @@ export function getStatusNote(status: string) {
 }
 
 /** Escape XML special characters to prevent injection in structured notifications. */
-export function escapeXml(s: string) {
+function escapeXml(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 

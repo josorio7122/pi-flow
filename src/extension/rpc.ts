@@ -11,10 +11,6 @@
 
 import type { EventBus } from "@mariozechner/pi-coding-agent";
 
-/** RPC reply envelope — matches pi-mono's RpcResponse shape. */
-export type RpcReply<T = void> =
-  | { success: true; data?: T }
-  | { success: false; error: string };
 
 /** RPC protocol version — bumped when the envelope or method contracts change. */
 export const PROTOCOL_VERSION = 2;

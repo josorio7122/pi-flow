@@ -175,7 +175,7 @@ export class ConversationViewer implements Component {
 }
 
 /** Pure — builds conversation content lines from messages and activity state. */
-export function buildConversationLines({ messages, activity, status, width, theme }: {
+function buildConversationLines({ messages, activity, status, width, theme }: {
   messages: readonly AgentMessage[];
   activity: AgentActivity | undefined;
   status: string;
