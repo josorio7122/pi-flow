@@ -5,6 +5,7 @@
  * Subscribes to session events for real-time streaming updates.
  */
 
+import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { AgentSession, Theme } from "@mariozechner/pi-coding-agent";
 import { type Component, matchesKey, type TUI, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
 import { getConfig } from "../agents/registry.js";
@@ -163,10 +164,27 @@ export class ConversationViewer implements Component {
   }
 
   private buildContentLines(width: number) {
+    return buildConversationLines({
+      messages: this.session.messages,
+      activity: this.activity,
+      status: this.record.status,
+      width,
+      theme: this.theme,
+    });
+  }
+}
+
+/** Pure — builds conversation content lines from messages and activity state. */
+export function buildConversationLines({ messages, activity, status, width, theme }: {
+  messages: readonly AgentMessage[];
+  activity: AgentActivity | undefined;
+  status: string;
+  width: number;
+  theme: Theme;
+}) {
     if (width <= 0) return [];
 
-    const th = this.theme;
-    const messages = this.session.messages;
+    const th = theme;
     const lines: string[] = [];
 
     if (messages.length === 0) {
@@ -233,12 +251,11 @@ export class ConversationViewer implements Component {
     }
 
     // Streaming indicator for running agents
-    if (this.record.status === "running" && this.activity) {
-      const act = describeActivity(this.activity.activeTools, this.activity.responseText);
+    if (status === "running" && activity) {
+      const act = describeActivity(activity.activeTools, activity.responseText);
       lines.push("");
       lines.push(truncateToWidth(th.fg("accent", "▍ ") + th.fg("dim", act), width));
     }
 
     return lines.map(l => truncateToWidth(l, width));
-  }
 }
