@@ -13,7 +13,6 @@ import {
   formatTokens,
   formatTurns,
   getDisplayName,
-  getPromptModeLabel,
 } from "./formatters.js";
 
 const MAX_WIDGET_LINES = 12;
@@ -44,11 +43,9 @@ export function renderFinishedLine({
   };
   theme: Theme;
   activity?: AgentActivity | undefined;
-  config?: { displayName: string; promptMode: "replace" | "append" } | undefined;
+  config?: { displayName: string } | undefined;
 }) {
-  const cfg = config ?? { displayName: agent.type, promptMode: "replace" as const };
-  const name = getDisplayName(agent.type, cfg.displayName);
-  const modeLabel = getPromptModeLabel(cfg.promptMode);
+  const name = getDisplayName(agent.type, config?.displayName);
   const duration = formatMs((agent.completedAt ?? Date.now()) - agent.startedAt);
 
   const display = STATUS_DISPLAY[agent.status] ?? STATUS_DISPLAY.aborted!;
@@ -66,8 +63,7 @@ export function renderFinishedLine({
     duration,
   ];
 
-  const modeTag = modeLabel ? ` ${theme.fg("dim", `(${modeLabel})`)}` : "";
-  return `${icon} ${theme.fg("dim", name)}${modeTag}  ${theme.fg("dim", agent.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusSuffix}`;
+  return `${icon} ${theme.fg("dim", name)}  ${theme.fg("dim", agent.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusSuffix}`;
 }
 
 export function renderRunningLine({
@@ -80,12 +76,10 @@ export function renderRunningLine({
   agent: AgentRecord;
   theme: Theme;
   activity?: AgentActivity | undefined;
-  config: { displayName: string; promptMode: "replace" | "append" };
+  config: { displayName: string };
   frame: string;
 }) {
   const name = getDisplayName(agent.type, config.displayName);
-  const modeLabel = getPromptModeLabel(config.promptMode);
-  const modeTag = modeLabel ? ` ${theme.fg("dim", `(${modeLabel})`)}` : "";
   const elapsed = formatMs(Date.now() - agent.startedAt);
 
   const toolUses = activity?.toolUses ?? agent.toolUses;
@@ -107,7 +101,7 @@ export function renderRunningLine({
   const activityText = activity ? describeActivity(activity.activeTools, activity.responseText) : "thinking…";
 
   return {
-    header: `${theme.fg("dim", "├─")} ${theme.fg("accent", frame)} ${theme.bold(name)}${modeTag}  ${theme.fg("muted", agent.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}`,
+    header: `${theme.fg("dim", "├─")} ${theme.fg("accent", frame)} ${theme.bold(name)}  ${theme.fg("muted", agent.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}`,
     activity: `${theme.fg("dim", "│  ")}${theme.fg("dim", `  ⎿  ${activityText}`)}`,
   };
 }
