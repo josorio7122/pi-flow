@@ -14,10 +14,7 @@ Use **npm**: `npm install`, `npm test`, `npm run check`
 | All checks | `npm run check` |
 
 ## Commit Attribution
-AI commits MUST include:
-```
-Co-Authored-By: Claude <noreply@anthropic.com>
-```
+Never add `Co-Authored-By` trailers or any AI attribution to commit messages.
 
 ## TypeScript Rules
 
