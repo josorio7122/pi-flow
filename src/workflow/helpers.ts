@@ -72,11 +72,20 @@ export function buildWorkflowStatusText({
   );
 }
 
+function isBookmark(data: unknown): data is ActiveWorkflowBookmark {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "workflowId" in data &&
+    typeof (data as Record<string, unknown>).workflowId === "string"
+  );
+}
+
 export function findLatestBookmark(entries: readonly { type: string; customType?: string; data?: unknown }[]) {
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
-    if (entry?.type === "custom" && entry.customType === ENTRY_TYPE && entry.data) {
-      return entry.data as ActiveWorkflowBookmark;
+    if (entry?.type === "custom" && entry.customType === ENTRY_TYPE && isBookmark(entry.data)) {
+      return entry.data;
     }
   }
   return null;

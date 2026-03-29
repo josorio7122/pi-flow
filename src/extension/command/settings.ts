@@ -4,7 +4,6 @@
 
 import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
 import { normalizeMaxTurns } from "../../agents/runner-types.js";
-import type { JoinMode } from "../../types.js";
 import type { CommandDeps } from "./types.js";
 
 export async function showSettings(deps: CommandDeps, ctx: ExtensionCommandContext) {
@@ -58,8 +57,11 @@ export async function showSettings(deps: CommandDeps, ctx: ExtensionCommandConte
       "group — always group background agents",
     ]);
     if (val) {
-      setDefaultJoinMode(val.split(" ")[0] as JoinMode);
-      ctx.ui.notify(`Default join mode set to ${val.split(" ")[0]}`, "info");
+      const mode = val.split(" ")[0];
+      if (mode === "smart" || mode === "async" || mode === "group") {
+        setDefaultJoinMode(mode);
+        ctx.ui.notify(`Default join mode set to ${mode}`, "info");
+      }
     }
   }
 }

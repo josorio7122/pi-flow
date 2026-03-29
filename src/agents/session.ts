@@ -145,7 +145,7 @@ export async function buildAgentSession({
     resolveDefaultModel({ parentModel: ctx.model, registry: ctx.modelRegistry, configModel: agentConfig?.model });
   const thinkingLevel = options.thinkingLevel ?? agentConfig?.thinking;
 
-  const sessionOpts: Record<string, unknown> = {
+  const { session } = await createAgentSession({
     cwd: effectiveCwd,
     sessionManager: SessionManager.inMemory(effectiveCwd),
     settingsManager: SettingsManager.create(),
@@ -153,10 +153,8 @@ export async function buildAgentSession({
     model,
     tools,
     resourceLoader: loader,
-  };
-  if (thinkingLevel) sessionOpts.thinkingLevel = thinkingLevel;
-
-  const { session } = await createAgentSession(sessionOpts as Parameters<typeof createAgentSession>[0]);
+    ...(thinkingLevel ? { thinkingLevel } : {}),
+  } as Parameters<typeof createAgentSession>[0]);
 
   const disallowedSet = agentConfig?.disallowedTools ? new Set(agentConfig.disallowedTools) : undefined;
 
