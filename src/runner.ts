@@ -25,6 +25,7 @@ import { buildMemoryBlock, buildReadOnlyMemoryBlock } from './memory.js';
 import { emptyUsage } from './result-utils.js';
 import { createWorktree, cleanupWorktree, type WorktreeInfo } from './worktree.js';
 import { detectEnv, buildEnvBlock, SUB_AGENT_CONTEXT } from './env.js';
+import { preloadSkills } from './skill-loader.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -194,11 +195,22 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
     systemPrompt = systemPrompt + '\n\n' + memoryBlock;
   }
 
-  // 2. Create resource loader (no extensions, no skills — we inject via prompt)
+  // 1c. Preload skills if configured (#9)
+  if (Array.isArray(agent.skills)) {
+    const loaded = preloadSkills(agent.skills, effectiveCwd);
+    for (const skill of loaded) {
+      systemPrompt += `\n\n# Preloaded Skill: ${skill.name}\n${skill.content}`;
+    }
+  }
+
+  // 2. Create resource loader — respect extension/skill config (#8, #9)
+  const noExtensions = agent.extensions === false || agent.extensions === undefined;
+  const noSkills =
+    agent.skills === false || agent.skills === undefined || Array.isArray(agent.skills);
   const loader = new DefaultResourceLoader({
     cwd: effectiveCwd,
-    noExtensions: true,
-    noSkills: true,
+    noExtensions,
+    noSkills,
     noPromptTemplates: true,
     noThemes: true,
     systemPromptOverride: () => systemPrompt,
@@ -226,10 +238,29 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
     thinkingLevel: agent.thinking as any,
   });
 
-  // 6. Enforce exact tool set (minus denylist)
+  // 6. Enforce tool set — filter denylist + exclude our own tools from extensions
   const denied = agent.disallowedTools ? new Set(agent.disallowedTools) : undefined;
-  const activeTools = agent.tools.filter((t) => !denied?.has(t));
-  session.setActiveToolsByName(activeTools);
+  const EXCLUDED_TOOLS = ['dispatch_flow', 'get_agent_result', 'steer_agent'];
+  if (!noExtensions) {
+    // When extensions are loaded, filter active tools:
+    // keep agent's built-in tools + extension tools (minus excluded + denied)
+    const builtinNames = new Set(tools.map((t) => t.name));
+    const activeToolNames = session.getActiveToolNames().filter((t: string) => {
+      if (EXCLUDED_TOOLS.includes(t)) return false;
+      if (denied?.has(t)) return false;
+      if (builtinNames.has(t)) return true;
+      // Extension tool — check extension allowlist
+      if (Array.isArray(agent.extensions)) {
+        return agent.extensions.some((ext) => t.startsWith(ext) || t.includes(ext));
+      }
+      return true; // extensions === true → allow all
+    });
+    session.setActiveToolsByName(activeToolNames);
+  } else {
+    // No extensions — just apply agent tools minus denylist
+    const activeTools = agent.tools.filter((t) => !denied?.has(t));
+    session.setActiveToolsByName(activeTools);
+  }
 
   // 6b. Notify caller that session is ready (for pending steer flush, etc.)
   callbacks?.onSessionCreated?.(session);
