@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposal** — ready for review.
+**Implemented** — all three features complete on `feature/memory` branch.
 
 ## Motivation
 

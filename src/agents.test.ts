@@ -446,6 +446,99 @@ Body.
     const agent = parseAgentFile(filePath, 'builtin');
     expect(agent.writable).toBe(false);
   });
+
+  it('parses memory: project from frontmatter', () => {
+    const filePath = path.join(tmpDir, 'agent.md');
+    writeMd(
+      filePath,
+      `---
+name: builder
+model: claude-sonnet-4-6
+tools:
+  - read
+  - write
+writable: true
+memory: project
+limits:
+  max_tokens: 100000
+  max_steps: 120
+---
+
+Body.
+`,
+    );
+
+    const agent = parseAgentFile(filePath, 'builtin');
+    expect(agent.memory).toBe('project');
+  });
+
+  it('parses memory: global from frontmatter', () => {
+    const filePath = path.join(tmpDir, 'agent.md');
+    writeMd(
+      filePath,
+      `---
+name: reviewer
+model: claude-sonnet-4-6
+tools:
+  - read
+memory: global
+limits:
+  max_tokens: 60000
+  max_steps: 80
+---
+
+Body.
+`,
+    );
+
+    const agent = parseAgentFile(filePath, 'builtin');
+    expect(agent.memory).toBe('global');
+  });
+
+  it('defaults memory to undefined when not specified', () => {
+    const filePath = path.join(tmpDir, 'agent.md');
+    writeMd(
+      filePath,
+      `---
+name: agent
+model: claude-sonnet-4-6
+tools:
+  - read
+limits:
+  max_tokens: 10000
+  max_steps: 10
+---
+
+Body.
+`,
+    );
+
+    const agent = parseAgentFile(filePath, 'builtin');
+    expect(agent.memory).toBeUndefined();
+  });
+
+  it('ignores invalid memory values', () => {
+    const filePath = path.join(tmpDir, 'agent.md');
+    writeMd(
+      filePath,
+      `---
+name: agent
+model: claude-sonnet-4-6
+tools:
+  - read
+memory: invalid
+limits:
+  max_tokens: 10000
+  max_steps: 10
+---
+
+Body.
+`,
+    );
+
+    const agent = parseAgentFile(filePath, 'builtin');
+    expect(agent.memory).toBeUndefined();
+  });
 });
 
 // ─── validateAgent ────────────────────────────────────────────────────────────

@@ -16,6 +16,8 @@ tools:
   - find
   - ls
 writable: true
+isolation: worktree
+memory: project
 limits:
   max_tokens: 100000
   max_steps: 120

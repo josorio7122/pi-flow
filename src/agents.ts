@@ -223,6 +223,10 @@ export function parseAgentFile(filePath: string, source: 'builtin' | 'custom'): 
   const writes = toStringArray(fm.writes);
 
   const limitsRaw = fm.limits as Record<string, unknown> | undefined;
+  const memoryRaw = fm.memory as string | undefined;
+  const memory = memoryRaw === 'project' || memoryRaw === 'global' ? memoryRaw : undefined;
+  const isolationRaw = fm.isolation as string | undefined;
+  const isolation = isolationRaw === 'worktree' ? ('worktree' as const) : undefined;
 
   return {
     name: String(fm.name ?? ''),
@@ -241,6 +245,8 @@ export function parseAgentFile(filePath: string, source: 'builtin' | 'custom'): 
     systemPrompt: body.trim(),
     source,
     filePath,
+    memory,
+    isolation,
   };
 }
 

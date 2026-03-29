@@ -14,6 +14,10 @@ export interface FlowAgentConfig {
   systemPrompt: string; // markdown body after frontmatter
   source: 'builtin' | 'custom';
   filePath: string;
+  /** Persistent memory scope — agents with memory get a MEMORY.md directory */
+  memory?: 'project' | 'global';
+  /** Isolation mode — "worktree" runs the agent in a temporary git worktree */
+  isolation?: 'worktree';
 }
 
 // ─── Skill config parsed from .md frontmatter ────────────────────────────────
@@ -66,6 +70,8 @@ export interface DispatchParams {
   sessionDir?: string;
   /** Extension context — required for in-process agent execution */
   ctx?: unknown;
+  /** Run agents in background — returns IDs immediately */
+  background?: boolean;
 }
 
 export interface DispatchResult {
@@ -89,6 +95,8 @@ export interface SingleAgentResult {
   errorMessage?: string;
   step?: number;
   startedAt?: number;
+  /** Branch name if agent ran in a worktree and made changes */
+  worktreeBranch?: string;
 }
 
 export interface UsageStats {

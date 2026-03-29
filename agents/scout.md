@@ -13,6 +13,7 @@ tools:
   - find
   - ls
 writable: false
+memory: project
 limits:
   max_tokens: 60000
   max_steps: 80

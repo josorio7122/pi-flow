@@ -1,6 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { FlowAgentConfig } from './types.js';
 
+// ─── Mock memory module ───────────────────────────────────────────────────────
+
+vi.mock('./memory.js', () => ({
+  buildMemoryBlock: vi.fn(
+    (name: string, scope: string) =>
+      `# Agent Memory\n\nMemory Instructions\nagent-memory/${name}\nscope: ${scope}`,
+  ),
+  buildReadOnlyMemoryBlock: vi.fn(
+    (name: string, scope: string) =>
+      `# Agent Memory (read-only)\n\nagent-memory/${name}\nscope: ${scope}`,
+  ),
+}));
+
 // ─── Hoisted mock state (available to vi.mock factory) ────────────────────────
 
 const { state, mockSession, mockCreateAgentSession, mockReload } = vi.hoisted(() => {
@@ -414,6 +427,62 @@ describe('runAgent', () => {
     const injectedPrompt = loader.opts.systemPromptOverride();
     expect(injectedPrompt).toContain('Feature: auth-refresh');
     expect(injectedPrompt).toContain('Patterns: singleton used 3x');
+  });
+
+  it('injects writable memory block when agent has memory and is writable', async () => {
+    await runAgent({
+      ctx: makeCtx(),
+      agent: makeAgent({
+        memory: 'project',
+        writable: true,
+        systemPrompt: 'Base prompt',
+      }),
+      task: 'Build it',
+      variableMap: {},
+    });
+
+    const opts = (mockCreateAgentSession as any).mock.calls[0][0];
+    const loader = opts.resourceLoader;
+    const prompt = loader.opts.systemPromptOverride();
+    expect(prompt).toContain('Base prompt');
+    expect(prompt).toContain('Agent Memory');
+    expect(prompt).toContain('Memory Instructions');
+    expect(prompt).toContain('agent-memory');
+  });
+
+  it('injects read-only memory block when agent has memory and is not writable', async () => {
+    await runAgent({
+      ctx: makeCtx(),
+      agent: makeAgent({
+        memory: 'project',
+        writable: false,
+        systemPrompt: 'Scout instructions',
+      }),
+      task: 'Investigate',
+      variableMap: {},
+    });
+
+    const opts = (mockCreateAgentSession as any).mock.calls[0][0];
+    const loader = opts.resourceLoader;
+    const prompt = loader.opts.systemPromptOverride();
+    expect(prompt).toContain('Scout instructions');
+    expect(prompt).toContain('read-only');
+    expect(prompt).not.toContain('Memory Instructions');
+  });
+
+  it('does not inject memory block when agent has no memory config', async () => {
+    await runAgent({
+      ctx: makeCtx(),
+      agent: makeAgent({ systemPrompt: 'No memory agent' }),
+      task: 'Do stuff',
+      variableMap: {},
+    });
+
+    const opts = (mockCreateAgentSession as any).mock.calls[0][0];
+    const loader = opts.resourceLoader;
+    const prompt = loader.opts.systemPromptOverride();
+    expect(prompt).toBe('No memory agent');
+    expect(prompt).not.toContain('Agent Memory');
   });
 
   it('forwards abort signal to session.abort', async () => {
