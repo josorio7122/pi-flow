@@ -10,15 +10,12 @@
  *   /agents                 — Interactive agent management menu
  */
 
-import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import type { AgentSession, ExtensionAPI, ExtensionCommandContext, ExtensionContext, ModelRegistry } from "@mariozechner/pi-coding-agent";
+import type { AgentSession, ExtensionAPI, ExtensionContext, } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { loadCustomAgents } from "./agents/custom.js";
 import { createAgentManager } from "./agents/manager.js";
-import { BUILTIN_TOOL_NAMES, createRegistry } from "./agents/registry.js";
+import { createRegistry } from "./agents/registry.js";
 import { createRunnerSettings, getAgentConversation, normalizeMaxTurns, steerAgent } from "./agents/runner.js";
 import { resolveAgentInvocationConfig, resolveJoinMode } from "./config/invocation.js";
 import { resolveModel } from "./config/model-resolver.js";
@@ -27,7 +24,7 @@ import { createGroupJoinManager } from "./extension/group-join.js";
 import { buildDetails, buildNotificationDetails, createActivityTracker, formatTaskNotification, getStatusNote, safeFormatTokens, textResult } from "./extension/helpers.js";
 import { registerRpcHandlers } from "./extension/rpc.js";
 import { createOutputFilePath, streamToOutputFile, writeInitialEntry } from "./infra/output-file.js";
-import { type AgentConfig, type AgentRecord, type JoinMode, type NotificationDetails, type SubagentType } from "./types.js";
+import { type AgentRecord, type JoinMode, type NotificationDetails, type SubagentType } from "./types.js";
 import {
   type AgentActivity,
   type AgentDetails,

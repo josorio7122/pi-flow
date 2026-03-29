@@ -17,8 +17,6 @@ import { type RunnerSettings, resumeAgent, runAgent, type ToolActivity } from ".
 
 export type OnAgentComplete = (record: AgentRecord) => void;
 export type OnAgentStart = (record: AgentRecord) => void;
-type OnComplete = OnAgentComplete | undefined;
-type OnStart = OnAgentStart | undefined;
 
 /** Default max concurrent background agents. */
 const DEFAULT_MAX_CONCURRENT = 4;

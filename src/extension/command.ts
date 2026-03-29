@@ -35,7 +35,7 @@ function getModelLabelFromConfig(modelStr: string) {
 
 export function registerAgentsCommand(deps: AgentsCommandDeps) {
   const { pi, manager, agentActivity, reloadCustomAgents, getDefaultJoinMode, setDefaultJoinMode, runnerSettings, registry } = deps;
-  const { getAgentConfig, getAllTypes, resolveType } = registry;
+  const { getAgentConfig, getAllTypes } = registry;
 
   const projectAgentsDir = () => join(process.cwd(), ".pi", "agents");
   const personalAgentsDir = () => join(homedir(), ".pi", "agent", "agents");

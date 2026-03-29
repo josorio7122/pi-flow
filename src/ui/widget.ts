@@ -12,7 +12,6 @@ import type { Registry } from "../agents/registry.js";
 import type { SubagentType } from "../types.js";
 import {
   type AgentActivity,
-  type AgentDetails,
   describeActivity,
   ERROR_STATUSES,
   formatMs,

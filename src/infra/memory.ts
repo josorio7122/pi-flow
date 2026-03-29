@@ -154,11 +154,11 @@ This memory persists across sessions. Use it to build up knowledge over time.`;
 export function buildReadOnlyMemoryBlock({ agentName, scope, cwd }: { agentName: string; scope: MemoryScope; cwd: string }) {
   const memoryDir = resolveMemoryDir({ agentName, scope, cwd });
   const existingMemory = readMemoryIndex(memoryDir);
-  return buildReadOnlyMemoryPrompt({ memoryDir, scope, existingMemory });
+  return buildReadOnlyMemoryPrompt({ scope, existingMemory });
 }
 
 /** Pure — builds the read-only memory prompt string from already-read data. */
-export function buildReadOnlyMemoryPrompt({ memoryDir, scope, existingMemory }: { memoryDir: string; scope: MemoryScope; existingMemory: string | undefined }) {
+export function buildReadOnlyMemoryPrompt({ scope, existingMemory }: { scope: MemoryScope; existingMemory: string | undefined }) {
 
   const header = `# Agent Memory (read-only)
 
