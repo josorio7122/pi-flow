@@ -12,7 +12,6 @@ function makeHandoff(findings: string): AgentHandoff {
     filesAnalyzed: [],
     filesModified: [],
     toolsUsed: 3,
-    turnsUsed: 2,
     duration: 5000,
     timestamp: Date.now(),
   };

@@ -77,7 +77,6 @@ export interface WorkflowState {
   currentPhase: string;
   phases: Record<string, PhaseResult>;
   reviewCycle: number;
-  maxReviewCycles: number;
   exitReason?: ExitReason | undefined;
   tokens: TokenState;
   activeAgents: ActiveAgent[];
@@ -99,7 +98,6 @@ export interface AgentHandoff {
   filesAnalyzed: readonly string[];
   filesModified: readonly string[];
   toolsUsed: number;
-  turnsUsed: number;
   verdict?: ReviewVerdict | undefined;
   issues?: readonly ReviewIssue[] | undefined;
   duration: number;

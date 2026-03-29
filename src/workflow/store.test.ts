@@ -50,7 +50,6 @@ describe("state operations", () => {
       currentPhase: "scout",
       phases: { scout: { phase: "scout", status: "pending", attempt: 0 } },
       reviewCycle: 0,
-      maxReviewCycles: 3,
       tokens: { total: 0, byPhase: {}, limit: 100000, limitReached: false },
       activeAgents: [],
       completedAgents: [],
@@ -80,7 +79,6 @@ describe("handoff operations", () => {
     filesAnalyzed: ["a.ts"],
     filesModified: [],
     toolsUsed: 5,
-    turnsUsed: 2,
     duration: 10_000,
     timestamp: Date.now(),
   };

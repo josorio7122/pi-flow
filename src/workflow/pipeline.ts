@@ -46,7 +46,6 @@ export function createWorkflowState({
     currentPhase: firstPhase ? firstPhase.name : "",
     phases,
     reviewCycle: 0,
-    maxReviewCycles: 3,
     tokens: createTokenState(definition.config.tokenLimit),
     activeAgents: [],
     completedAgents: [],

@@ -53,7 +53,6 @@ describe("buildContinuationPrompt", () => {
       filesAnalyzed: [],
       filesModified: ["src/types.ts"],
       toolsUsed: 5,
-      turnsUsed: 3,
       duration: 30_000,
       timestamp: Date.now(),
     };

@@ -84,7 +84,6 @@ export async function executeReviewLoop({
       filesAnalyzed: [],
       filesModified: [],
       toolsUsed: reviewRecord.toolUses,
-      turnsUsed: 0,
       verdict: review.verdict,
       issues: review.issues.map((desc) => ({
         file: "",
@@ -158,7 +157,6 @@ export async function executeReviewLoop({
       filesAnalyzed: [],
       filesModified: [],
       toolsUsed: fixRecord.toolUses,
-      turnsUsed: 0,
       duration: fixDuration,
       timestamp: Date.now(),
     };

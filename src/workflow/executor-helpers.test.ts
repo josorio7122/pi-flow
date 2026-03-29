@@ -11,7 +11,6 @@ function makeState(phaseStatus: string, attempt = 1): WorkflowState {
     currentPhase: "build",
     phases: { build: { phase: "build", status: phaseStatus as WorkflowState["phases"][string]["status"], attempt } },
     reviewCycle: 0,
-    maxReviewCycles: 3,
     tokens: { total: 0, byPhase: {}, limit: 100000, limitReached: false },
     activeAgents: [],
     completedAgents: [],
@@ -29,7 +28,6 @@ const HANDOFF: AgentHandoff = {
   filesAnalyzed: [],
   filesModified: ["src/auth.ts"],
   toolsUsed: 5,
-  turnsUsed: 3,
   duration: 10000,
   timestamp: Date.now(),
 };

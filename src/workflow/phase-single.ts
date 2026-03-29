@@ -82,7 +82,6 @@ export async function executeSinglePhase({
     filesAnalyzed: [],
     filesModified: [],
     toolsUsed: record.toolUses,
-    turnsUsed: 0,
     duration,
     timestamp: Date.now(),
   };

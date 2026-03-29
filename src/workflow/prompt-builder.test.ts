@@ -20,7 +20,6 @@ const STATE: WorkflowState = {
   currentPhase: "scout",
   phases: { scout: { phase: "scout", status: "running", attempt: 1 } },
   reviewCycle: 0,
-  maxReviewCycles: 3,
   tokens: { total: 5000, byPhase: {}, limit: 100000, limitReached: false },
   activeAgents: [],
   completedAgents: [],
@@ -37,7 +36,6 @@ const HANDOFF: AgentHandoff = {
   filesAnalyzed: ["src/foo.ts", "src/bar.ts"],
   filesModified: [],
   toolsUsed: 5,
-  turnsUsed: 3,
   duration: 10000,
   timestamp: Date.now(),
 };

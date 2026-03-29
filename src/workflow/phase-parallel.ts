@@ -113,7 +113,6 @@ export async function executeParallelPhase({
         filesAnalyzed: [],
         filesModified: [],
         toolsUsed: record.toolUses,
-        turnsUsed: 0,
         duration,
         timestamp: Date.now(),
       };
