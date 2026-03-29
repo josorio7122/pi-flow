@@ -268,6 +268,58 @@ export class BackgroundManager {
     record.pendingSteers = undefined;
   }
 
+  // ── Resume ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Resume an existing agent session with a new prompt.
+   * Requires the agent to have a session reference and a resumeExecutor.
+   */
+  async resume(
+    id: string,
+    prompt: string,
+    executor: (session: unknown, prompt: string) => Promise<string>,
+  ): Promise<BackgroundRecord | undefined> {
+    const record = this.agents.get(id);
+    if (!record?.session) return undefined;
+
+    record.status = 'running';
+    record.startedAt = Date.now();
+    record.completedAt = undefined;
+    record.result = undefined;
+    record.error = undefined;
+
+    try {
+      const responseText = await executor(record.session, prompt);
+      record.status = 'completed';
+      record.completedAt = Date.now();
+      // Store response as a minimal result
+      record.result = {
+        agent: record.agent.name,
+        agentSource: record.agent.source,
+        task: prompt,
+        exitCode: 0,
+        messages: [{ role: 'assistant', content: [{ type: 'text', text: responseText }] }],
+        stderr: '',
+        usage: record.usage ?? {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          cost: 0,
+          contextTokens: 0,
+          turns: 0,
+        },
+        startedAt: record.startedAt,
+      };
+    } catch (err) {
+      record.status = 'error';
+      record.error = err instanceof Error ? err.message : String(err);
+      record.completedAt = Date.now();
+    }
+
+    return record;
+  }
+
   // ── Cleanup ───────────────────────────────────────────────────────────────
 
   clearCompleted(): void {
@@ -364,6 +416,42 @@ export class BackgroundManager {
         this.startAgent(next.id, record, next.options);
       }
     }
+  }
+}
+
+// ─── SmartBatcher ─────────────────────────────────────────────────────────────
+
+/**
+ * Collects background agent IDs spawned within a debounce window (100ms)
+ * and automatically registers them as a group in the GroupJoinManager.
+ */
+export class SmartBatcher {
+  private batch: string[] = [];
+  private timer?: ReturnType<typeof setTimeout>;
+  private counter = 0;
+
+  constructor(private gjm: GroupJoinManager) {}
+
+  /** Add an agent ID to the current batch. */
+  add(id: string): void {
+    this.batch.push(id);
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.finalize(), 100);
+  }
+
+  /** Finalize the current batch — register as group if 2+ agents. */
+  private finalize(): void {
+    this.timer = undefined;
+    const ids = [...this.batch];
+    this.batch = [];
+    if (ids.length >= 2) {
+      this.gjm.registerGroup(`batch-${++this.counter}`, ids);
+    }
+  }
+
+  dispose(): void {
+    if (this.timer) clearTimeout(this.timer);
+    this.batch = [];
   }
 }
 

@@ -490,6 +490,7 @@ describe('runAgent', () => {
       agent: makeAgent({
         memory: 'project',
         writable: true,
+        tools: ['read', 'write', 'edit', 'grep'],
         systemPrompt: 'Base prompt',
       }),
       task: 'Build it',

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BackgroundManager, GroupJoinManager } from './background.js';
+import { BackgroundManager, GroupJoinManager, SmartBatcher } from './background.js';
 import type { FlowAgentConfig, SingleAgentResult } from './types.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -462,6 +462,86 @@ describe('BackgroundManager', () => {
 
     await expect(waitPromise).resolves.toBeUndefined();
     expect(manager.listAgents().every((r) => r.status === 'completed')).toBe(true);
+  });
+
+  // ── Phase 6: Gap #6/#25 — resume existing session ────────────────────
+
+  it('resume re-prompts an existing session', async () => {
+    const session = { steer: vi.fn() };
+    let resolve!: (r: SingleAgentResult) => void;
+    const executor = vi.fn(
+      () =>
+        new Promise<SingleAgentResult>((r) => {
+          resolve = r;
+        }),
+    );
+    const id = manager.spawn({
+      agent: makeAgent(),
+      task: 't',
+      description: 'd',
+      executor,
+    });
+
+    // Set session reference
+    manager.getRecord(id)!.session = session;
+    resolve(makeResult());
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Resume
+    const resumeExecutor = vi.fn(() => Promise.resolve('resumed output'));
+    const record = await manager.resume(id, 'new prompt', resumeExecutor);
+
+    expect(record).toBeDefined();
+    expect(record!.status).toBe('completed');
+    expect(resumeExecutor).toHaveBeenCalledWith(session, 'new prompt');
+  });
+
+  it('resume returns undefined for agent without session', async () => {
+    const executor = vi.fn(() => Promise.resolve(makeResult()));
+    const id = manager.spawn({
+      agent: makeAgent(),
+      task: 't',
+      description: 'd',
+      executor,
+    });
+    await new Promise((r) => setTimeout(r, 20));
+
+    // No session set — clear it
+    manager.getRecord(id)!.session = undefined;
+    const result = await manager.resume(id, 'prompt', vi.fn());
+    expect(result).toBeUndefined();
+  });
+});
+
+// ─── SmartBatcher ─────────────────────────────────────────────────────────────
+
+describe('SmartBatcher', () => {
+  it('registers groups for 2+ agents in the same batch', async () => {
+    const gjm = new GroupJoinManager(vi.fn());
+    const batcher = new SmartBatcher(gjm);
+
+    batcher.add('a1');
+    batcher.add('a2');
+    batcher.add('a3');
+
+    // Wait for debounce
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(gjm.isGrouped('a1')).toBe(true);
+    expect(gjm.isGrouped('a2')).toBe(true);
+    expect(gjm.isGrouped('a3')).toBe(true);
+    batcher.dispose();
+  });
+
+  it('does not register group for single agent', async () => {
+    const gjm = new GroupJoinManager(vi.fn());
+    const batcher = new SmartBatcher(gjm);
+
+    batcher.add('solo');
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(gjm.isGrouped('solo')).toBe(false);
+    batcher.dispose();
   });
 });
 

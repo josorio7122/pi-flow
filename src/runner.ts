@@ -184,9 +184,13 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
 
   // 1b. Inject per-agent memory block if configured
   if (agent.memory) {
-    const memoryBlock = agent.writable
-      ? buildMemoryBlock(agent.name, agent.memory, ctx.cwd)
-      : buildReadOnlyMemoryBlock(agent.name, agent.memory, ctx.cwd);
+    // Detect write capability: check actual tool set + denylist (#114)
+    const deniedSet = agent.disallowedTools ? new Set(agent.disallowedTools) : undefined;
+    const effectiveTools = agent.tools.filter((t) => !deniedSet?.has(t));
+    const hasWriteTools = effectiveTools.includes('write') || effectiveTools.includes('edit');
+    const memoryBlock = hasWriteTools
+      ? buildMemoryBlock(agent.name, agent.memory, effectiveCwd)
+      : buildReadOnlyMemoryBlock(agent.name, agent.memory, effectiveCwd);
     systemPrompt = systemPrompt + '\n\n' + memoryBlock;
   }
 
