@@ -6,29 +6,31 @@
 
 ## pi-flow Vision Recap
 
-pi-flow is an **intelligent workflow engine** — the LLM orchestrator observes user intent, selects the right workflow, spawns specialized agents, manages their lifecycle, shares context between them, and gives the user full visibility + approval gates.
+pi-flow is an **intelligent workflow engine** built ON TOP of the existing sub-agent system. The existing agent spawning (`runAgent`, `createAgentManager`, `createRegistry`, `createAgentSession`) stays untouched — workflows are a new orchestration layer that uses those primitives.
 
-### Workflows
+The LLM orchestrator observes user intent, selects the right workflow, triggers agents through the existing system, manages context passing between them, and gives the user full visibility + approval gates.
 
-| ID | Intent | Phases | Agents |
-|----|--------|--------|--------|
-| W1 | Simple fix | Scout → Report → Approve → Build → Review → Report | scout, builder, reviewer |
-| W2 | Research/verify | Probe → Report | probe |
-| W3 | Complex feature | Clarify (SDD) → Plan → Test (red) → Build (green) → Review loop → Report | clarifier, planner, test-writer, builder, reviewer |
-| W4 | Understand code | Explore → Summary → User decides next | explorer |
+### Workflows (ordered by complexity)
+
+| Level | ID | Intent | Phases | Agents |
+|-------|----|--------|--------|--------|
+| Simple | **W1** | Research/verify | Probe → Report | probe |
+| Simple | **W2** | Understand code | Explore → Summary → User decides | explorer |
+| Medium | **W3** | Simple fix | Scout → Report → Approve → Build → Review → Report | scout, builder, reviewer |
+| Complex | **W4** | Complex feature | Clarify (SDD) → Plan → Test (red) → Build (green) → Review loop → Report | clarifier, planner, test-writer, builder, reviewer |
 
 ### Agent Roles
 
 | Role | What it does | Tools |
 |------|-------------|-------|
-| **Scout** | Reads codebase, finds relevant code, produces analysis | read, grep, find, ls, bash (read-only) |
 | **Probe** | Research/verification — DB queries, web search, docker | bash, exa, docker tools |
+| **Explorer** | Deep-reads codebase, produces understanding report | read, grep, find, ls, bash (read-only) |
+| **Scout** | Reads codebase, finds relevant code, produces targeted analysis | read, grep, find, ls, bash (read-only) |
 | **Clarifier** | Asks user questions, builds SDD (Spec-Driven Design) | read, bash (read-only), user questions |
 | **Planner** | Creates structured plan from understanding | read, bash (read-only) |
 | **Test-writer** | Writes failing tests from spec (red phase) | read, write, edit, bash |
 | **Builder** | Implements code to make tests pass (green phase) | read, write, edit, bash |
 | **Reviewer** | Checks work against spec+plan, produces verdict | read, grep, find, bash (read-only) |
-| **Explorer** | Deep-reads codebase, produces understanding report | read, grep, find, ls, bash (read-only) |
 
 ### System Requirements
 
@@ -39,85 +41,80 @@ pi-flow is an **intelligent workflow engine** — the LLM orchestrator observes 
 5. **Human-in-the-loop** — approve plans, review results, decide commits
 6. **Cost awareness** — track token usage, budget limits
 
+### Key Constraint
+
+**The sub-agent system does NOT change.** pi-flow already has:
+- `runAgent()` in `agents/runner.ts` — spawns agents via `createAgentSession()` (SDK)
+- `createAgentManager()` in `agents/manager.ts` — manages agent lifecycle
+- `createRegistry()` in `agents/registry.ts` — agent type configs with tools
+- Agent configs from markdown frontmatter in `agents/defaults.ts` + `agents/custom.ts`
+
+Workflows use these existing primitives. The new code is the orchestration layer: deciding WHICH agents to spawn, in WHAT order, with WHAT context, and HOW to handle their results.
+
 ---
 
 ## Reuse Analysis
 
-### Layer 1: Agent Spawning & Lifecycle (Already Have + Adapt)
+### Layer 1: Workflow Types & State (Adapt from pi-coordination)
 
-**What we have in pi-flow today:**
-- `createAgentSession()` (SDK mode) in `agents/runner.ts`
-- `createAgentManager()` in `agents/manager.ts`
-- `createRegistry()` for agent type configs in `agents/registry.ts`
-- Agent configs from markdown frontmatter in `agents/defaults.ts` + `agents/custom.ts`
-
-**What to take:**
+The pipeline engine — phase tracking, cost tracking, state persistence.
 
 | Source | What | Why | Adaptation |
 |--------|------|-----|------------|
-| **pi-coordination** `subagent/runner.ts` | `runSingleAgent()` — subprocess mode (`pi --mode json`) | Need subprocess mode for parallel workers (SDK is single-threaded) | Extract the JSONL output parsing, progress tracking, and temp file prompt handling. We already have SDK mode — this adds subprocess as alternative. |
-| **pi-coordination** `subagent/types.ts` | `SingleResult`, `OnUpdateCallback`, `OutputLimits` | Clean result type for agent runs | Copy types, adapt to our `types.ts` conventions |
-| **pi-coordination** `subagent/truncate.ts` | `truncateOutputHead()` | Output truncation for agent results | Direct copy, it's a pure function (121 lines) |
-| **pi-messenger** `crew/agents.ts` | `spawnAgents()`, `resolveModel()` | Process spawning with model resolution | Already have `resolveModel` — take the subprocess spawn pattern |
+| **pi-coordination** `coordinate/types.ts` | `PipelinePhase`, `PipelineState`, `PhaseResult`, `CostState` | Type foundations for workflow tracking | Adapt phase names to ours (probe, explore, scout, clarify, plan, test, build, review). Keep `CostState` as-is. |
+| **pi-coordination** `coordinate/pipeline.ts` | `initializePipelineState()`, `updatePhaseStatus()`, `checkCostLimit()`, `runReviewFixLoop()` | Phase state machine, cost limit checking, review-fix loop with stuck detection | Strip observability noise. Keep: phase transitions, cost tracking, `runReviewFixLoop()` (this IS W3's review cycle). ~250 lines from 817. |
+| **pi-coordination** `coordinate/checkpoint.ts` | `CheckpointManager` | Save/restore workflow state across crashes | Simplify — 102 lines, mostly direct reuse |
+| **pi-coordination** `coordinate/progress.ts` | `generateProgressDoc()` | Human-readable progress document | Adapt to our phase names. ~100 lines from 208. |
+
+**Key insight:** pi-coordination's `runReviewFixLoop()` is exactly what W3 and W4 need — review → detect issues → fix → re-review → until clean or stuck. The `detectStuckIssues()` function (15 lines) prevents infinite loops.
+
+---
+
+### Layer 2: Task Management (Adapt from pi-messenger, simpler)
+
+pi-coordination's `TaskQueueManager` (406 lines with file locking, subtasks, priority queues) is overkill. pi-messenger's crew store is closer to what we need.
+
+| Source | What | Why | Adaptation |
+|--------|------|-----|------------|
+| **pi-messenger** `crew/store.ts` | Task CRUD, plan storage, progress tracking, `getReadyTasks()` | Simple task model: `{ id, title, description, status, dependencies, files }`. Dependency-aware readiness check. | Strip messenger-specific fields (assigned_to, base_commit, lobby). Keep: create, update, getReadyTasks, dependency resolution. ~200 lines from 613. |
+| **pi-messenger** `crew/task-actions.ts` | `startTask`, `completeTask`, `blockTask`, `resetTask` | Clean state transitions | Direct copy + type adaptation. 123 lines. |
+| **pi-manage-todo-list** `state-manager.ts` | Validation pattern, stats computation | For W1/W2 where tasks are simple (no dependency graph needed) | Use as inspiration for lightweight tracking |
+
+---
+
+### Layer 3: Context Sharing Between Agents (Adapt from pi-coordination)
+
+Critical — agents must NOT start from scratch. The scout's output feeds the builder, the reviewer's issues feed back to the builder, etc.
+
+| Source | What | Why | Adaptation |
+|--------|------|-----|------------|
+| **pi-coordination** `coordinate/worker-context.ts` | `WorkerContext`, `loadContext()`, `saveContext()`, `updateContext()` | Per-task context persistence. Tracks: files modified, discoveries, attempt history. Survives agent restarts. | Generalize from "worker" to "agent" context. Add: structured handoff (previous agent's output becomes next agent's input). ~150 lines from 654. |
+| **pi-coordination** `coordinate/auto-continue.ts` | `processWorkerExit()`, continuation prompt building | When agent fails: load context.md → analyze what was done → build restart prompt: "Don't redo X, fix Y at line Z" | Adapt to our agent roles. The pattern is universal — any agent can fail. ~100 lines from 362. |
 
 **Build new:**
-- Unified `SpawnMode` type: `"sdk" | "subprocess"` — let workflow decide
-- `runAgent()` wrapper that delegates to SDK or subprocess based on mode
+- `AgentHandoff` type — structured output from one agent that becomes input for the next:
+  ```ts
+  interface AgentHandoff {
+    fromRole: AgentRole
+    toRole: AgentRole
+    summary: string
+    findings: string       // the agent's main output
+    filesAnalyzed: string[]
+    filesModified: string[]
+    context: string        // anything the next agent needs to know
+  }
+  ```
+- `buildAgentPrompt(role, task, handoff, plan)` — assembles prompt from workflow state + previous handoff
 
 ---
 
-### Layer 2: Workflow Pipeline (Take from pi-coordination)
-
-**What to take:**
+### Layer 4: Review System (Take from pi-messenger)
 
 | Source | What | Why | Adaptation |
 |--------|------|-----|------------|
-| **pi-coordination** `coordinate/pipeline.ts` | `PipelineConfig`, `PipelineContext`, `PipelineResult`, phase status tracking, cost tracking, review-fix loop | **This is the core of what we need.** Phase pipeline with status, cost, checkpointing, stuck detection. | Heavy adaptation — strip the observability noise, keep: phase tracking, cost tracking, review-fix loop, stuck detection. Our pipelines are different (W1-W4) but the pipeline *machinery* is the same. |
-| **pi-coordination** `coordinate/types.ts` | `PipelinePhase`, `PipelineState`, `PhaseResult`, `CostState`, `Task`, `TaskStatus` | Type foundations for pipeline + task tracking | Adapt phase names to ours (scout, plan, test, build, review). Keep `CostState` as-is. Simplify `Task` — we don't need priority queue initially. |
-| **pi-coordination** `coordinate/checkpoint.ts` | `CheckpointManager` | Save/restore pipeline state across crashes | Direct reuse (102 lines, simple) |
-| **pi-coordination** `coordinate/progress.ts` | `generateProgressDoc()` | Progress.md generation for visibility | Adapt to our phase names |
-
-**Key insight:** pi-coordination's `runReviewFixLoop()` is exactly what W1 and W3 need — review → detect issues → fix → re-review → until clean or stuck. Copy this pattern directly.
-
----
-
-### Layer 3: Task Management (Take from pi-messenger, simpler)
-
-pi-coordination's `TaskQueueManager` is 406 lines with file locking, subtasks, discovered tasks, priority queues — overkill for v1. pi-messenger's crew store is simpler and closer to what we need.
-
-| Source | What | Why | Adaptation |
-|--------|------|-----|------------|
-| **pi-messenger** `crew/store.ts` | Task CRUD, plan storage, progress tracking | Simpler than coordination's. Tasks are `{ id, title, description, status, dependencies, files }`. JSONL progress per task. | Strip messenger-specific fields (assigned_to, base_commit, lobby). Keep: create, update, getReadyTasks, dependency resolution. |
-| **pi-messenger** `crew/task-actions.ts` | `startTask`, `completeTask`, `blockTask`, `resetTask` | Clean state transitions | Direct copy, adapt types |
-| **pi-messenger** `crew/store.ts` → `getReadyTasks()` | Dependency-aware task readiness | Tasks whose deps are all complete become ready | Direct copy (it's a filter + dependency check) |
-| **pi-manage-todo-list** `state-manager.ts` | `TodoStateManager` validation pattern | For simple task tracking (W1, W2) | Use as inspiration for lightweight task tracking when full plan isn't needed |
-
----
-
-### Layer 4: Context Sharing Between Agents (Take from pi-coordination)
-
-This is critical — agents must not start from scratch. The scout's output feeds the planner, the planner's output feeds the test-writer, etc.
-
-| Source | What | Why | Adaptation |
-|--------|------|-----|------------|
-| **pi-coordination** `coordinate/worker-context.ts` | `WorkerContext`, `loadContext()`, `saveContext()`, `updateContext()` | Per-task context persistence that survives agent restarts. Tracks: files modified, discoveries, attempt history. | Generalize from "worker" to "agent" context. Keep: context.md pattern, attempt tracking. Add: previous agent's output as context for next agent. |
-| **pi-coordination** `coordinate/auto-continue.ts` | `processWorkerExit()`, continuation prompt building | When agent fails, build a smart restart prompt: "Don't redo X, fix Y at line Z" | Direct reuse concept. Our agents fail too — the auto-continue pattern is universally useful. |
-| **pi-coordination** `coordinate/coordinator-context.ts` | Session-level context (not per-task) | The orchestrator needs session context too — what's been done, what's pending | Simplify heavily (790 lines is too much). Take the concept: `WorkflowContext` that tracks overall progress. |
-
-**Build new:**
-- `AgentHandoff` type: structured output from one agent that becomes input for the next
-- `buildAgentPrompt(role, task, previousContext, plan)` — assembles prompt from workflow state
-
----
-
-### Layer 5: Review System (Take from pi-messenger, simpler verdict model)
-
-| Source | What | Why | Adaptation |
-|--------|------|-----|------------|
-| **pi-messenger** `crew/utils/verdict.ts` | `parseVerdict()` → SHIP / NEEDS_WORK / MAJOR_RETHINK | Simple, clear verdicts. 55 lines. | Direct copy. This is the review output format we want. |
-| **pi-messenger** `crew/handlers/review.ts` | `reviewImplementation()` — spawns reviewer with git diff context | Review pattern: get diff → build prompt → spawn reviewer → parse verdict | Adapt: use our agent spawning, but keep the diff-based review approach |
-| **pi-coordination** `coordinate/phases/review.ts` | `runReviewPhase()` — structured review with file/line/severity issues | More structured than messenger's. Returns `ReviewIssue[]` with file, line, description, severity. | Take the `ReviewIssue` type and structured output parsing. Combine with messenger's simpler verdict. |
-| **pi-coordination** pipeline's `detectStuckIssues()` | Detect when same issues keep appearing across review cycles | Prevents infinite review-fix loops | Direct copy (15 lines, pure function) |
+| **pi-messenger** `crew/utils/verdict.ts` | `parseVerdict()` → SHIP / NEEDS_WORK / MAJOR_RETHINK | Simple, clear verdict model. 55 lines, pure function. | Direct copy. This IS our review output format. |
+| **pi-messenger** `crew/handlers/review.ts` | `reviewImplementation()` — get diff → build prompt → spawn reviewer → parse verdict | The review workflow pattern | Adapt to use our `runAgent()` instead of messenger's `spawnAgents()` |
+| **pi-coordination** `coordinate/pipeline.ts` | `detectStuckIssues()` | Detect when same issues keep appearing across review cycles | Direct copy — 15 lines, pure function |
 
 **Our review model:**
 ```
@@ -125,47 +122,44 @@ Verdict: SHIP | NEEDS_WORK | MAJOR_RETHINK
 Issues: [{ file, line?, description, severity }]
 Summary: string
 ```
-- SHIP → workflow complete, report to user
-- NEEDS_WORK → feed issues to builder, re-review (max N cycles)
-- MAJOR_RETHINK → escalate to user, plan may need revision
+- **SHIP** → workflow complete, report to user
+- **NEEDS_WORK** → feed issues to builder, re-review (max N cycles)
+- **MAJOR_RETHINK** → escalate to user, plan may need revision
 
 ---
 
-### Layer 6: Visibility & Dashboard (Take from pi-coordination + pi-manage-todo-list)
+### Layer 5: Visibility & Dashboard (Adapt from multiple)
 
 | Source | What | Why | Adaptation |
 |--------|------|-----|------------|
-| **pi-manage-todo-list** `ui/todo-widget.ts` | `updateWidget()` — simple progress widget | Clean pattern: render lines with status icons, call `ctx.ui.setWidget()` | Direct pattern reuse for workflow progress widget |
-| **pi-coordination** `coordinate/progress.ts` | `generateProgressDoc()` — progress.md generation | Structured progress document | Adapt to our phases |
-| **pi-coordination** `coordinate/dashboard.ts` | `CoordinationDashboard`, `MiniDashboard`, `MiniFooter` | Full-screen dashboard via `ctx.ui.custom()` + compact footer widget | Study the interaction patterns. For v1, start with widget + footer (not full dashboard). Dashboard is v2. |
-| **pi-coordination** `coordinate/render-utils.ts` | Table rendering, status bars, phase timeline | TUI formatting helpers | Cherry-pick what we need — `formatDuration`, `renderPhaseTimeline`, status icons |
-| **pi-messenger** `crew/live-progress.ts` | Real-time worker progress via JSONL streaming | Shows each worker's current tool, call count, token usage | Adapt for our parallel agent tracking |
+| **pi-manage-todo-list** `ui/todo-widget.ts` | `updateWidget()` — render lines with status icons, `ctx.ui.setWidget()` | Clean widget pattern for workflow progress | Direct pattern reuse — render phase pipeline + task status as widget |
+| **pi-coordination** `coordinate/render-utils.ts` | `formatDuration`, status icons, phase timeline rendering | TUI formatting helpers | Cherry-pick: duration formatting, status icons, phase bar. ~50 lines from 694. |
+| **pi-coordination** `coordinate/progress.ts` | `generateProgressDoc()` | Structured progress for the workflow | Adapt phase names |
+| **pi-coordination** `coordinate/dashboard.ts` | `MiniFooter` — compact status in footer | Status bar: `[flow] scout ● 2/5 tasks | $0.45 | 2m30s` | Study pattern, build simpler version |
 
-**Our visibility model (v1):**
+**Visibility model (v1):**
 1. **Widget** (always visible): Phase pipeline + active agents + task progress
-2. **Status bar**: `[flow] scout ● 2/5 tasks | $0.45 | 2m30s`
-3. **`/flow` command**: Show detailed progress, allow intervention
+2. **Status bar**: `[flow] build ● 3/5 tasks | $0.45`
+3. **`/flow` command**: Detailed progress, intervention options
 
 ---
 
-### Layer 7: Human-in-the-Loop (Take from pi-planner)
+### Layer 6: Human-in-the-Loop (Adapt from pi-planner)
 
 | Source | What | Why | Adaptation |
 |--------|------|-----|------------|
-| **pi-planner** `mode/hooks.ts` | Tool restriction in plan mode (`setActiveTools` + `tool_call` hook) | During planning/review, agents shouldn't modify files | Direct pattern reuse — restrict tools per phase |
-| **pi-planner** `index.ts` → execution flow | Approval gates: user approves plan before execution starts | Human approval is core to pi-flow | Adapt: our approval points are after plan creation and after review |
-| **pi-planner** `persistence/plan-store.ts` | Plan storage with optimistic locking | Plans need to survive crashes | Simplify — we don't need the full markdown+YAML format. JSON is fine for v1. |
-| **pi-coordination** `coordinate/inline-questions-tui.ts` | Sequential questions TUI with timeout | For the Clarifier agent (SDD workflow) — asks user questions interactively | Study the pattern. We need: ask question → wait for answer → ask next. Could use `ctx.ui.editor()` or custom TUI. |
+| **pi-planner** `mode/hooks.ts` | Tool restriction via `setActiveTools` + `tool_call` hook enforcement | During scout/review phases, agents shouldn't modify files. Dual-layer: hide tools + enforce via hook. | Direct pattern reuse — restrict tools per agent role |
+| **pi-planner** `index.ts` → approval flow | User approves plan before execution. Uses `ctx.ui.select()` for approve/reject. | Human approval is core to pi-flow (after plan creation, after review) | Adapt approval points to our workflow phases |
+| **pi-planner** `executor/stalled.ts` | Stalled detection (timeout-based) | Detect agents stuck in executing state | Direct copy — 34 lines |
 
 ---
 
-### Layer 8: Resilience & Recovery (Take from pi-coordination)
+### Layer 7: Resilience (Adapt from pi-coordination)
 
 | Source | What | Why | Adaptation |
 |--------|------|-----|------------|
-| **pi-coordination** `coordinate/supervisor.ts` | `SupervisorLoop` — nudge → restart → abandon | Agents can get stuck. Need automated detection + recovery. | Simplify: we don't need the full class. Take the pattern: check activity timestamp → if stale → nudge via steer → if still stale → restart. |
-| **pi-coordination** `coordinate/auto-continue.ts` | `processWorkerExit()` — smart restart with context | When builder fails, restart with "here's what was done, fix this" | Direct concept reuse. Adapt to our `AgentHandoff` type. |
-| **pi-planner** `executor/stalled.ts` | Stalled detection (timeout-based) | Detect agents stuck in executing state | Direct copy (34 lines) |
+| **pi-coordination** `coordinate/supervisor.ts` | Stuck detection pattern: check activity → nudge → restart → abandon | Agents can get stuck. Need automated detection + recovery. | Don't need the full class. Take the pattern: check last activity timestamp → if stale → steer message → if still stale → restart agent. ~60 lines. |
+| **pi-coordination** `coordinate/auto-continue.ts` | Smart restart with context from previous attempt | When builder fails: "here's what was done, here's the error, fix this" | Covered in Layer 3 above |
 
 ---
 
@@ -173,158 +167,160 @@ Summary: string
 
 | Component | Why it's new | Description |
 |-----------|-------------|-------------|
-| **Workflow Router** | No repo has an LLM-based intent classifier | The orchestrator tool that analyzes user intent and selects W1-W4. Uses the LLM itself — not a hardcoded switch. The tool description guides the LLM on when to use which workflow. |
-| **SDD Clarifier** | No repo does spec-driven design | Interactive clarification phase: ask questions until the spec is complete. Different from pi-coordination's interview (which is planning-focused). This is requirements gathering. |
-| **Test-Writer Agent** | No repo has TDD as a first-class phase | Agent that reads the plan and writes failing tests. Must run tests to confirm red. This is unique to pi-flow's TDD philosophy. |
-| **Red-Green Verification** | No repo verifies test state transitions | After test-writer (red) and builder (green), verify that tests actually transitioned from failing to passing. Not just "tests pass" — they must have been red first. |
-| **Agent Handoff Protocol** | All repos use ad-hoc context passing | Structured `AgentHandoff` type: `{ role, task, output, filesModified, context, nextAgent }`. Each agent produces a handoff that becomes the next agent's input. |
-| **Workflow State Machine** | Repos use either linear pipelines or task graphs | We need a hybrid: the workflow is a state machine (phase transitions), but within a phase there can be parallel tasks. |
+| **Workflow Router** | No repo has LLM-based intent classification | The orchestrator tool analyzes user intent and selects W1-W4. Uses the LLM itself via tool description guidance — not a hardcoded switch. |
+| **SDD Clarifier** | No repo does spec-driven design | Interactive clarification: ask questions until the spec is complete. Different from pi-coordination's interview (which is planning-focused). |
+| **Test-Writer Agent** | No repo has TDD as a first-class phase | Agent reads the plan, writes failing tests. Runs tests to confirm red. |
+| **Red-Green Verification** | No repo verifies test state transitions | After test-writer (red) and builder (green), verify tests transitioned from failing to passing. Not just "tests pass" — they must have been red first. |
+| **Agent Handoff Protocol** | All repos use ad-hoc context passing | Structured `AgentHandoff` type. Each agent produces a handoff that becomes the next agent's prompt context. |
+| **Workflow Orchestrator** | All repos use either linear pipelines or task graphs | We need both: the workflow is a phase sequence (W1-W4), but within W4's build phase there can be parallel tasks. The orchestrator is an LLM that manages transitions. |
 
 ---
 
 ## Implementation Priority
 
-### Phase 1: Foundation (reuse-heavy)
+### Phase 1: Foundation (types + pipeline + context + visibility)
 
-| # | Component | Source | LOC estimate |
-|---|-----------|--------|-------------|
-| 1 | Agent handoff types | New | ~80 |
-| 2 | Workflow types (phases, state, cost) | pi-coordination types.ts | ~120 |
-| 3 | Subprocess runner | pi-coordination subagent/runner.ts | ~200 (stripped) |
-| 4 | Output truncation | pi-coordination subagent/truncate.ts | ~120 (direct copy) |
-| 5 | Pipeline engine (phase tracking, cost, checkpointing) | pi-coordination pipeline.ts | ~250 (stripped) |
-| 6 | Review-fix loop | pi-coordination pipeline.ts `runReviewFixLoop` | ~80 |
-| 7 | Verdict parsing | pi-messenger verdict.ts | ~55 (direct copy) |
-| 8 | Progress widget | pi-manage-todo-list widget.ts | ~80 |
-| 9 | Stuck detection | pi-coordination supervisor.ts (pattern) | ~60 |
-| 10 | Agent context persistence | pi-coordination worker-context.ts (simplified) | ~150 |
+| # | Component | Source | LOC est |
+|---|-----------|--------|---------|
+| 1 | Workflow types (phases, state, cost, handoff, verdict) | pi-coordination types + new | ~150 |
+| 2 | Pipeline engine (phase tracking, cost, transitions) | pi-coordination pipeline.ts | ~250 |
+| 3 | Verdict parsing (SHIP/NEEDS_WORK/MAJOR_RETHINK) | pi-messenger verdict.ts | ~55 |
+| 4 | Agent context persistence + handoff | pi-coordination worker-context.ts | ~150 |
+| 5 | Progress widget | pi-manage-todo-list widget.ts | ~80 |
+| 6 | Output truncation | pi-coordination truncate.ts | ~120 |
+| 7 | Stalled detection | pi-planner stalled.ts | ~34 |
 
-**Total Phase 1: ~1,200 lines of new/adapted code**
+**~840 lines. Provides: type system, phase machine, context sharing, visibility.**
 
-### Phase 2: Workflows
+### Phase 2: Simple Workflows (W1 + W2)
 
-| # | Component | Source | LOC estimate |
-|---|-----------|--------|-------------|
-| 11 | W1: Simple fix workflow (scout → build → review) | New + pi-coordination phases | ~200 |
-| 12 | W2: Research/verify workflow (probe) | New | ~100 |
-| 13 | W4: Understand workflow (explorer) | New | ~100 |
-| 14 | Workflow router tool | New | ~150 |
-| 15 | Agent role configs (.md files) | pi-coordination agents/*.md | ~300 (8 agent configs) |
-| 16 | Task store (simple) | pi-messenger crew/store.ts | ~200 (stripped) |
+| # | Component | Source | LOC est |
+|---|-----------|--------|---------|
+| 8 | Agent role configs (probe, explorer .md files) | pi-coordination agents/*.md | ~100 |
+| 9 | W1: Research/verify (probe → report) | New | ~80 |
+| 10 | W2: Understand code (explore → summary) | New | ~80 |
+| 11 | Workflow router tool | New | ~150 |
+| 12 | Tool restriction per role | pi-planner mode/hooks.ts | ~80 |
 
-**Total Phase 2: ~1,050 lines**
+**~490 lines. Delivers: working W1 + W2 + router.**
 
-### Phase 3: Complex Workflows + Polish
+### Phase 3: Medium Workflow (W3)
 
-| # | Component | Source | LOC estimate |
-|---|-----------|--------|-------------|
-| 17 | W3: Complex feature workflow (SDD → plan → TDD → build → review) | New | ~300 |
-| 18 | SDD clarifier | New + pi-coordination interview.ts (pattern) | ~200 |
-| 19 | Test-writer agent + red-green verification | New | ~200 |
-| 20 | Auto-continue (smart restart) | pi-coordination auto-continue.ts | ~150 |
-| 21 | Dashboard (`/flow` command) | pi-coordination dashboard.ts (simplified) | ~300 |
-| 22 | Parallel execution (multiple builders) | pi-messenger crew/spawn.ts | ~150 |
-| 23 | Cost control | pi-coordination pipeline.ts | ~50 |
+| # | Component | Source | LOC est |
+|---|-----------|--------|---------|
+| 13 | Agent role configs (scout, builder, reviewer .md) | pi-coordination agents/*.md | ~150 |
+| 14 | W3: Simple fix (scout → approve → build → review) | New + pi-coordination phases | ~200 |
+| 15 | Review-fix loop | pi-coordination pipeline.ts | ~80 |
+| 16 | Stuck issue detection | pi-coordination pipeline.ts | ~15 |
+| 17 | Smart restart / auto-continue | pi-coordination auto-continue.ts | ~100 |
+| 18 | Human approval gates | pi-planner index.ts | ~80 |
 
-**Total Phase 3: ~1,350 lines**
+**~625 lines. Delivers: working W3 with review loop + approval.**
+
+### Phase 4: Complex Workflow (W4)
+
+| # | Component | Source | LOC est |
+|---|-----------|--------|---------|
+| 19 | Agent role configs (clarifier, planner, test-writer .md) | New | ~150 |
+| 20 | SDD Clarifier | New (study pi-coordination interview.ts) | ~200 |
+| 21 | Task store with dependencies | pi-messenger crew/store.ts | ~200 |
+| 22 | Task actions (state transitions) | pi-messenger crew/task-actions.ts | ~123 |
+| 23 | W4: Complex feature (full pipeline) | New | ~300 |
+| 24 | Test-writer + red-green verification | New | ~200 |
+| 25 | Parallel builder execution | Study pi-messenger crew/spawn.ts | ~150 |
+| 26 | Dashboard (`/flow` command) | Study pi-coordination dashboard.ts | ~300 |
+| 27 | Cost control | pi-coordination pipeline.ts | ~50 |
+
+**~1,673 lines. Delivers: full W4 with TDD, parallel execution, dashboard.**
 
 ---
 
 ## File-Level Reuse Map
 
-Concrete files to copy/adapt from each repo:
-
-### From pi-coordination (most reuse)
+### From pi-coordination
 
 ```
-COPY   subagent/truncate.ts        → src/workflow/truncate.ts       (121 lines, pure function)
-ADAPT  subagent/runner.ts          → src/agents/subprocess.ts       (take JSONL parsing, temp file prompt)
-ADAPT  subagent/types.ts           → src/workflow/types.ts          (SingleResult → AgentResult)
-ADAPT  coordinate/types.ts         → src/workflow/types.ts          (PipelinePhase, CostState, Task)
-ADAPT  coordinate/pipeline.ts      → src/workflow/pipeline.ts       (phase tracking, cost, review-fix loop)
-ADAPT  coordinate/checkpoint.ts    → src/workflow/checkpoint.ts     (102 lines, simplify)
-ADAPT  coordinate/progress.ts      → src/workflow/progress.ts       (adapt phase names)
-ADAPT  coordinate/worker-context.ts→ src/workflow/agent-context.ts  (generalize to any agent role)
+ADAPT  coordinate/types.ts         → src/workflow/types.ts          (phase, cost, task types)
+ADAPT  coordinate/pipeline.ts      → src/workflow/pipeline.ts       (phase machine, review-fix loop)
+ADAPT  coordinate/checkpoint.ts    → src/workflow/checkpoint.ts     (state persistence)
+ADAPT  coordinate/progress.ts      → src/workflow/progress.ts       (progress doc generation)
+ADAPT  coordinate/worker-context.ts→ src/workflow/agent-context.ts  (context persistence + handoff)
 ADAPT  coordinate/auto-continue.ts → src/workflow/recovery.ts       (smart restart logic)
-ADAPT  coordinate/supervisor.ts    → src/workflow/supervisor.ts     (stuck detection pattern only)
-STUDY  coordinate/dashboard.ts     → src/ui/dashboard.ts           (v2 — study TUI patterns)
+COPY   subagent/truncate.ts        → src/workflow/truncate.ts       (121 lines, pure function)
+STUDY  coordinate/supervisor.ts    → src/workflow/supervisor.ts     (stuck detection pattern)
+STUDY  coordinate/dashboard.ts     → src/ui/dashboard.ts           (Phase 4)
 STUDY  coordinate/render-utils.ts  → src/ui/render-utils.ts        (cherry-pick formatters)
 STUDY  plan/interview.ts           → (inform SDD clarifier design)
 ```
 
-### From pi-messenger (simpler patterns)
+### From pi-messenger
 
 ```
 COPY   crew/utils/verdict.ts       → src/workflow/verdict.ts        (55 lines, direct copy)
-ADAPT  crew/store.ts               → src/workflow/task-store.ts     (task CRUD, stripped)
-ADAPT  crew/task-actions.ts        → src/workflow/task-actions.ts   (state transitions)
-ADAPT  crew/handlers/review.ts     → (inform review agent prompt)
-STUDY  crew/handlers/work.ts       → (inform wave execution)
-STUDY  crew/spawn.ts               → (inform parallel spawning)
-STUDY  crew/lobby.ts               → (v2 — pre-warmed workers)
+ADAPT  crew/store.ts               → src/workflow/task-store.ts     (Phase 4 — task CRUD)
+ADAPT  crew/task-actions.ts        → src/workflow/task-actions.ts   (Phase 4 — state transitions)
+STUDY  crew/handlers/review.ts     → (inform reviewer agent prompt)
+STUDY  crew/handlers/work.ts       → (inform Phase 4 parallel execution)
 ```
 
-### From pi-planner (approval + tool restriction)
+### From pi-planner
 
 ```
-ADAPT  mode/hooks.ts               → src/workflow/tool-guard.ts     (tool restriction per phase)
-STUDY  executor/runner.ts          → (executor prompt injection trick)
+ADAPT  mode/hooks.ts               → src/workflow/tool-guard.ts     (tool restriction per role)
 COPY   executor/stalled.ts         → src/workflow/stalled.ts        (34 lines, direct copy)
-STUDY  persistence/plan-store.ts   → (inform plan storage design)
+STUDY  index.ts                    → (inform approval gate pattern)
 ```
 
-### From pi-manage-todo-list (widget pattern)
+### From pi-manage-todo-list
 
 ```
 ADAPT  ui/todo-widget.ts           → src/ui/progress-widget.ts     (widget rendering pattern)
-STUDY  state-manager.ts            → (inform lightweight state)
 ```
 
 ---
 
-## Architecture Summary
+## Architecture
 
 ```
 src/
-├── agents/              # EXISTING — agent spawning (SDK + subprocess)
-│   ├── runner.ts        # SDK mode (existing)
-│   ├── subprocess.ts    # NEW: subprocess mode (from pi-coordination)
-│   ├── manager.ts       # EXISTING — agent lifecycle
-│   ├── registry.ts      # EXISTING — agent type configs
-│   └── ...
+├── agents/              # UNTOUCHED — existing sub-agent system
+│   ├── runner.ts        # runAgent() via createAgentSession()
+│   ├── manager.ts       # createAgentManager() lifecycle
+│   ├── registry.ts      # createRegistry() agent type configs
+│   ├── defaults.ts      # built-in agent types
+│   └── custom.ts        # user-defined agent types
 │
-├── workflow/            # NEW — workflow engine
-│   ├── types.ts         # Phase, CostState, Task, AgentHandoff, Verdict
-│   ├── pipeline.ts      # Phase tracking, cost, checkpointing
+├── workflow/            # NEW — orchestration layer (uses agents/ as engine)
+│   ├── types.ts         # WorkflowPhase, WorkflowState, CostState, AgentHandoff, Verdict
+│   ├── pipeline.ts      # Phase tracking, cost tracking, transitions
 │   ├── router.ts        # Intent → workflow selection (LLM-driven)
-│   ├── task-store.ts    # Task CRUD with dependency resolution
-│   ├── task-actions.ts  # State transitions
 │   ├── verdict.ts       # SHIP/NEEDS_WORK/MAJOR_RETHINK parsing
-│   ├── agent-context.ts # Per-agent context persistence + handoff
-│   ├── recovery.ts      # Auto-continue on failure
+│   ├── agent-context.ts # Per-agent context persistence + handoff protocol
+│   ├── recovery.ts      # Auto-continue on agent failure
 │   ├── stalled.ts       # Timeout-based stall detection
-│   ├── tool-guard.ts    # Tool restriction per phase
-│   ├── truncate.ts      # Output truncation
-│   ├── checkpoint.ts    # Pipeline state persistence
+│   ├── tool-guard.ts    # Tool restriction per agent role
+│   ├── truncate.ts      # Output truncation (pure function)
+│   ├── checkpoint.ts    # Workflow state persistence across crashes
 │   └── progress.ts      # Progress document generation
 │
-├── workflows/           # NEW — workflow implementations
-│   ├── simple-fix.ts    # W1: scout → build → review
-│   ├── research.ts      # W2: probe → report
-│   ├── feature.ts       # W3: clarify → plan → test → build → review
-│   └── explore.ts       # W4: explore → report
+├── workflows/           # NEW — workflow implementations (use workflow/ + agents/)
+│   ├── research.ts      # W1: probe → report
+│   ├── explore.ts       # W2: explore → summary
+│   ├── fix.ts           # W3: scout → approve → build → review
+│   ├── feature.ts       # W4: clarify → plan → test → build → review loop
+│   └── task-store.ts    # Task CRUD with dependencies (W4 only)
 │
-├── ui/                  # EXISTING + NEW
-│   ├── widget.ts        # EXISTING
-│   ├── viewer.ts        # EXISTING
+├── ui/                  # EXISTING + additions
+│   ├── widget.ts        # EXISTING (agent widget)
+│   ├── viewer.ts        # EXISTING (conversation viewer)
 │   ├── formatters.ts    # EXISTING
-│   ├── progress-widget.ts # NEW: workflow progress widget
-│   └── dashboard.ts     # NEW (v2): full-screen /flow dashboard
+│   ├── progress-widget.ts # NEW: workflow phase + task progress widget
+│   └── dashboard.ts     # NEW (Phase 4): /flow command
 │
 ├── config/              # EXISTING
 ├── infra/               # EXISTING
 ├── extension/           # EXISTING
-├── index.ts             # EXISTING — wire workflow tools
+├── index.ts             # EXISTING — add workflow tool registration
 └── types.ts             # EXISTING
 ```
 
@@ -334,13 +330,14 @@ src/
 
 | Feature | From | Why not |
 |---------|------|---------|
-| File reservations | messenger, coordination | Only needed for true parallel file edits. v1 runs one builder at a time. |
-| A2A messaging | coordination | Our agents communicate via handoff, not messages. |
-| Contracts (provide/need) | coordination | Only needed when multiple workers build shared interfaces. v1 is sequential. |
-| Full observability stack | coordination | 7 JSONL files is overkill. v1: single events.jsonl. |
-| Worker lobby (pre-warming) | messenger | Optimization for v2 when parallel execution is proven. |
-| Subtasks (TASK-XX.Y) | coordination | Complexity we don't need in v1. Tasks are flat. |
-| Plan mode safety registry | planner | We restrict tools per phase, not per skill classification. Simpler. |
-| Markdown+YAML plan storage | planner | JSON is fine for v1. No need for human-readable plan files yet. |
-| Full dashboard | coordination | 1524 lines. v1 uses widget + footer. Dashboard is v2. |
-| Async mode | coordination | v1 workflows run in-session. Async is v2. |
+| Subprocess runner (`pi --mode json`) | coordination | We use SDK (`createAgentSession`). The existing system works. |
+| File reservations | messenger, coordination | Only needed for true parallel file edits. v1 builders run sequentially per task. |
+| A2A messaging | coordination | Our agents communicate via handoff protocol, not messages. |
+| Contracts (provide/need) | coordination | Only for multiple workers building shared interfaces. Not our model. |
+| Full observability stack (7 JSONL files) | coordination | Overkill. v1: events in workflow state. |
+| Worker lobby (pre-warming) | messenger | Optimization for later, after parallel execution is proven. |
+| Subtasks (TASK-XX.Y) | coordination | Unnecessary complexity. Tasks are flat. |
+| Plan mode safety registry (READ/WRITE per skill) | planner | We restrict tools per agent role. Simpler. |
+| Markdown+YAML plan storage | planner | JSON workflow state is fine. |
+| Full-screen dashboard (1524 lines) | coordination | v1 uses widget + `/flow` command. Full dashboard is Phase 4. |
+| Async/detached mode | coordination | Workflows run in-session. |
