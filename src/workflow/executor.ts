@@ -5,12 +5,13 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
+import { accumulateTokens, resolveContextHandoff } from "./executor-helpers.js";
 import { executeGatePhase } from "./phase-gate.js";
 import { executeParallelPhase } from "./phase-parallel.js";
 import { executeReviewLoop } from "./phase-review.js";
 import { executeSinglePhase } from "./phase-single.js";
 import { checkTokenLimit, updatePhaseStatus } from "./pipeline.js";
-import { appendEvent, listHandoffs, writeState } from "./store.js";
+import { appendEvent, writeState } from "./store.js";
 import type { AgentHandoff, PhaseDefinition, WorkflowDefinition, WorkflowEvent, WorkflowState } from "./types.js";
 
 export type PhaseOutcome =
@@ -235,31 +236,4 @@ function advanceToNextPhase({
 
   // Recurse — execute the next phase immediately
   return executeCurrentPhase({ definition, state, cwd, workflowId, pi, ctx, manager });
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────
-
-function resolveContextHandoff(cwd: string, workflowId: string, phase: PhaseDefinition) {
-  if (!phase.contextFrom) return undefined;
-  const handoffs = listHandoffs(cwd, workflowId);
-  for (let i = handoffs.length - 1; i >= 0; i--) {
-    const h = handoffs[i];
-    if (h && h.phase === phase.contextFrom) return h;
-  }
-  return undefined;
-}
-
-function accumulateTokens(state: WorkflowState, phaseName: string, manager: AgentManager) {
-  for (const agent of manager.listAgents()) {
-    if (!agent.completedAt || !agent.session) continue;
-    if (state.countedAgentIds.includes(agent.id)) continue;
-    try {
-      const tokens = agent.session.getSessionStats().tokens.total;
-      state.tokens.total += tokens;
-      state.tokens.byPhase[phaseName] = (state.tokens.byPhase[phaseName] ?? 0) + tokens;
-      state.countedAgentIds.push(agent.id);
-    } catch {
-      /* stats unavailable */
-    }
-  }
 }
