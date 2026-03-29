@@ -101,14 +101,6 @@ interface RunOptions {
   registry?: Registry | undefined;
 }
 
-interface RunResult {
-  responseText: string;
-  session: AgentSession;
-  /** True if the agent was hard-aborted (max_turns + grace exceeded). */
-  aborted: boolean;
-  /** True if the agent was steered to wrap up (hit soft turn limit) but finished in time. */
-  steered: boolean;
-}
 
 /**
  * Subscribe to a session and collect the last assistant message text.
