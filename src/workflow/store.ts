@@ -40,10 +40,17 @@ function ensureDir(dir: string) {
   }
 }
 
-export function readJson<T>(filePath: string): T | null {
+/**
+ * Read and parse a JSON file. Returns null if missing, unreadable, or not a JSON object/array.
+ * The caller is responsible for further type narrowing — this only guarantees valid JSON.
+ */
+export function readJson<T>(filePath: string, guard?: (v: unknown) => v is T): T | null {
   if (!fs.existsSync(filePath)) return null;
   try {
-    return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
+    const raw: unknown = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    if (guard) return guard(raw) ? raw : null;
+    if (typeof raw !== "object" || raw === null) return null;
+    return raw as T;
   } catch {
     return null;
   }

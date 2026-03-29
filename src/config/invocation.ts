@@ -1,6 +1,13 @@
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { AgentConfig, IsolationMode, JoinMode } from "../types.js";
 
+const VALID_THINKING = new Set<string>(["off", "minimal", "low", "medium", "high", "xhigh"]);
+
+function parseThinking(val: string | undefined) {
+  if (!val) return undefined;
+  return VALID_THINKING.has(val) ? (val as ThinkingLevel) : undefined;
+}
+
 interface AgentInvocationParams {
   model?: string | undefined;
   thinking?: string | undefined;
@@ -27,7 +34,7 @@ export function resolveAgentInvocationConfig(
   return {
     modelInput: agentConfig?.model ?? params.model,
     modelFromParams: agentConfig?.model == null && params.model != null,
-    thinking: (agentConfig?.thinking ?? params.thinking) as ThinkingLevel | undefined,
+    thinking: agentConfig?.thinking ?? parseThinking(params.thinking),
     maxTurns: agentConfig?.maxTurns ?? params.max_turns,
     inheritContext: agentConfig?.inheritContext ?? params.inherit_context ?? false,
     runInBackground: agentConfig?.runInBackground ?? params.run_in_background ?? false,
