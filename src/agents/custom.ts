@@ -19,13 +19,14 @@ import { BUILTIN_TOOL_NAMES } from "./registry.js";
  * Project-level agents override global ones with the same name.
  * Any name is allowed — names matching defaults (e.g. "Explore") override them.
  */
-export function loadCustomAgents(cwd: string) {
+export function loadCustomAgents(cwd: string, builtinDir?: string) {
   const globalDir = join(homedir(), ".pi", "agent", "agents");
   const projectDir = join(cwd, ".pi", "agents");
 
   const agents = new Map<string, AgentConfig>();
-  loadFromDir({ dir: globalDir, agents, source: "global" }); // lower priority
-  loadFromDir({ dir: projectDir, agents, source: "project" }); // higher priority (overwrites)
+  if (builtinDir) loadFromDir({ dir: builtinDir, agents, source: "global" }); // lowest priority
+  loadFromDir({ dir: globalDir, agents, source: "global" });
+  loadFromDir({ dir: projectDir, agents, source: "project" }); // highest priority (overwrites)
   return agents;
 }
 

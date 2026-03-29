@@ -10,6 +10,8 @@
  *   /agents                 — Interactive agent management menu
  */
 
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { createBatchSystem } from "./agents/batch.js";
 import { loadCustomAgents } from "./agents/custom.js";
@@ -29,6 +31,7 @@ import { AgentWidget } from "./ui/widget.js";
 import { registerWorkflowExtension } from "./workflow/integration.js";
 
 export default function (pi: ExtensionAPI) {
+  const extensionRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
   const runnerSettings = createRunnerSettings();
   const registry = createRegistry();
 
@@ -36,8 +39,9 @@ export default function (pi: ExtensionAPI) {
   registerMessageRenderer(pi);
 
   /** Reload agents from .pi/agents/*.md and merge with defaults (called on init and each Agent invocation). */
+  const builtinAgentsDir = join(extensionRoot, "agents");
   const reloadCustomAgents = () => {
-    const userAgents = loadCustomAgents(process.cwd());
+    const userAgents = loadCustomAgents(process.cwd(), builtinAgentsDir);
     registry.register(userAgents);
   };
 
@@ -161,5 +165,5 @@ export default function (pi: ExtensionAPI) {
   });
 
   // ---- Workflow engine ----
-  registerWorkflowExtension(pi, undefined, { manager });
+  registerWorkflowExtension(pi, join(extensionRoot, "workflows"), { manager });
 }
