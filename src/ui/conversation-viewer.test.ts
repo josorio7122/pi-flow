@@ -16,7 +16,7 @@ function makeRecord(): BackgroundRecord {
   };
 }
 
-function makeTUI() {
+function makeTUI(): any {
   return {
     terminal: { columns: 80, rows: 24 },
     requestRender: vi.fn(),
