@@ -8,7 +8,7 @@ import { join } from "node:path";
 import type { ExtensionAPI, ModelRegistry } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../../agents/manager.js";
 import type { Registry } from "../../agents/registry.js";
-import type { RunnerSettings } from "../../agents/runner.js";
+import type { RunnerSettings } from "../../agents/runner-types.js";
 import { resolveModel } from "../../config/model-resolver.js";
 import type { JoinMode } from "../../types.js";
 import type { AgentActivity } from "../../ui/formatters.js";

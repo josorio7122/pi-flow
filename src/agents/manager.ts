@@ -17,7 +17,8 @@ import {
   type SpawnOptions,
 } from "./manager-types.js";
 import type { Registry } from "./registry.js";
-import { type RunnerSettings, resumeAgent, runAgent, type ToolActivity } from "./runner.js";
+import { resumeAgent, runAgent } from "./runner.js";
+import type { RunnerSettings, ToolActivity } from "./runner-types.js";
 
 export function createAgentManager({
   onComplete,

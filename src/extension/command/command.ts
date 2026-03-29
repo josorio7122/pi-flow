@@ -8,8 +8,6 @@ import type { CommandDeps } from "./types.js";
 import { showAllAgentsList, showRunningAgents } from "./views.js";
 import { showCreateWizard } from "./wizards.js";
 
-export type { CommandDeps } from "./types.js";
-
 async function showAgentsMenu(deps: CommandDeps, ctx: ExtensionCommandContext) {
   const { manager } = deps;
   const running = manager.listAgents().filter((a) => a.status === "running" || a.status === "queued");

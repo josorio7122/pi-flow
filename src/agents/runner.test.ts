@@ -56,7 +56,8 @@ vi.mock("../config/skill-loader.js", () => ({
   preloadSkills: vi.fn(() => []),
 }));
 
-import { createRunnerSettings, normalizeMaxTurns, resumeAgent, runAgent } from "./runner.js";
+import { resumeAgent, runAgent } from "./runner.js";
+import { createRunnerSettings, normalizeMaxTurns } from "./runner-types.js";
 
 function createSession(finalText: string) {
   const listeners: Array<(event: any) => void> = [];

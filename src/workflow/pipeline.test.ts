@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { checkTokenLimit, createTokenState, createWorkflowState, detectStuckIssues, updatePhaseStatus } from "./pipeline.js";
+import {
+  checkTokenLimit,
+  createTokenState,
+  createWorkflowState,
+  detectStuckIssues,
+  updatePhaseStatus,
+} from "./pipeline.js";
 import type { PhaseDefinition, ReviewIssue, WorkflowDefinition } from "./types.js";
 
 const fixPhases: PhaseDefinition[] = [

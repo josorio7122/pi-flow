@@ -144,5 +144,3 @@ export function detectStuckIssues({
 
   return sameCount >= Math.min(sameIssueLimit, currentIssues.length);
 }
-
-

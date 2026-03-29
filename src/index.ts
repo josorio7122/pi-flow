@@ -17,7 +17,7 @@ import { createGroupJoinCallback, createOnComplete } from "./agents/lifecycle.js
 import { createAgentManager } from "./agents/manager.js";
 import { createNotificationSystem, registerMessageRenderer } from "./agents/notification.js";
 import { createRegistry } from "./agents/registry.js";
-import { createRunnerSettings } from "./agents/runner.js";
+import { createRunnerSettings } from "./agents/runner-types.js";
 import { registerAgentTool } from "./agents/tools/agent-tool.js";
 import { registerResultTool } from "./agents/tools/result-tool.js";
 import { registerSteerTool } from "./agents/tools/steer-tool.js";

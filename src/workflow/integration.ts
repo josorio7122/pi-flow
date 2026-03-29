@@ -8,6 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
+import type { AgentManager } from "../agents/manager.js";
 import { executeCurrentPhase } from "./executor.js";
 import {
   type ActiveWorkflowBookmark,
@@ -28,7 +29,7 @@ import type { WorkflowDefinition, WorkflowEvent } from "./types.js";
 export function registerWorkflowExtension(
   pi: ExtensionAPI,
   builtinWorkflowsDir?: string,
-  deps?: { manager?: import("../agents/manager.js").AgentManager },
+  deps?: { manager?: AgentManager },
 ) {
   let workflows = new Map<string, WorkflowDefinition>();
   let activeWorkflowId: string | undefined;

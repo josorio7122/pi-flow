@@ -3,7 +3,7 @@
  */
 
 import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
-import { normalizeMaxTurns } from "../../agents/runner.js";
+import { normalizeMaxTurns } from "../../agents/runner-types.js";
 import type { JoinMode } from "../../types.js";
 import type { CommandDeps } from "./types.js";
 

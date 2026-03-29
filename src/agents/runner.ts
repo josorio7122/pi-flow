@@ -10,9 +10,6 @@ import type { RunOptions, ToolActivity } from "./runner-types.js";
 import { normalizeMaxTurns } from "./runner-types.js";
 import { buildAgentSession } from "./session.js";
 
-export type { RunnerSettings, RunOptions, ToolActivity } from "./runner-types.js";
-export { createRunnerSettings, normalizeMaxTurns } from "./runner-types.js";
-
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function collectResponseText(session: AgentSession) {

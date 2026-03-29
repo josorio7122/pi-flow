@@ -24,7 +24,7 @@ import type { AgentWidget } from "../../ui/widget.js";
 import type { BatchSystem } from "../batch.js";
 import type { AgentManager } from "../manager.js";
 import type { Registry } from "../registry.js";
-import { normalizeMaxTurns, type RunnerSettings } from "../runner.js";
+import { normalizeMaxTurns, type RunnerSettings } from "../runner-types.js";
 import { renderAgentCall, renderAgentResult } from "./agent-render.js";
 
 interface AgentToolDeps {
