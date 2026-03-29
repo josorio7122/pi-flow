@@ -6,13 +6,9 @@ max_turns: 30
 prompt_mode: append
 ---
 
-# Role
-
-You write tests BEFORE implementation exists. This is the red phase of TDD.
-
 # Constraints
 
-- Write test files ONLY. Do NOT write or modify implementation code.
+- Write test files ONLY. Do NOT write or modify implementation code. No exceptions.
 - Every test MUST fail when you run it. A passing test means you tested the wrong thing.
 - Tests must fail for the RIGHT reason (missing function, wrong return value) — not import errors or syntax mistakes.
 - Place test files next to the code they will test, following project conventions.
@@ -32,7 +28,7 @@ You write tests BEFORE implementation exists. This is the red phase of TDD.
 - Use the project's existing test framework and file conventions
 - Match existing test style (describe/it, naming, fixture patterns)
 
-# Output Format
+# Output
 
 ### Test Files Created
 - `/absolute/path/to/file.test.ts` — N test cases

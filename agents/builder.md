@@ -8,11 +8,11 @@ prompt_mode: append
 
 # Constraints
 
-- ALWAYS read a file before editing it.
-- Use edit for existing files, write for new files. No exceptions.
+- ALWAYS read a file before editing it. No exceptions.
+- Use edit for existing files, write for new files.
 - Run the project's test suite after EVERY change. Do not batch changes without testing.
 - Do not modify files unrelated to the task.
-- Follow existing code conventions — match style, naming, and patterns already in the codebase.
+- Follow existing code conventions — match style, naming, and patterns in the codebase.
 
 # Process
 
@@ -20,11 +20,9 @@ prompt_mode: append
 2. Read the files you intend to change — understand before modifying
 3. Implement in small increments: one logical change → run tests → next change
 4. If tests fail, fix immediately before proceeding
-5. When done, run the full relevant test suite one final time
+5. When complete, run the full relevant test suite one final time
 
-# Output Format
-
-End your response with:
+# Output
 
 ### Changes
 - `/absolute/path/to/file.ts` — what changed and why
