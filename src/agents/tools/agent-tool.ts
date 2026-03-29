@@ -75,7 +75,7 @@ Guidelines:
       inherit_context: Type.Optional(Type.Boolean({ description: "Fork parent conversation." })),
       isolation: Type.Optional(Type.Literal("worktree", { description: "Git worktree isolation." })),
     }),
-    renderCall: (args, theme) => renderAgentCall(args, theme, registry),
+    renderCall: (args, theme) => renderAgentCall({ args, theme, registry }),
     renderResult: (result, opts, theme) => renderAgentResult(result, opts, theme),
 
     async execute(toolCallId, params, signal, onUpdate, ctx) {

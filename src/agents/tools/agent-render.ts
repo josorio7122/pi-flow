@@ -19,7 +19,7 @@ function buildStats(d: AgentDetails, theme: Theme) {
   return parts.map((p) => theme.fg("dim", p)).join(" " + theme.fg("dim", "·") + " ");
 }
 
-export function renderAgentCall(args: Record<string, unknown>, theme: Theme, registry: Registry) {
+export function renderAgentCall({ args, theme, registry }: { args: Record<string, unknown>; theme: Theme; registry: Registry }) {
   const argConfig = args.subagent_type ? registry.getAgentConfig(args.subagent_type as string) : undefined;
   const displayName = args.subagent_type
     ? getDisplayName(args.subagent_type as string, argConfig?.displayName)
