@@ -8,9 +8,9 @@
 import { randomUUID } from "node:crypto";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
+import { executeCurrentPhase } from "./executor.js";
 import {
   type ActiveWorkflowBookmark,
-  buildWorkflowContinueText,
   buildWorkflowStatusText,
   ENTRY_TYPE,
   findLatestBookmark,
@@ -19,13 +19,17 @@ import {
   textResult,
 } from "./helpers.js";
 import { loadWorkflowDefinitions } from "./loader.js";
-import { createWorkflowState } from "./pipeline.js";
+import { createWorkflowState, updatePhaseStatus } from "./pipeline.js";
 import { formatDuration } from "./progress.js";
 import { findStalled, formatStalledMessage } from "./recovery.js";
 import { appendEvent, initWorkflowDir, listHandoffs, readEvents, readState, writeState } from "./store.js";
 import type { WorkflowDefinition, WorkflowEvent } from "./types.js";
 
-export function registerWorkflowExtension(pi: ExtensionAPI, builtinWorkflowsDir?: string) {
+export function registerWorkflowExtension(
+  pi: ExtensionAPI,
+  builtinWorkflowsDir?: string,
+  deps?: { manager?: import("../agents/manager.js").AgentManager },
+) {
   let workflows = new Map<string, WorkflowDefinition>();
   let activeWorkflowId: string | undefined;
   let activeDefinition: WorkflowDefinition | undefined;
@@ -63,8 +67,7 @@ export function registerWorkflowExtension(pi: ExtensionAPI, builtinWorkflowsDir?
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       if (params.action === "status") return buildWorkflowStatusText({ ctx, activeWorkflowId });
-      if (params.action === "continue")
-        return buildWorkflowContinueText({ activeWorkflowId, activeDefinition, cwd: ctx.cwd });
+      if (params.action === "continue") return continueWorkflow(ctx);
       return startWorkflow(params.workflow_type, params.description ?? "", ctx);
     },
   });
@@ -92,13 +95,98 @@ export function registerWorkflowExtension(pi: ExtensionAPI, builtinWorkflowsDir?
     emitEvent(ctx.cwd, { type: "workflow_start", workflowType: definition.name, description: desc, ts: Date.now() });
     doRefreshWidget(ctx);
 
-    const phaseList = definition.phases.map((p) => `${p.name} (${p.mode})`).join(" → ");
-    const instructions = definition.orchestratorInstructions
-      ? `Instructions:\n${definition.orchestratorInstructions}\n\n`
-      : "";
-    return textResult(
-      `Workflow "${definition.name}" started (${workflowId}).\n\nPhases: ${phaseList}\n\nDescription: ${desc}\n\n${instructions}The first phase is "${definition.phases[0]?.name}". Spawn the appropriate agent to begin.`,
-    );
+    doRefreshWidget(ctx);
+
+    if (!deps?.manager) {
+      const phaseList = definition.phases.map((p) => `${p.name} (${p.mode})`).join(" → ");
+      return textResult(
+        `Workflow "${definition.name}" started (${workflowId}).\n\nPhases: ${phaseList}\n\nDescription: ${desc}\n\nThe first phase is "${definition.phases[0]?.name}". Spawn the appropriate agent to begin.`,
+      );
+    }
+
+    return runPhaseAndReport(ctx);
+  }
+
+  async function runPhaseAndReport(ctx: ExtensionContext) {
+    if (!activeWorkflowId || !activeDefinition || !deps?.manager) {
+      return textResult("No active workflow or manager not available.", true);
+    }
+    const state = readState(ctx.cwd, activeWorkflowId);
+    if (!state) return textResult("Workflow state not found.", true);
+
+    const outcome = await executeCurrentPhase({
+      definition: activeDefinition,
+      state,
+      cwd: ctx.cwd,
+      workflowId: activeWorkflowId,
+      pi,
+      ctx,
+      manager: deps.manager,
+    });
+
+    doRefreshWidget(ctx);
+
+    if (outcome.type === "workflow-complete") {
+      const result = `Workflow completed: ${outcome.exitReason}.`;
+      activeWorkflowId = undefined;
+      activeDefinition = undefined;
+      doRefreshWidget(ctx);
+      return textResult(result);
+    }
+    if (outcome.type === "gate-waiting") {
+      return textResult(
+        `Workflow paused at approval gate: "${state.currentPhase}". Review the results above and use Workflow({ action: "continue" }) to proceed.`,
+      );
+    }
+    if (outcome.type === "error") {
+      return textResult(`Workflow error: ${outcome.error}`, true);
+    }
+    if (outcome.type === "stuck") {
+      return textResult(`Workflow stuck: ${outcome.reason}. Consider manual intervention.`, true);
+    }
+    return textResult("Phase completed.");
+  }
+
+  async function continueWorkflow(ctx: ExtensionContext) {
+    if (!activeWorkflowId || !activeDefinition) {
+      return textResult("No active workflow to continue.", true);
+    }
+    const state = readState(ctx.cwd, activeWorkflowId);
+    if (!state) return textResult("Workflow state not found.", true);
+
+    // Advance past gate
+    const currentPhase = activeDefinition.phases.find((p) => p.name === state.currentPhase);
+    if (currentPhase?.mode === "gate") {
+      updatePhaseStatus({
+        state,
+        phase: state.currentPhase,
+        status: "complete",
+        onEvent: (e) => emitEvent(ctx.cwd, e),
+      });
+      emitEvent(ctx.cwd, { type: "approval", phase: state.currentPhase, decision: "approved", ts: Date.now() });
+
+      const nextIndex = activeDefinition.phases.findIndex((p) => p.name === state.currentPhase) + 1;
+      const nextPhase = activeDefinition.phases[nextIndex];
+      if (!nextPhase) {
+        state.exitReason = "clean";
+        state.completedAt = Date.now();
+        writeState(ctx.cwd, activeWorkflowId, state);
+        activeWorkflowId = undefined;
+        activeDefinition = undefined;
+        doRefreshWidget(ctx);
+        return textResult("Workflow completed (no more phases after gate).");
+      }
+      state.currentPhase = nextPhase.name;
+      writeState(ctx.cwd, activeWorkflowId, state);
+    }
+
+    if (!deps?.manager) {
+      return textResult(
+        `Workflow resumed at phase "${state.currentPhase}". Spawn the ${currentPhase?.role ?? "next"} agent to continue.`,
+      );
+    }
+
+    return runPhaseAndReport(ctx);
   }
 
   // ── /flow Command ──────────────────────────────────────────────

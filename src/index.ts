@@ -161,5 +161,5 @@ export default function (pi: ExtensionAPI) {
   });
 
   // ---- Workflow engine ----
-  registerWorkflowExtension(pi);
+  registerWorkflowExtension(pi, undefined, { manager });
 }
