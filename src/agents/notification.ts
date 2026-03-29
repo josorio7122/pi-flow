@@ -49,12 +49,11 @@ export function createNotificationSystem({
     if (record.resultConsumed) return;
 
     const notification = formatTaskNotification(record, 500);
-    const footer = record.outputFile ? `\nFull transcript available at: ${record.outputFile}` : "";
 
     pi.sendMessage<NotificationDetails>(
       {
         customType: "subagent-notification",
-        content: notification + footer,
+        content: notification,
         display: true,
         details: buildNotificationDetails({ record, resultMaxLen: 500, activity: agentActivity.get(record.id) }),
       },
@@ -108,10 +107,6 @@ export function registerMessageRenderer(pi: ExtensionAPI) {
       } else {
         const preview = d.resultPreview.split("\n")[0]?.slice(0, 80) ?? "";
         line += "\n  " + theme.fg("dim", `⎿  ${preview}`);
-      }
-
-      if (d.outputFile) {
-        line += "\n  " + theme.fg("muted", `transcript: ${d.outputFile}`);
       }
 
       return line;

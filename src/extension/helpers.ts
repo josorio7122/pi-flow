@@ -83,7 +83,7 @@ export function formatTaskNotification(record: AgentRecord, resultMaxLen: number
     `<task-notification>`,
     `<task-id>${record.id}</task-id>`,
     record.toolCallId ? `<tool-use-id>${escapeXml(record.toolCallId)}</tool-use-id>` : null,
-    record.outputFile ? `<output-file>${escapeXml(record.outputFile)}</output-file>` : null,
+
     `<status>${escapeXml(status)}</status>`,
     `<summary>Agent "${escapeXml(record.description)}" ${record.status}</summary>`,
     `<result>${escapeXml(resultPreview)}</result>`,
@@ -155,7 +155,6 @@ export function buildNotificationDetails({
     maxTurns: activity?.maxTurns,
     totalTokens,
     durationMs: record.completedAt ? record.completedAt - record.startedAt : 0,
-    outputFile: record.outputFile,
     error: record.error,
     resultPreview: record.result
       ? record.result.length > resultMaxLen

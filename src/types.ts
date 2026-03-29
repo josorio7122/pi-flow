@@ -93,7 +93,6 @@ export interface NotificationDetails {
   maxTurns?: number | undefined;
   totalTokens: number;
   durationMs: number;
-  outputFile?: string | undefined;
   error?: string | undefined;
   resultPreview: string;
   /** Additional agents in a group notification. */
