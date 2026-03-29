@@ -9,11 +9,11 @@ import type {
   DispatchResult,
 } from './types.js';
 import { loadConfig } from './config.js';
-import { discoverAgents, buildVariableMap } from './agents.js';
+import { discoverAgents, buildVariableMap, findAgentByName } from './agents.js';
 import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
 import { runAgent } from './runner.js';
 import { mapWithConcurrencyLimit, getFinalOutput, emptyResult } from './result-utils.js';
-import { BackgroundManager } from './background.js';
+import { BackgroundManager, GroupJoinManager } from './background.js';
 import {
   readStateFile,
   writeDispatchLog,
@@ -52,7 +52,7 @@ export function requiresFeature(agentName: string): boolean {
 // ─── Pure helpers (exported for testing) ──────────────────────────────────────
 
 export function findAgent(agents: FlowAgentConfig[], name: string): FlowAgentConfig | null {
-  return agents.find((a) => a.name === name) ?? null;
+  return findAgentByName(agents, name) ?? null;
 }
 
 export function resolveAgentTasks(
@@ -425,6 +425,7 @@ export async function executeDispatch(
   signal?: AbortSignal,
   onUpdate?: OnUpdateCallback,
   backgroundManager?: BackgroundManager,
+  groupJoinMgr?: GroupJoinManager,
 ): Promise<DispatchResult> {
   try {
     // Validate exactly one mode
@@ -503,6 +504,16 @@ export async function executeDispatch(
               variableMap,
               signal: sig,
               feature,
+              callbacks: {
+                onSessionCreated: (session) => {
+                  const rec = backgroundManager.getRecord(id);
+                  if (rec) {
+                    rec.steerFn = (msg: string) =>
+                      (session as { steer(m: string): Promise<void> }).steer(msg);
+                    backgroundManager.flushPendingSteers(id);
+                  }
+                },
+              },
             }),
         });
         return {
@@ -537,10 +548,27 @@ export async function executeDispatch(
                 variableMap,
                 signal: sig,
                 feature,
+                callbacks: {
+                  onSessionCreated: (session) => {
+                    const rec = backgroundManager.getRecord(id);
+                    if (rec) {
+                      rec.steerFn = (msg: string) =>
+                        (session as { steer(m: string): Promise<void> }).steer(msg);
+                      backgroundManager.flushPendingSteers(id);
+                    }
+                  },
+                },
               }),
           });
           ids.push(id);
         }
+
+        // Register as a group for batched completion notifications
+        if (groupJoinMgr && ids.length >= 2) {
+          const groupId = `parallel-${Date.now()}`;
+          groupJoinMgr.registerGroup(groupId, ids);
+        }
+
         return {
           content: [
             {

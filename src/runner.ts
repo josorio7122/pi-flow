@@ -17,6 +17,13 @@ import {
   grepTool,
   findTool,
   lsTool,
+  createReadTool,
+  createBashTool,
+  createEditTool,
+  createWriteTool,
+  createGrepTool,
+  createFindTool,
+  createLsTool,
 } from '@mariozechner/pi-coding-agent';
 import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
 import type { FlowAgentConfig, SingleAgentResult, UsageStats } from './types.js';
@@ -24,14 +31,42 @@ import { injectVariables } from './agents.js';
 import { buildMemoryBlock, buildReadOnlyMemoryBlock } from './memory.js';
 import { emptyUsage } from './result-utils.js';
 import { createWorktree, cleanupWorktree, type WorktreeInfo } from './worktree.js';
+import { detectEnv, buildEnvBlock, SUB_AGENT_CONTEXT } from './env.js';
+import { preloadSkills } from './skill-loader.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /** Additional turns allowed after the soft steer message before hard abort. */
+let graceTurns = 5;
+
+/** Default max turns. undefined = unlimited. */
+let defaultMaxTurns: number | undefined;
+
+export function getGraceTurns(): number {
+  return graceTurns;
+}
+export function setGraceTurns(n: number): void {
+  graceTurns = Math.max(1, n);
+}
+export function getDefaultMaxTurns(): number | undefined {
+  return defaultMaxTurns;
+}
+export function setDefaultMaxTurns(n: number | undefined): void {
+  defaultMaxTurns = normalizeMaxTurns(n);
+}
+
+/** Normalize max turns: 0/undefined → unlimited, otherwise minimum 1. */
+export function normalizeMaxTurns(n: number | undefined): number | undefined {
+  if (n == null || n === 0) return undefined;
+  return Math.max(1, n);
+}
+
+/** @deprecated Use getGraceTurns() instead. */
 export const GRACE_TURNS = 5;
 
 // ─── Tool resolution ──────────────────────────────────────────────────────────
 
+/** Global tool singletons (default — no cwd binding). */
 const TOOL_MAP: Record<string, { name: string }> = {
   read: readTool,
   bash: bashTool,
@@ -42,12 +77,35 @@ const TOOL_MAP: Record<string, { name: string }> = {
   ls: lsTool,
 };
 
+/** cwd-specific tool factory functions (#20/#117). */
+const TOOL_FACTORIES: Record<string, (cwd: string) => { name: string }> = {
+  read: (cwd) => createReadTool(cwd),
+  bash: (cwd) => createBashTool(cwd),
+  edit: (cwd) => createEditTool(cwd),
+  write: (cwd) => createWriteTool(cwd),
+  grep: (cwd) => createGrepTool(cwd),
+  find: (cwd) => createFindTool(cwd),
+  ls: (cwd) => createLsTool(cwd),
+};
+
 /**
  * Maps agent tool name strings to pi built-in tool objects.
- * Unknown names are silently filtered out.
+ * When `cwd` is provided, creates cwd-specific tool instances.
+ * Applies denylist filtering when provided.
  */
-export function resolveTools(toolNames: string[]): { name: string }[] {
-  return toolNames.map((name) => TOOL_MAP[name]).filter((t): t is { name: string } => t != null);
+export function resolveTools(
+  toolNames: string[],
+  disallowedTools?: string[],
+  cwd?: string,
+): { name: string }[] {
+  const denied = disallowedTools ? new Set(disallowedTools) : undefined;
+  return toolNames
+    .filter((name) => !denied?.has(name))
+    .map((name) => {
+      if (cwd && TOOL_FACTORIES[name]) return TOOL_FACTORIES[name](cwd);
+      return TOOL_MAP[name];
+    })
+    .filter((t): t is { name: string } => t != null);
 }
 
 // ─── Model resolution ─────────────────────────────────────────────────────────
@@ -81,6 +139,8 @@ export interface RunAgentCallbacks {
   onTextDelta?: (delta: string, fullText: string) => void;
   onTurnEnd?: (turnCount: number) => void;
   onUsageUpdate?: (usage: UsageStats) => void;
+  /** Called when the agent session is created (before first prompt). */
+  onSessionCreated?: (session: unknown) => void;
 }
 
 export interface RunAgentOptions {
@@ -113,30 +173,70 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
   // 0. Worktree isolation for writable agents
   let effectiveCwd = ctx.cwd;
   let worktreeInfo: WorktreeInfo | undefined;
+  let worktreeWarning = '';
   if (agent.isolation === 'worktree') {
     const agentId = `${agent.name}-${Date.now()}`;
     worktreeInfo = createWorktree(ctx.cwd, agentId, feature);
     if (worktreeInfo) {
       effectiveCwd = worktreeInfo.path;
+    } else {
+      worktreeWarning =
+        '\n\n[WARNING: Worktree isolation was requested but failed (not a git repo, or no commits yet). Running in the main working directory instead.]';
     }
   }
 
-  // 1. Build system prompt with variable injection + memory block
-  let systemPrompt = injectVariables(agent.systemPrompt, variableMap, agent.variables);
+  // 1. Build system prompt with variable injection + env block + memory block
+  const env = await detectEnv(effectiveCwd);
+  const envBlock = buildEnvBlock(effectiveCwd, env);
+  let systemPrompt: string;
+
+  if (agent.promptMode === 'append') {
+    // Append mode: env + parent prompt + sub-agent context + agent instructions
+    const parentPrompt = ''; // TODO: add parent context forking in Phase 6
+    systemPrompt =
+      envBlock +
+      (parentPrompt
+        ? '\n\n<inherited_system_prompt>\n' + parentPrompt + '\n</inherited_system_prompt>'
+        : '') +
+      '\n\n' +
+      SUB_AGENT_CONTEXT +
+      '\n\n<agent_instructions>\n' +
+      injectVariables(agent.systemPrompt, variableMap, agent.variables) +
+      '\n</agent_instructions>';
+  } else {
+    // Replace mode (default): env + agent prompt
+    systemPrompt =
+      envBlock + '\n\n' + injectVariables(agent.systemPrompt, variableMap, agent.variables);
+  }
 
   // 1b. Inject per-agent memory block if configured
   if (agent.memory) {
-    const memoryBlock = agent.writable
-      ? buildMemoryBlock(agent.name, agent.memory, ctx.cwd)
-      : buildReadOnlyMemoryBlock(agent.name, agent.memory, ctx.cwd);
+    // Detect write capability: check actual tool set + denylist (#114)
+    const deniedSet = agent.disallowedTools ? new Set(agent.disallowedTools) : undefined;
+    const effectiveTools = agent.tools.filter((t) => !deniedSet?.has(t));
+    const hasWriteTools = effectiveTools.includes('write') || effectiveTools.includes('edit');
+    const memoryBlock = hasWriteTools
+      ? buildMemoryBlock(agent.name, agent.memory, effectiveCwd)
+      : buildReadOnlyMemoryBlock(agent.name, agent.memory, effectiveCwd);
     systemPrompt = systemPrompt + '\n\n' + memoryBlock;
   }
 
-  // 2. Create resource loader (no extensions, no skills — we inject via prompt)
+  // 1c. Preload skills if configured (#9)
+  if (Array.isArray(agent.skills)) {
+    const loaded = preloadSkills(agent.skills, effectiveCwd);
+    for (const skill of loaded) {
+      systemPrompt += `\n\n# Preloaded Skill: ${skill.name}\n${skill.content}`;
+    }
+  }
+
+  // 2. Create resource loader — respect extension/skill config (#8, #9)
+  const noExtensions = agent.extensions === false || agent.extensions === undefined;
+  const noSkills =
+    agent.skills === false || agent.skills === undefined || Array.isArray(agent.skills);
   const loader = new DefaultResourceLoader({
     cwd: effectiveCwd,
-    noExtensions: true,
-    noSkills: true,
+    noExtensions,
+    noSkills,
     noPromptTemplates: true,
     noThemes: true,
     systemPromptOverride: () => systemPrompt,
@@ -147,14 +247,15 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Model<any> from pi SDK
   const model = resolveModel(ctx.modelRegistry, agent.model, ctx.model) as any;
 
-  // 4. Resolve tools
-  const tools = resolveTools(agent.tools);
+  // 4. Resolve tools (with denylist, cwd-specific when worktree changes cwd)
+  const cwdForTools = worktreeInfo ? effectiveCwd : undefined;
+  const tools = resolveTools(agent.tools, agent.disallowedTools, cwdForTools);
 
   // 5. Create session
   const { session } = await createAgentSession({
     cwd: effectiveCwd,
     sessionManager: SessionManager.inMemory(effectiveCwd),
-    settingsManager: SettingsManager.inMemory(),
+    settingsManager: SettingsManager.create(),
     modelRegistry: ctx.modelRegistry,
     model,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- pi SDK Tool[] type is complex
@@ -164,14 +265,38 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
     thinkingLevel: agent.thinking as any,
   });
 
-  // 6. Enforce exact tool set
-  session.setActiveToolsByName(agent.tools);
+  // 6. Enforce tool set — filter denylist + exclude our own tools from extensions
+  const denied = agent.disallowedTools ? new Set(agent.disallowedTools) : undefined;
+  const EXCLUDED_TOOLS = ['dispatch_flow', 'get_agent_result', 'steer_agent'];
+  if (!noExtensions) {
+    // When extensions are loaded, filter active tools:
+    // keep agent's built-in tools + extension tools (minus excluded + denied)
+    const builtinNames = new Set(tools.map((t) => t.name));
+    const activeToolNames = session.getActiveToolNames().filter((t: string) => {
+      if (EXCLUDED_TOOLS.includes(t)) return false;
+      if (denied?.has(t)) return false;
+      if (builtinNames.has(t)) return true;
+      // Extension tool — check extension allowlist
+      if (Array.isArray(agent.extensions)) {
+        return agent.extensions.some((ext) => t.startsWith(ext) || t.includes(ext));
+      }
+      return true; // extensions === true → allow all
+    });
+    session.setActiveToolsByName(activeToolNames);
+  } else {
+    // No extensions — just apply agent tools minus denylist
+    const activeTools = agent.tools.filter((t) => !denied?.has(t));
+    session.setActiveToolsByName(activeTools);
+  }
+
+  // 6b. Notify caller that session is ready (for pending steer flush, etc.)
+  callbacks?.onSessionCreated?.(session);
 
   // 7. Turn tracking state
   let turnCount = 0;
   let softLimitReached = false;
   let aborted = false;
-  const maxSteps = agent.limits.max_steps > 0 ? agent.limits.max_steps : undefined;
+  const maxSteps = normalizeMaxTurns(agent.limits.max_steps) ?? defaultMaxTurns;
 
   // 8. Subscribe to session events
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AgentSessionEvent union type
@@ -188,7 +313,7 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
             session.steer(
               'You have reached your turn limit. Wrap up immediately — provide your final answer now.',
             );
-          } else if (softLimitReached && turnCount >= maxSteps + GRACE_TURNS) {
+          } else if (softLimitReached && turnCount >= maxSteps + graceTurns) {
             aborted = true;
             session.abort();
           }
@@ -228,7 +353,8 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
 
   // 10. Execute
   try {
-    await session.prompt(task);
+    const effectiveTask = worktreeWarning ? worktreeWarning + '\n\n' + task : task;
+    await session.prompt(effectiveTask);
 
     // 11. Collect results
     const stats = session.getSessionStats();

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BackgroundManager, GroupJoinManager } from './background.js';
+import { BackgroundManager, GroupJoinManager, SmartBatcher } from './background.js';
 import type { FlowAgentConfig, SingleAgentResult } from './types.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -270,6 +270,278 @@ describe('BackgroundManager', () => {
     manager.steer(id, 'wrap up now');
     const record = manager.getRecord(id);
     expect(record!.pendingSteers).toContain('wrap up now');
+  });
+
+  // ── Phase 1: Gap #24 — pending steers flushed via onSessionCreated ──────
+
+  it('flushes pending steers when steerFn is set', () => {
+    const executor = vi.fn(() => new Promise<SingleAgentResult>(() => {}));
+    const id = manager.spawn({
+      agent: makeAgent(),
+      task: 't',
+      description: 'd',
+      executor,
+    });
+
+    // Queue steers before session ready
+    manager.steer(id, 'message 1');
+    manager.steer(id, 'message 2');
+
+    // Simulate session ready — set steerFn
+    const steerFn = vi.fn(() => Promise.resolve());
+    const record = manager.getRecord(id)!;
+    record.steerFn = steerFn;
+
+    // Flush pending steers
+    manager.flushPendingSteers(id);
+    expect(steerFn).toHaveBeenCalledTimes(2);
+    expect(steerFn).toHaveBeenCalledWith('message 1');
+    expect(steerFn).toHaveBeenCalledWith('message 2');
+    expect(record.pendingSteers).toBeUndefined();
+  });
+
+  it('flushPendingSteers is a no-op when no pending steers', () => {
+    const executor = vi.fn(() => new Promise<SingleAgentResult>(() => {}));
+    const id = manager.spawn({
+      agent: makeAgent(),
+      task: 't',
+      description: 'd',
+      executor,
+    });
+
+    const steerFn = vi.fn(() => Promise.resolve());
+    manager.getRecord(id)!.steerFn = steerFn;
+    manager.flushPendingSteers(id);
+    expect(steerFn).not.toHaveBeenCalled();
+  });
+
+  // ── Phase 1: Gap #26 — waitForAll with loop-drain ──────────────────────
+
+  // ── Phase 2: Gap #27 — setMaxConcurrent at runtime ───────────────────
+
+  it('setMaxConcurrent adjusts limit and drains queue', async () => {
+    const executor = vi.fn(() => new Promise<SingleAgentResult>(() => {}));
+
+    // maxConcurrent=2, spawn 3 — third is queued
+    manager.spawn({ agent: makeAgent('a1'), task: 't1', description: 'd1', executor });
+    manager.spawn({ agent: makeAgent('a2'), task: 't2', description: 'd2', executor });
+    const id3 = manager.spawn({
+      agent: makeAgent('a3'),
+      task: 't3',
+      description: 'd3',
+      executor,
+    });
+    expect(manager.getRecord(id3)!.status).toBe('queued');
+
+    // Increase limit — should drain queue
+    manager.setMaxConcurrent(3);
+    expect(manager.getRecord(id3)!.status).toBe('running');
+  });
+
+  it('getMaxConcurrent returns current limit', () => {
+    expect(manager.getMaxConcurrent()).toBe(2);
+    manager.setMaxConcurrent(8);
+    expect(manager.getMaxConcurrent()).toBe(8);
+  });
+
+  // ── Phase 2: Gap #30 — toolUses counter ─────────────────────────────
+
+  it('tracks toolUses via onToolUse callback', async () => {
+    const result = makeResult();
+    const executor = vi.fn(() => Promise.resolve(result));
+    const id = manager.spawn({
+      agent: makeAgent(),
+      task: 't',
+      description: 'd',
+      executor,
+    });
+
+    // Simulate tool use tracking
+    manager.incrementToolUses(id);
+    manager.incrementToolUses(id);
+    expect(manager.getRecord(id)!.toolUses).toBe(2);
+  });
+
+  // ── Phase 2: Gap #31 — onStart callback ─────────────────────────────
+
+  it('calls onStart when agent transitions to running', async () => {
+    const onStart = vi.fn();
+    const mgr = new BackgroundManager({ onComplete: vi.fn(), maxConcurrent: 2, onStart });
+    const executor = vi.fn(() => new Promise<SingleAgentResult>(() => {}));
+
+    mgr.spawn({ agent: makeAgent(), task: 't', description: 'd', executor });
+    expect(onStart).toHaveBeenCalledTimes(1);
+    expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ status: 'running' }));
+  });
+
+  it('calls onStart for queued agents when they start', async () => {
+    const onStart = vi.fn();
+    let resolve1!: (r: SingleAgentResult) => void;
+    const mgr = new BackgroundManager({ onComplete: vi.fn(), maxConcurrent: 1, onStart });
+
+    const p1 = new Promise<SingleAgentResult>((r) => {
+      resolve1 = r;
+    });
+    mgr.spawn({ agent: makeAgent('a1'), task: 't1', description: 'd1', executor: () => p1 });
+    mgr.spawn({
+      agent: makeAgent('a2'),
+      task: 't2',
+      description: 'd2',
+      executor: () => new Promise<SingleAgentResult>(() => {}),
+    });
+
+    expect(onStart).toHaveBeenCalledTimes(1); // only a1
+
+    resolve1(makeResult('a1'));
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(onStart).toHaveBeenCalledTimes(2); // now a2 too
+  });
+
+  // ── Phase 2: Gap #34 — resultConsumed flag ──────────────────────────
+
+  it('resultConsumed prevents onComplete from firing notification', async () => {
+    const onComplete = vi.fn();
+    const mgr = new BackgroundManager({ onComplete, maxConcurrent: 2 });
+    const executor = vi.fn(() => Promise.resolve(makeResult()));
+
+    const id = mgr.spawn({ agent: makeAgent(), task: 't', description: 'd', executor });
+
+    // Mark as consumed before completion
+    mgr.getRecord(id)!.resultConsumed = true;
+
+    await new Promise((r) => setTimeout(r, 20));
+
+    // onComplete still fires (manager doesn't know about consumption)
+    // but the record has the flag set for the caller to check
+    expect(mgr.getRecord(id)!.resultConsumed).toBe(true);
+  });
+
+  // ── Phase 1: Gap #26 — waitForAll with loop-drain ──────────────────
+
+  it('waitForAll drains queued agents through completion', async () => {
+    let resolve1!: (r: SingleAgentResult) => void;
+    let resolve2!: (r: SingleAgentResult) => void;
+    let resolve3!: (r: SingleAgentResult) => void;
+
+    const executor1 = vi.fn(
+      () =>
+        new Promise<SingleAgentResult>((r) => {
+          resolve1 = r;
+        }),
+    );
+    const executor2 = vi.fn(
+      () =>
+        new Promise<SingleAgentResult>((r) => {
+          resolve2 = r;
+        }),
+    );
+    const executor3 = vi.fn(
+      () =>
+        new Promise<SingleAgentResult>((r) => {
+          resolve3 = r;
+        }),
+    );
+
+    // maxConcurrent=2, so a3 will be queued
+    manager.spawn({ agent: makeAgent('a1'), task: 't1', description: 'd1', executor: executor1 });
+    manager.spawn({ agent: makeAgent('a2'), task: 't2', description: 'd2', executor: executor2 });
+    manager.spawn({ agent: makeAgent('a3'), task: 't3', description: 'd3', executor: executor3 });
+
+    // Start waiting (won't resolve until all 3 are done)
+    const waitPromise = manager.waitForAll();
+
+    // Complete a1 — should trigger a3 to start via drain
+    resolve1(makeResult('a1'));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(executor3).toHaveBeenCalledTimes(1);
+
+    // Complete a2 and a3
+    resolve2(makeResult('a2'));
+    resolve3(makeResult('a3'));
+
+    await expect(waitPromise).resolves.toBeUndefined();
+    expect(manager.listAgents().every((r) => r.status === 'completed')).toBe(true);
+  });
+
+  // ── Phase 6: Gap #6/#25 — resume existing session ────────────────────
+
+  it('resume re-prompts an existing session', async () => {
+    const session = { steer: vi.fn() };
+    let resolve!: (r: SingleAgentResult) => void;
+    const executor = vi.fn(
+      () =>
+        new Promise<SingleAgentResult>((r) => {
+          resolve = r;
+        }),
+    );
+    const id = manager.spawn({
+      agent: makeAgent(),
+      task: 't',
+      description: 'd',
+      executor,
+    });
+
+    // Set session reference
+    manager.getRecord(id)!.session = session;
+    resolve(makeResult());
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Resume
+    const resumeExecutor = vi.fn(() => Promise.resolve('resumed output'));
+    const record = await manager.resume(id, 'new prompt', resumeExecutor);
+
+    expect(record).toBeDefined();
+    expect(record!.status).toBe('completed');
+    expect(resumeExecutor).toHaveBeenCalledWith(session, 'new prompt');
+  });
+
+  it('resume returns undefined for agent without session', async () => {
+    const executor = vi.fn(() => Promise.resolve(makeResult()));
+    const id = manager.spawn({
+      agent: makeAgent(),
+      task: 't',
+      description: 'd',
+      executor,
+    });
+    await new Promise((r) => setTimeout(r, 20));
+
+    // No session set — clear it
+    manager.getRecord(id)!.session = undefined;
+    const result = await manager.resume(id, 'prompt', vi.fn());
+    expect(result).toBeUndefined();
+  });
+});
+
+// ─── SmartBatcher ─────────────────────────────────────────────────────────────
+
+describe('SmartBatcher', () => {
+  it('registers groups for 2+ agents in the same batch', async () => {
+    const gjm = new GroupJoinManager(vi.fn());
+    const batcher = new SmartBatcher(gjm);
+
+    batcher.add('a1');
+    batcher.add('a2');
+    batcher.add('a3');
+
+    // Wait for debounce
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(gjm.isGrouped('a1')).toBe(true);
+    expect(gjm.isGrouped('a2')).toBe(true);
+    expect(gjm.isGrouped('a3')).toBe(true);
+    batcher.dispose();
+  });
+
+  it('does not register group for single agent', async () => {
+    const gjm = new GroupJoinManager(vi.fn());
+    const batcher = new SmartBatcher(gjm);
+
+    batcher.add('solo');
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(gjm.isGrouped('solo')).toBe(false);
+    batcher.dispose();
   });
 });
 

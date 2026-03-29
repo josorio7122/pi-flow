@@ -6,6 +6,7 @@ import {
   parseAgentFile,
   validateAgent,
   discoverAgents,
+  findAgentByName,
   readAgentsMd,
   buildVariableMap,
   injectVariables,
@@ -1118,5 +1119,145 @@ describe('injectVariables', () => {
     const prompt = 'Hello {{X}}.';
     const result = injectVariables(prompt, {}, ['X']);
     expect(result).toBe('Hello .');
+  });
+});
+
+// ─── Phase 3: New agent config fields ─────────────────────────────────────────
+
+describe('parseAgentFile — Phase 3 fields', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flow-phase3-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writeAndParse(content: string) {
+    const fp = path.join(tmpDir, 'test.md');
+    fs.writeFileSync(fp, content);
+    return parseAgentFile(fp, 'custom');
+  }
+
+  it('parses enabled: false', () => {
+    const agent = writeAndParse(`---
+name: disabled
+model: anthropic/claude-sonnet-4-6
+tools: read
+enabled: false
+---
+Disabled agent.`);
+    expect(agent.enabled).toBe(false);
+  });
+
+  it('defaults enabled to true when omitted', () => {
+    const agent = writeAndParse(`---
+name: normal
+model: anthropic/claude-sonnet-4-6
+tools: read
+---
+Normal agent.`);
+    expect(agent.enabled).toBe(true);
+  });
+
+  it('parses disallowed_tools as comma-separated', () => {
+    const agent = writeAndParse(`---
+name: restricted
+model: anthropic/claude-sonnet-4-6
+tools: read, write, edit
+disallowed_tools: bash, write
+---
+Restricted.`);
+    expect(agent.disallowedTools).toEqual(['bash', 'write']);
+  });
+
+  it('parses prompt_mode: append', () => {
+    const agent = writeAndParse(`---
+name: appender
+model: anthropic/claude-sonnet-4-6
+tools: read
+prompt_mode: append
+---
+Append mode.`);
+    expect(agent.promptMode).toBe('append');
+  });
+
+  it('defaults prompt_mode to replace', () => {
+    const agent = writeAndParse(`---
+name: normal
+model: anthropic/claude-sonnet-4-6
+tools: read
+---
+Replace mode.`);
+    expect(agent.promptMode).toBe('replace');
+  });
+
+  it('parses extensions as false/none', () => {
+    const agent = writeAndParse(`---
+name: isolated
+model: anthropic/claude-sonnet-4-6
+tools: read
+extensions: false
+---
+No extensions.`);
+    expect(agent.extensions).toBe(false);
+  });
+
+  it('parses extensions as true', () => {
+    const agent = writeAndParse(`---
+name: full
+model: anthropic/claude-sonnet-4-6
+tools: read
+extensions: true
+---
+Full extensions.`);
+    expect(agent.extensions).toBe(true);
+  });
+
+  it('parses memory: local', () => {
+    const agent = writeAndParse(`---
+name: local-mem
+model: anthropic/claude-sonnet-4-6
+tools: read
+memory: local
+---
+Local memory.`);
+    expect(agent.memory).toBe('local');
+  });
+
+  it('parses inherit_context: true', () => {
+    const agent = writeAndParse(`---
+name: forker
+model: anthropic/claude-sonnet-4-6
+tools: read
+inherit_context: true
+---
+Fork parent context.`);
+    expect(agent.inheritContext).toBe(true);
+  });
+});
+
+// ─── Phase 3: Case-insensitive agent lookup ───────────────────────────────────
+
+describe('findAgentByName', () => {
+  const agents = [
+    { name: 'scout' } as any,
+    { name: 'Builder' } as any,
+    { name: 'Test-Writer' } as any,
+  ];
+
+  it('finds exact match', () => {
+    expect(findAgentByName(agents, 'scout')?.name).toBe('scout');
+  });
+
+  it('finds case-insensitive match', () => {
+    expect(findAgentByName(agents, 'BUILDER')?.name).toBe('Builder');
+    expect(findAgentByName(agents, 'test-writer')?.name).toBe('Test-Writer');
+  });
+
+  it('returns undefined for no match', () => {
+    expect(findAgentByName(agents, 'nonexistent')).toBeUndefined();
   });
 });

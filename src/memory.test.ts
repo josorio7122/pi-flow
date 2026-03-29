@@ -123,6 +123,11 @@ describe('resolveMemoryDir', () => {
     expect(result).toBe(path.join(os.homedir(), '.pi', 'flow-memory', 'reviewer'));
   });
 
+  it('resolves local scope to .flow/agent-memory-local/{name}', () => {
+    const result = resolveMemoryDir('builder', 'local', '/my/project');
+    expect(result).toBe(path.join('/my/project', '.flow', 'agent-memory-local', 'builder'));
+  });
+
   it('throws for unsafe agent names', () => {
     expect(() => resolveMemoryDir('../etc', 'project', '/my/project')).toThrow('Unsafe agent name');
     expect(() => resolveMemoryDir('', 'project', '/my/project')).toThrow('Unsafe agent name');

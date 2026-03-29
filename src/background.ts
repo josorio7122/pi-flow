@@ -28,10 +28,30 @@ export interface BackgroundRecord {
   abortController: AbortController;
   promise?: Promise<SingleAgentResult>;
   usage?: UsageStats;
+  /** Number of tool uses completed by this agent. */
+  toolUses?: number;
+  /** True if result was already consumed via get_agent_result — suppresses notification. */
+  resultConsumed?: boolean;
   /** Steering messages queued before the session is ready. */
   pendingSteers?: string[];
   /** Callback to deliver a steer to the live session. */
   steerFn?: (message: string) => Promise<void>;
+  /** Reference to the live agent session (for resume, stats, conversation). */
+  session?: unknown;
+  /** The tool_use_id from the original dispatch tool call. */
+  toolCallId?: string;
+  /** Path to the streaming output transcript file. */
+  outputFile?: string;
+  /** Cleanup function for the output file stream subscription. */
+  outputCleanup?: () => void;
+  /** Group ID for batched notifications. */
+  groupId?: string;
+  /** Join mode for notification batching. */
+  joinMode?: 'async' | 'group' | 'smart';
+  /** Worktree info if the agent is running in isolation. */
+  worktreeInfo?: { path: string; branch: string };
+  /** Worktree cleanup result after completion. */
+  worktreeResult?: { hasChanges: boolean; branch?: string };
 }
 
 export interface SpawnOptions {
@@ -45,6 +65,7 @@ export interface SpawnOptions {
 
 export interface BackgroundManagerOptions {
   onComplete?: (record: BackgroundRecord) => void;
+  onStart?: (record: BackgroundRecord) => void;
   maxConcurrent?: number;
 }
 
@@ -58,10 +79,40 @@ export class BackgroundManager {
   private runningCount = 0;
   private maxConcurrent: number;
   private onComplete?: (record: BackgroundRecord) => void;
+  private onStart?: (record: BackgroundRecord) => void;
+  private cleanupInterval: ReturnType<typeof setInterval>;
 
   constructor(opts: BackgroundManagerOptions = {}) {
     this.onComplete = opts.onComplete;
+    this.onStart = opts.onStart;
     this.maxConcurrent = opts.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
+    // Auto-cleanup completed agents after 10 minutes
+    this.cleanupInterval = setInterval(() => this.autoCleanup(), 60_000);
+  }
+
+  private autoCleanup(): void {
+    const cutoff = Date.now() - 10 * 60_000;
+    for (const [id, record] of this.agents) {
+      if (record.status === 'running' || record.status === 'queued') continue;
+      if ((record.completedAt ?? 0) >= cutoff) continue;
+      this.agents.delete(id);
+    }
+  }
+
+  /** Update the max concurrent background agents limit. */
+  setMaxConcurrent(n: number): void {
+    this.maxConcurrent = Math.max(1, n);
+    this.drainQueue();
+  }
+
+  getMaxConcurrent(): number {
+    return this.maxConcurrent;
+  }
+
+  /** Increment tool use counter for an agent. */
+  incrementToolUses(id: string): void {
+    const record = this.agents.get(id);
+    if (record) record.toolUses = (record.toolUses ?? 0) + 1;
   }
 
   /**
@@ -148,11 +199,20 @@ export class BackgroundManager {
     return false;
   }
 
+  /**
+   * Wait for all running and queued agents to complete.
+   * Loops because drainQueue starts new agents as running ones finish.
+   */
   async waitForAll(): Promise<void> {
-    const promises = [...this.agents.values()]
-      .filter((r) => r.promise)
-      .map((r) => r.promise!.catch(() => {}));
-    await Promise.all(promises);
+    while (true) {
+      this.drainQueue();
+      const pending = [...this.agents.values()]
+        .filter((r) => r.status === 'running' || r.status === 'queued')
+        .map((r) => r.promise)
+        .filter(Boolean);
+      if (pending.length === 0) break;
+      await Promise.allSettled(pending);
+    }
   }
 
   // ── Control ───────────────────────────────────────────────────────────────
@@ -195,6 +255,71 @@ export class BackgroundManager {
     }
   }
 
+  /**
+   * Flush any pending steers for an agent.
+   * Called when the session becomes available (onSessionCreated).
+   */
+  flushPendingSteers(id: string): void {
+    const record = this.agents.get(id);
+    if (!record?.steerFn || !record.pendingSteers?.length) return;
+    for (const msg of record.pendingSteers) {
+      record.steerFn(msg).catch(() => {});
+    }
+    record.pendingSteers = undefined;
+  }
+
+  // ── Resume ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Resume an existing agent session with a new prompt.
+   * Requires the agent to have a session reference and a resumeExecutor.
+   */
+  async resume(
+    id: string,
+    prompt: string,
+    executor: (session: unknown, prompt: string) => Promise<string>,
+  ): Promise<BackgroundRecord | undefined> {
+    const record = this.agents.get(id);
+    if (!record?.session) return undefined;
+
+    record.status = 'running';
+    record.startedAt = Date.now();
+    record.completedAt = undefined;
+    record.result = undefined;
+    record.error = undefined;
+
+    try {
+      const responseText = await executor(record.session, prompt);
+      record.status = 'completed';
+      record.completedAt = Date.now();
+      // Store response as a minimal result
+      record.result = {
+        agent: record.agent.name,
+        agentSource: record.agent.source,
+        task: prompt,
+        exitCode: 0,
+        messages: [{ role: 'assistant', content: [{ type: 'text', text: responseText }] }],
+        stderr: '',
+        usage: record.usage ?? {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          cost: 0,
+          contextTokens: 0,
+          turns: 0,
+        },
+        startedAt: record.startedAt,
+      };
+    } catch (err) {
+      record.status = 'error';
+      record.error = err instanceof Error ? err.message : String(err);
+      record.completedAt = Date.now();
+    }
+
+    return record;
+  }
+
   // ── Cleanup ───────────────────────────────────────────────────────────────
 
   clearCompleted(): void {
@@ -206,6 +331,7 @@ export class BackgroundManager {
   }
 
   dispose(): void {
+    clearInterval(this.cleanupInterval);
     this.abortAll();
     this.agents.clear();
     this.queue = [];
@@ -217,6 +343,7 @@ export class BackgroundManager {
     record.status = 'running';
     record.startedAt = Date.now();
     this.runningCount++;
+    this.onStart?.(record);
 
     const promise = options
       .executor(record.abortController.signal)
@@ -227,6 +354,15 @@ export class BackgroundManager {
         record.result = result;
         record.usage = result.usage;
         record.completedAt = Date.now();
+        // Final flush of output transcript
+        if (record.outputCleanup) {
+          try {
+            record.outputCleanup();
+          } catch {
+            /* ignore */
+          }
+          record.outputCleanup = undefined;
+        }
         this.runningCount--;
         this.onComplete?.(record);
         this.drainQueue();
@@ -238,6 +374,14 @@ export class BackgroundManager {
           record.error = err instanceof Error ? err.message : String(err);
         }
         record.completedAt = Date.now();
+        if (record.outputCleanup) {
+          try {
+            record.outputCleanup();
+          } catch {
+            /* ignore */
+          }
+          record.outputCleanup = undefined;
+        }
         this.runningCount--;
         this.onComplete?.(record);
         this.drainQueue();
@@ -272,6 +416,42 @@ export class BackgroundManager {
         this.startAgent(next.id, record, next.options);
       }
     }
+  }
+}
+
+// ─── SmartBatcher ─────────────────────────────────────────────────────────────
+
+/**
+ * Collects background agent IDs spawned within a debounce window (100ms)
+ * and automatically registers them as a group in the GroupJoinManager.
+ */
+export class SmartBatcher {
+  private batch: string[] = [];
+  private timer?: ReturnType<typeof setTimeout>;
+  private counter = 0;
+
+  constructor(private gjm: GroupJoinManager) {}
+
+  /** Add an agent ID to the current batch. */
+  add(id: string): void {
+    this.batch.push(id);
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.finalize(), 100);
+  }
+
+  /** Finalize the current batch — register as group if 2+ agents. */
+  private finalize(): void {
+    this.timer = undefined;
+    const ids = [...this.batch];
+    this.batch = [];
+    if (ids.length >= 2) {
+      this.gjm.registerGroup(`batch-${++this.counter}`, ids);
+    }
+  }
+
+  dispose(): void {
+    if (this.timer) clearTimeout(this.timer);
+    this.batch = [];
   }
 }
 
