@@ -52,6 +52,7 @@ export function createWorkflowState({
     tokens: createTokenState(definition.config.tokenLimit),
     activeAgents: [],
     completedAgents: [],
+    countedAgentIds: [],
     startedAt: Date.now(),
   };
 

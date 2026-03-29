@@ -24,6 +24,7 @@ const STATE: WorkflowState = {
   tokens: { total: 5000, byPhase: {}, limit: 100000, limitReached: false },
   activeAgents: [],
   completedAgents: [],
+  countedAgentIds: [],
   startedAt: Date.now(),
 };
 

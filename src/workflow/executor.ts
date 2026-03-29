@@ -254,16 +254,16 @@ function resolveContextHandoff(cwd: string, workflowId: string, phase: PhaseDefi
 }
 
 function accumulateTokens(state: WorkflowState, phaseName: string, manager: AgentManager) {
-  // Accumulate tokens from recently completed agents
   for (const agent of manager.listAgents()) {
-    if (agent.completedAt && agent.session) {
-      try {
-        const tokens = agent.session.getSessionStats().tokens.total;
-        state.tokens.total += tokens;
-        state.tokens.byPhase[phaseName] = (state.tokens.byPhase[phaseName] ?? 0) + tokens;
-      } catch {
-        /* stats unavailable */
-      }
+    if (!agent.completedAt || !agent.session) continue;
+    if (state.countedAgentIds.includes(agent.id)) continue;
+    try {
+      const tokens = agent.session.getSessionStats().tokens.total;
+      state.tokens.total += tokens;
+      state.tokens.byPhase[phaseName] = (state.tokens.byPhase[phaseName] ?? 0) + tokens;
+      state.countedAgentIds.push(agent.id);
+    } catch {
+      /* stats unavailable */
     }
   }
 }

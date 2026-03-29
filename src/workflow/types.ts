@@ -84,6 +84,8 @@ export interface WorkflowState {
   tokens: TokenState;
   activeAgents: ActiveAgent[];
   completedAgents: CompletedAgent[];
+  /** Agent IDs whose tokens have already been counted — prevents double-counting across phases. */
+  countedAgentIds: string[];
   startedAt: number;
   completedAt?: number | undefined;
 }
