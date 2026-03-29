@@ -3,7 +3,6 @@
  *
  * - findStalled / formatStalledMessage: adapted from pi-planner executor/stalled.ts
  * - buildContinuationPrompt: adapted from pi-coordination coordinate/auto-continue.ts
- * - isRecoverableExit: copied from pi-coordination coordinate/auto-continue.ts
  */
 
 import type { ActiveAgent, AgentHandoff } from "./types.js";
@@ -25,14 +24,6 @@ export function findStalled({
 export function formatStalledMessage(agent: ActiveAgent) {
   const elapsed = Math.round((Date.now() - agent.startedAt) / 60_000);
   return `Agent ${agent.agentId} (${agent.role}) in phase "${agent.phase}" has been running for ${elapsed}m`;
-}
-
-// ── Recoverable Exit ────────────���────────────────────────────────────
-
-const NON_RECOVERABLE_CODES = new Set([0, 139, 143]);
-
-export function isRecoverableExit(exitCode: number) {
-  return !NON_RECOVERABLE_CODES.has(exitCode);
 }
 
 // ── Continuation Prompt ──────────���────────────────────────────���──────

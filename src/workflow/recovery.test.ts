@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildContinuationPrompt, findStalled, formatStalledMessage, isRecoverableExit } from "./recovery.js";
+import { buildContinuationPrompt, findStalled, formatStalledMessage } from "./recovery.js";
 import type { ActiveAgent, AgentHandoff } from "./types.js";
 
 describe("findStalled", () => {
@@ -32,24 +32,6 @@ describe("formatStalledMessage", () => {
     expect(msg).toContain("builder");
     expect(msg).toContain("build");
     expect(msg).toContain("6m");
-  });
-});
-
-describe("isRecoverableExit", () => {
-  it("treats exit code 0 as non-recoverable (success)", () => {
-    expect(isRecoverableExit(0)).toBe(false);
-  });
-
-  it("treats exit code 1 as recoverable", () => {
-    expect(isRecoverableExit(1)).toBe(true);
-  });
-
-  it("treats signal kills (137) as recoverable", () => {
-    expect(isRecoverableExit(137)).toBe(true);
-  });
-
-  it("treats OOM (139) as non-recoverable", () => {
-    expect(isRecoverableExit(139)).toBe(false);
   });
 });
 

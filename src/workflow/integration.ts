@@ -95,8 +95,6 @@ export function registerWorkflowExtension(
     emitEvent(ctx.cwd, { type: "workflow_start", workflowType: definition.name, description: desc, ts: Date.now() });
     doRefreshWidget(ctx);
 
-    doRefreshWidget(ctx);
-
     if (!deps?.manager) {
       const phaseList = definition.phases.map((p) => `${p.name} (${p.mode})`).join(" → ");
       return textResult(

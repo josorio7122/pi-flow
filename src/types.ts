@@ -8,8 +8,6 @@ import type { AgentSession } from "@mariozechner/pi-coding-agent";
 /** Agent type: any string name (built-in defaults or user-defined). */
 export type SubagentType = string;
 
-/** Names of the three embedded default agents. */
-
 /** Memory scope for persistent agent memory. */
 export type MemoryScope = "user" | "project" | "local";
 

@@ -72,30 +72,6 @@ export function buildWorkflowStatusText({
   );
 }
 
-export function buildWorkflowContinueText({
-  activeWorkflowId,
-  activeDefinition,
-  cwd,
-}: {
-  activeWorkflowId: string | undefined;
-  activeDefinition: WorkflowDefinition | undefined;
-  cwd: string;
-}) {
-  if (!activeWorkflowId || !activeDefinition) {
-    return textResult("No active workflow to continue.", true);
-  }
-  const state = readState(cwd, activeWorkflowId);
-  if (!state) return textResult("Workflow state not found.", true);
-
-  const currentPhase = activeDefinition.phases.find((p) => p.name === state.currentPhase);
-  if (!currentPhase) return textResult("Current phase not found in definition.", true);
-
-  return textResult(
-    `Workflow "${state.type}" resumed at phase "${state.currentPhase}" (${currentPhase.mode}).\n` +
-      `Continue with the ${currentPhase.role ?? "next"} agent.`,
-  );
-}
-
 export function findLatestBookmark(entries: readonly { type: string; customType?: string; data?: unknown }[]) {
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];

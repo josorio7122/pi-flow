@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  checkTokenLimit,
-  createTokenState,
-  createWorkflowState,
-  detectStuckIssues,
-  runReviewFixLoop,
-  updatePhaseStatus,
-} from "./pipeline.js";
+import { checkTokenLimit, createTokenState, createWorkflowState, detectStuckIssues, updatePhaseStatus } from "./pipeline.js";
 import type { PhaseDefinition, ReviewIssue, WorkflowDefinition } from "./types.js";
 
 const fixPhases: PhaseDefinition[] = [
@@ -115,85 +108,6 @@ describe("checkTokenLimit", () => {
     const tokens = createTokenState(0);
     tokens.total = 999_999;
     expect(checkTokenLimit(tokens)).toBe(false);
-  });
-});
-
-describe("runReviewFixLoop", () => {
-  const makeIssue = (file: string, desc: string): ReviewIssue => ({
-    file,
-    description: desc,
-    severity: "error",
-    category: "bug",
-  });
-
-  it("returns clean on SHIP verdict", async () => {
-    const state = createWorkflowState({ definition: fixDef, description: "test", workflowId: "f-1" });
-    const result = await runReviewFixLoop({
-      state,
-      maxCycles: 3,
-      reviewHistory: [],
-      onReview: async () => ({ verdict: "SHIP", issues: [] }),
-      onFix: async () => {},
-      onEvent: () => {},
-    });
-    expect(result).toBe("clean");
-  });
-
-  it("loops on NEEDS_WORK then returns clean on SHIP", async () => {
-    const state = createWorkflowState({ definition: fixDef, description: "test", workflowId: "f-1" });
-    let reviewCount = 0;
-    let fixCount = 0;
-    const result = await runReviewFixLoop({
-      state,
-      maxCycles: 5,
-      reviewHistory: [],
-      onReview: async () => {
-        reviewCount++;
-        if (reviewCount >= 3) return { verdict: "SHIP", issues: [] };
-        return { verdict: "NEEDS_WORK", issues: [makeIssue("a.ts", `issue ${reviewCount}`)] };
-      },
-      onFix: async () => {
-        fixCount++;
-      },
-      onEvent: () => {},
-    });
-    expect(result).toBe("clean");
-    expect(reviewCount).toBe(3);
-    expect(fixCount).toBe(2);
-    expect(state.reviewCycle).toBe(2);
-  });
-
-  it("returns max_cycles when limit reached", async () => {
-    const state = createWorkflowState({ definition: fixDef, description: "test", workflowId: "f-1" });
-    let cycle = 0;
-    const result = await runReviewFixLoop({
-      state,
-      maxCycles: 2,
-      reviewHistory: [],
-      onReview: async () => {
-        cycle++;
-        return { verdict: "NEEDS_WORK", issues: [makeIssue("a.ts", `different issue ${cycle}`)] };
-      },
-      onFix: async () => {},
-      onEvent: () => {},
-    });
-    expect(result).toBe("max_cycles");
-    expect(state.reviewCycle).toBe(2);
-  });
-
-  it("returns token_limit when tokens exceeded", async () => {
-    const state = createWorkflowState({ definition: fixDef, description: "test", workflowId: "f-1" });
-    state.tokens.total = 200_000;
-    state.tokens.limit = 100_000;
-    const result = await runReviewFixLoop({
-      state,
-      maxCycles: 5,
-      reviewHistory: [],
-      onReview: async () => ({ verdict: "NEEDS_WORK", issues: [] }),
-      onFix: async () => {},
-      onEvent: () => {},
-    });
-    expect(result).toBe("token_limit");
   });
 });
 
