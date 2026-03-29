@@ -21,19 +21,24 @@ export function safeFormatTokens(session: { getSessionStats(): { tokens: { total
  * Create an AgentActivity state and spawn callbacks for tracking tool usage.
  * Used by both foreground and background paths to avoid duplication.
  */
+/** Pure — apply a tool activity event to the state, returns updated fields. */
+export function applyToolActivity(state: AgentActivity, activity: { type: "start" | "end"; toolName: string }) {
+  if (activity.type === "start") {
+    state.activeTools.set(activity.toolName + "_" + Date.now(), activity.toolName);
+  } else {
+    for (const [key, name] of state.activeTools) {
+      if (name === activity.toolName) { state.activeTools.delete(key); break; }
+    }
+    state.toolUses++;
+  }
+}
+
 export function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => void) {
   const state: AgentActivity = { activeTools: new Map(), toolUses: 0, turnCount: 1, maxTurns, tokens: "", responseText: "", session: undefined };
 
   const callbacks = {
     onToolActivity: (activity: { type: "start" | "end"; toolName: string }) => {
-      if (activity.type === "start") {
-        state.activeTools.set(activity.toolName + "_" + Date.now(), activity.toolName);
-      } else {
-        for (const [key, name] of state.activeTools) {
-          if (name === activity.toolName) { state.activeTools.delete(key); break; }
-        }
-        state.toolUses++;
-      }
+      applyToolActivity(state, activity);
       state.tokens = safeFormatTokens(state.session);
       onStreamUpdate?.();
     },
