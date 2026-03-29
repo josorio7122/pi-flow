@@ -8,7 +8,7 @@ import { readState } from "./store.js";
 import type { WorkflowDefinition } from "./types.js";
 
 export const ENTRY_TYPE = "pi-flow:active";
-export const WIDGET_KEY = "pi-flow";
+const WIDGET_KEY = "pi-flow";
 export const STALLED_TIMEOUT_MS = 5 * 60 * 1000;
 
 export interface ActiveWorkflowBookmark {

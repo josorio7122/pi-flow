@@ -32,7 +32,7 @@ function eventsPath(cwd: string, workflowId: string) {
   return path.join(getFlowDir(cwd, workflowId), "events.jsonl");
 }
 
-// ── Generic I/O (from pi-messenger) ─────────────────────────────────
+// ── Generic I/O ─────────────────────────────────────────────────────
 
 function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) {

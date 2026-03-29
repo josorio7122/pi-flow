@@ -27,12 +27,6 @@ export interface RpcDeps {
   manager: SpawnCapable;
 }
 
-export interface RpcHandle {
-  unsubPing: () => void;
-  unsubSpawn: () => void;
-  unsubStop: () => void;
-}
-
 /**
  * Wire a single RPC handler: listen on `channel`, run `fn(params)`,
  * emit the reply envelope on `channel:reply:${requestId}`.

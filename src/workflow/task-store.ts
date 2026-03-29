@@ -61,10 +61,7 @@ export function getTasks(cwd: string, workflowId: string) {
   }
 }
 
-/**
- * Find tasks whose dependencies are all done.
- * Adapted from pi-messenger crew/store.ts getReadyTasks().
- */
+/** Find tasks whose dependencies are all done. */
 export function getReadyTasks(cwd: string, workflowId: string) {
   const tasks = getTasks(cwd, workflowId);
   const doneIds = new Set(tasks.filter((t) => t.status === "done").map((t) => t.id));

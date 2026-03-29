@@ -8,7 +8,7 @@
 
 import type { PhaseStatus, WorkflowDefinition, WorkflowState } from "./types.js";
 
-// ── Format Helpers (from pi-coordination render-utils.ts) ────────────
+// ── Format Helpers ───────────────────────────────────────────────────
 
 const STATUS_ICONS: Record<string, string> = {
   complete: "✓",

@@ -25,6 +25,7 @@ src/
 ├── infra/        # OS/git/filesystem — memory, worktree, env, context
 ├── extension/    # pi wiring — command, rpc, group-join, helpers
 ├── ui/           # TUI — widget, viewer, formatters
+├── workflow/     # Workflow engine — pipeline, store, loader, recovery, progress
 ├── index.ts      # Extension entry point
 └── types.ts      # Shared types
 ```
