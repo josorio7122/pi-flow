@@ -1,5 +1,5 @@
 /**
- * pi-agents — A pi extension providing Claude Code-style autonomous sub-agents.
+ * pi-flow — A pi extension providing autonomous sub-agents and workflow orchestration.
  *
  * Tools:
  *   Agent             — LLM-callable: spawn a sub-agent

@@ -1,8 +1,7 @@
 /**
  * output-file.ts — Streaming JSONL output file for agent transcripts.
  *
- * Creates a per-agent output file that streams conversation turns as JSONL,
- * matching Claude Code's task output file format.
+ * Creates a per-agent output file that streams conversation turns as JSONL.
  */
 
 import { appendFileSync, chmodSync, mkdirSync, writeFileSync } from "node:fs";
@@ -11,7 +10,7 @@ import { join } from "node:path";
 import type { AgentSession, AgentSessionEvent } from "@mariozechner/pi-coding-agent";
 
 /** Create the output file path, ensuring the directory exists.
- *  Mirrors Claude Code's layout: /tmp/{prefix}-{uid}/{encoded-cwd}/{sessionId}/tasks/{agentId}.output */
+ *  Layout: /tmp/pi-flow-{uid}/{encoded-cwd}/{sessionId}/tasks/{agentId}.output */
 export function createOutputFilePath({ cwd, agentId, sessionId }: { cwd: string; agentId: string; sessionId: string }) {
   const encoded = cwd.replace(/\//g, "-").replace(/^-/, "");
   const root = join(tmpdir(), `pi-flow-${process.getuid?.() ?? 0}`);

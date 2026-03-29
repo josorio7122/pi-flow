@@ -4,8 +4,6 @@
  *
  * All writes are atomic (temp file + rename) to prevent corruption on crash.
  * All reads return null on missing/corrupt files.
- *
- * I/O helpers adapted from pi-messenger crew/store.ts.
  */
 
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";

@@ -1,8 +1,5 @@
 /**
  * Crash recovery, stalled detection, and smart restart prompts.
- *
- * - findStalled / formatStalledMessage: adapted from pi-planner executor/stalled.ts
- * - buildContinuationPrompt: adapted from pi-coordination coordinate/auto-continue.ts
  */
 
 import type { ActiveAgent, AgentHandoff } from "./types.js";

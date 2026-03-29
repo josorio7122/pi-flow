@@ -4,7 +4,7 @@
  * Exposes ping, spawn, and stop RPCs over the pi.events event bus,
  * using per-request scoped reply channels.
  *
- * Reply envelope follows pi-mono convention:
+ * Reply envelope format:
  *   success → { success: true, data?: T }
  *   error   → { success: false, error: string }
  */

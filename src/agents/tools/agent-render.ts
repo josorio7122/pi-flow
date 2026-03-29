@@ -1,5 +1,5 @@
 /**
- * Agent tool render callbacks — Claude Code style TUI rendering.
+ * Agent tool render callbacks — TUI rendering for agent status.
  * Pure functions: take theme + details, return Text nodes.
  */
 

@@ -1,9 +1,6 @@
 /**
  * Progress rendering — widget lines, status bar text, format helpers.
- *
  * Pure functions — no I/O, no side effects.
- * Format helpers from pi-coordination coordinate/render-utils.ts.
- * Widget pattern from pi-manage-todo-list ui/todo-widget.ts.
  */
 
 import type { PhaseStatus, WorkflowDefinition, WorkflowState } from "./types.js";

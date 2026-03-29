@@ -1,8 +1,6 @@
 /**
  * Task CRUD with dependency resolution.
  * Each task is an individual JSON file — atomic per-task updates.
- *
- * Adapted from pi-messenger crew/store.ts task operations.
  */
 
 import { existsSync, readdirSync } from "node:fs";

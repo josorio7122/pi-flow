@@ -1,6 +1,5 @@
 /**
  * Parse reviewer agent markdown output into structured verdict.
- * Direct copy from pi-messenger crew/utils/verdict.ts.
  */
 
 import type { ParsedReview, ReviewVerdict } from "./types.js";

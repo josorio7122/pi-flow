@@ -4,8 +4,6 @@
  *
  * Pure logic — no I/O, no agent spawning. Callers provide callbacks
  * for events and agent execution.
- *
- * Adapted from pi-coordination coordinate/pipeline.ts.
  */
 
 import type {

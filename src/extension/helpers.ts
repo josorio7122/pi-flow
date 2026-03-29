@@ -67,7 +67,7 @@ function getTokenCount(session: { getSessionStats(): { tokens: { total: number }
   }
 }
 
-/** Format a structured task notification matching Claude Code's <task-notification> XML. */
+/** Format a structured task notification as XML. */
 export function formatTaskNotification(record: AgentRecord, resultMaxLen: number) {
   const status = getStatusLabel(record.status, record.error);
   const durationMs = record.completedAt ? record.completedAt - record.startedAt : 0;
