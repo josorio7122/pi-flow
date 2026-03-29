@@ -46,6 +46,7 @@ import { BackgroundManager, GroupJoinManager } from './background.js';
 import { getFinalOutput } from './result-utils.js';
 import { getAgentConversation } from './context.js';
 import { pruneWorktrees } from './worktree.js';
+import { registerRpcHandlers } from './cross-extension-rpc.js';
 
 // ─── Module-level state ───────────────────────────────────────────────────────
 
@@ -372,7 +373,24 @@ export default function piFlow(pi: ExtensionAPI) {
   // Initialize background manager with completion notifications
   const gjm = groupJoinManager;
   backgroundManager = new BackgroundManager({
+    onStart: (record) => {
+      pi.events.emit('flow:started', {
+        id: record.id,
+        type: record.agent.name,
+        description: record.description,
+      });
+    },
     onComplete: (record) => {
+      // Emit lifecycle event
+      const isError = record.status === 'error' || record.status === 'aborted';
+      pi.events.emit(isError ? 'flow:failed' : 'flow:completed', {
+        id: record.id,
+        type: record.agent.name,
+        description: record.description,
+        status: record.status,
+        error: record.error,
+      });
+
       // Skip notification if result was already consumed via get_agent_result
       if (record.resultConsumed) return;
 
@@ -565,6 +583,26 @@ export default function piFlow(pi: ExtensionAPI) {
     },
   });
 
+  // ─── 2b. Cross-extension integration ─────────────────────────────────────────
+
+  // Global manager registry for cross-package access
+  const MANAGER_KEY = Symbol.for('pi-flow:manager');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- global registry pattern
+  (globalThis as any)[MANAGER_KEY] = {
+    waitForAll: () => backgroundManager?.waitForAll(),
+    hasRunning: () => backgroundManager?.hasRunning() ?? false,
+    getRecord: (id: string) => backgroundManager?.getRecord(id),
+  };
+
+  // Register cross-extension RPC handlers
+  const rpcHandle = registerRpcHandlers({
+    events: pi.events,
+    getManager: () => backgroundManager ?? undefined,
+  });
+
+  // Broadcast readiness
+  pi.events.emit('flow:ready', {});
+
   // ─── 3. Commands ────────────────────────────────────────────────────────────
 
   pi.registerCommand('flow', {
@@ -619,8 +657,18 @@ export default function piFlow(pi: ExtensionAPI) {
     updateFooterStatus(ctx.ui);
   });
 
-  // session_shutdown — abort all background agents
+  // session_switch — clear completed agents
+  pi.on('session_switch' as 'session_start', async () => {
+    backgroundManager?.clearCompleted();
+  });
+
+  // session_shutdown — abort all background agents, clean up RPC
   pi.on('session_shutdown' as 'session_start', async () => {
+    rpcHandle.unsubPing();
+    rpcHandle.unsubSpawn();
+    rpcHandle.unsubStop();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- global registry cleanup
+    delete (globalThis as any)[MANAGER_KEY];
     groupJoinManager?.dispose();
     backgroundManager?.dispose();
   });
