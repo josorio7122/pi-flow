@@ -108,10 +108,13 @@ export function readMemoryIndex(memoryDir: string) {
  */
 export function buildMemoryBlock({ agentName, scope, cwd }: { agentName: string; scope: MemoryScope; cwd: string }) {
   const memoryDir = resolveMemoryDir({ agentName, scope, cwd });
-  // Create the memory directory so the agent can immediately write to it
   ensureMemoryDir(memoryDir);
-
   const existingMemory = readMemoryIndex(memoryDir);
+  return buildMemoryPrompt({ memoryDir, scope, existingMemory });
+}
+
+/** Pure — builds the memory prompt string from already-read data. */
+export function buildMemoryPrompt({ memoryDir, scope, existingMemory }: { memoryDir: string; scope: MemoryScope; existingMemory: string | undefined }) {
 
   const header = `# Agent Memory
 
@@ -151,6 +154,11 @@ This memory persists across sessions. Use it to build up knowledge over time.`;
 export function buildReadOnlyMemoryBlock({ agentName, scope, cwd }: { agentName: string; scope: MemoryScope; cwd: string }) {
   const memoryDir = resolveMemoryDir({ agentName, scope, cwd });
   const existingMemory = readMemoryIndex(memoryDir);
+  return buildReadOnlyMemoryPrompt({ memoryDir, scope, existingMemory });
+}
+
+/** Pure — builds the read-only memory prompt string from already-read data. */
+export function buildReadOnlyMemoryPrompt({ memoryDir, scope, existingMemory }: { memoryDir: string; scope: MemoryScope; existingMemory: string | undefined }) {
 
   const header = `# Agent Memory (read-only)
 
