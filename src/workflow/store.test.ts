@@ -8,9 +8,7 @@ import {
   initWorkflowDir,
   listHandoffs,
   readEvents,
-  readHandoff,
   readState,
-  updateState,
   writeHandoff,
   writeState,
 } from "./store.js";
@@ -49,17 +47,6 @@ describe("state operations", () => {
     const loaded = readState(tmpDir, WF_ID);
     expect(loaded).toEqual(state);
   });
-
-  it("updates state with mutator", () => {
-    initWorkflowDir(tmpDir, WF_ID);
-    const state = { id: WF_ID, type: "fix", currentPhase: "scout" } as unknown as WorkflowState;
-    writeState(tmpDir, WF_ID, state);
-    updateState(tmpDir, WF_ID, (s) => {
-      s.currentPhase = "build";
-    });
-    const loaded = readState(tmpDir, WF_ID);
-    expect(loaded?.currentPhase).toBe("build");
-  });
 });
 
 describe("handoff operations", () => {
@@ -77,15 +64,7 @@ describe("handoff operations", () => {
     timestamp: Date.now(),
   };
 
-  it("writes and reads a handoff", () => {
-    initWorkflowDir(tmpDir, WF_ID);
-    const file = writeHandoff(tmpDir, WF_ID, handoff);
-    expect(file).toBe("001-scout.json");
-    const loaded = readHandoff(tmpDir, WF_ID, file);
-    expect(loaded?.summary).toBe("Found 3 issues");
-  });
-
-  it("auto-increments handoff numbers", () => {
+  it("writes a handoff and auto-increments numbers", () => {
     initWorkflowDir(tmpDir, WF_ID);
     const file1 = writeHandoff(tmpDir, WF_ID, handoff);
     const file2 = writeHandoff(tmpDir, WF_ID, { ...handoff, role: "builder", phase: "build" });

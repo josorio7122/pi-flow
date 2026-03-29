@@ -115,19 +115,3 @@ export function blockTask({
 }) {
   return updateTask({ cwd, workflowId, taskId, updates: { status: "blocked", blockedReason: reason } });
 }
-
-export function resetTask(cwd: string, workflowId: string, taskId: string) {
-  const task = getTask(cwd, workflowId, taskId);
-  if (!task) return null;
-  return updateTask({
-    cwd,
-    workflowId,
-    taskId,
-    updates: {
-      status: "todo",
-      summary: undefined,
-      blockedReason: undefined,
-      attemptCount: task.attemptCount + 1,
-    },
-  });
-}

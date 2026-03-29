@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { initWorkflowDir } from "./store.js";
-import { blockTask, completeTask, createTask, getReadyTasks, getTask, getTasks, resetTask } from "./task-store.js";
+import { blockTask, completeTask, createTask, getReadyTasks, getTask, getTasks } from "./task-store.js";
 
 let tmpDir: string;
 const WF_ID = "flow-tasks-test";
@@ -77,16 +77,5 @@ describe("blockTask", () => {
     const task = getTask(tmpDir, WF_ID, "task-1");
     expect(task?.status).toBe("blocked");
     expect(task?.blockedReason).toBe("missing dependency");
-  });
-});
-
-describe("resetTask", () => {
-  it("resets a done task back to todo", () => {
-    createTask(tmpDir, WF_ID, { id: "task-1", title: "A", dependsOn: [] });
-    completeTask({ cwd: tmpDir, workflowId: WF_ID, taskId: "task-1", summary: "done" });
-    resetTask(tmpDir, WF_ID, "task-1");
-    const task = getTask(tmpDir, WF_ID, "task-1");
-    expect(task?.status).toBe("todo");
-    expect(task?.attemptCount).toBe(1);
   });
 });

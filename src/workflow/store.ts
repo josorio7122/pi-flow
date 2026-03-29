@@ -81,13 +81,6 @@ export function writeState(cwd: string, workflowId: string, state: WorkflowState
   writeJson(statePath(cwd, workflowId), state);
 }
 
-export function updateState(cwd: string, workflowId: string, updater: (state: WorkflowState) => void) {
-  const state = readState(cwd, workflowId);
-  if (!state) return;
-  updater(state);
-  writeState(cwd, workflowId, state);
-}
-
 // ── Handoffs ─────────────────────────────────────────────────────────
 
 export function writeHandoff(cwd: string, workflowId: string, handoff: AgentHandoff) {
@@ -97,10 +90,6 @@ export function writeHandoff(cwd: string, workflowId: string, handoff: AgentHand
   const filename = `${String(num).padStart(3, "0")}-${handoff.role}.json`;
   writeJson(path.join(dir, filename), handoff);
   return filename;
-}
-
-export function readHandoff(cwd: string, workflowId: string, filename: string) {
-  return readJson<AgentHandoff>(path.join(handoffsDir(cwd, workflowId), filename));
 }
 
 export function listHandoffs(cwd: string, workflowId: string) {
