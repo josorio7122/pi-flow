@@ -20,7 +20,7 @@ import { createRunnerSettings } from "./agents/runner.js";
 import { registerAgentTool } from "./agents/tools/agent-tool.js";
 import { registerResultTool } from "./agents/tools/result-tool.js";
 import { registerSteerTool } from "./agents/tools/steer-tool.js";
-import { registerAgentsCommand } from "./extension/command.js";
+import { registerAgentsCommand } from "./extension/command/command.js";
 import { createGroupJoinManager } from "./extension/group-join.js";
 import { buildNotificationDetails, formatTaskNotification } from "./extension/helpers.js";
 import { registerRpcHandlers } from "./extension/rpc.js";
