@@ -77,6 +77,14 @@ export interface FlowConfig {
 
 // ─── Dispatch types ───────────────────────────────────────────────────────────
 
+/** Activity update callback — fired during agent execution for live tracking. */
+export interface AgentActivityCallback {
+  onAgentStart?: (agentId: string, agentName: string, description: string) => void;
+  onToolActivity?: (agentId: string, activity: { type: 'start' | 'end'; toolName: string }) => void;
+  onTextDelta?: (agentId: string, delta: string, fullText: string) => void;
+  onTurnEnd?: (agentId: string, turnCount: number) => void;
+}
+
 export interface DispatchParams {
   agent?: string;
   task?: string;
@@ -100,6 +108,8 @@ export interface DispatchParams {
   isolation?: 'worktree';
   /** Fork parent conversation context into agent */
   inherit_context?: boolean;
+  /** Activity callbacks for live UI tracking */
+  activityCallbacks?: AgentActivityCallback;
 }
 
 export interface DispatchResult {

@@ -7,6 +7,7 @@ import type {
   SingleAgentResult,
   DispatchParams,
   DispatchResult,
+  AgentActivityCallback,
 } from './types.js';
 import { loadConfig } from './config.js';
 import { discoverAgents, buildVariableMap, findAgentByName } from './agents.js';
@@ -101,6 +102,7 @@ async function executeSingle(
   ctx?: ExtensionContext,
   signal?: AbortSignal,
   onUpdate?: OnUpdateCallback,
+  activityCb?: AgentActivityCallback,
 ): Promise<SingleAgentResult> {
   const featureLabel = feature ?? 'ad-hoc';
   const buildDetailsForUpdate = makeDetails('single', featureLabel);
@@ -112,6 +114,9 @@ async function executeSingle(
     });
   }
 
+  const agentId = `${agent.name}-${Date.now()}`;
+  activityCb?.onAgentStart?.(agentId, agent.name, task.slice(0, 100));
+
   const result = await runAgent({
     ctx: ctx as ExtensionContext,
     agent,
@@ -119,6 +124,13 @@ async function executeSingle(
     variableMap,
     signal,
     feature,
+    callbacks: activityCb
+      ? {
+          onToolActivity: (a) => activityCb.onToolActivity?.(agentId, a),
+          onTextDelta: (d, f) => activityCb.onTextDelta?.(agentId, d, f),
+          onTurnEnd: (t) => activityCb.onTurnEnd?.(agentId, t),
+        }
+      : undefined,
   });
 
   // Session-scoped dispatch log
@@ -645,6 +657,7 @@ export async function executeDispatch(
       ctx,
       signal,
       onUpdate,
+      params.activityCallbacks,
     );
     const details = makeDetails('single', featureLabel)([result]);
     if (featureDir) updateBudget(featureDir, currentState, [result]);

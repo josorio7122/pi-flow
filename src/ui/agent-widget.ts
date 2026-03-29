@@ -5,6 +5,7 @@
  * Uses the callback form of setWidget for themed rendering.
  */
 
+import { truncateToWidth } from '@mariozechner/pi-tui';
 import type { BackgroundManager, BackgroundRecord } from '../background.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -219,10 +220,12 @@ export class FlowAgentWidget {
   }
 
   private renderWidget(
-    _tui: { terminal: { columns: number } },
+    tui: { terminal: { columns: number } },
     theme: Theme,
     _allAgents: BackgroundRecord[],
   ): string[] {
+    const w = tui.terminal.columns;
+    const truncate = (line: string) => truncateToWidth(line, w);
     const allAgents = this.manager.listAgents();
     const running = allAgents.filter((a) => a.status === 'running');
     const queued = allAgents.filter((a) => a.status === 'queued');
@@ -258,21 +261,25 @@ export class FlowAgentWidget {
       parts.push(elapsed);
 
       lines.push(
-        theme.fg('dim', '├─') +
-          ` ${theme.fg('accent', frame)} ${theme.bold(a.agent.name)}  ${theme.fg('muted', a.description)} ${theme.fg('dim', '·')} ${theme.fg('dim', parts.join(' · '))}`,
+        truncate(
+          theme.fg('dim', '├─') +
+            ` ${theme.fg('accent', frame)} ${theme.bold(a.agent.name)}  ${theme.fg('muted', a.description)} ${theme.fg('dim', '·')} ${theme.fg('dim', parts.join(' · '))}`,
+        ),
       );
       const act = activity
         ? describeActivity(activity.activeTools, activity.responseText)
         : 'thinking…';
-      lines.push(theme.fg('dim', '│  ') + theme.fg('dim', `  ⎿  ${act}`));
+      lines.push(truncate(theme.fg('dim', '│  ') + theme.fg('dim', `  ⎿  ${act}`)));
       budget -= 2;
     }
 
     // Queued
     if (queued.length > 0 && budget >= 1) {
       lines.push(
-        theme.fg('dim', '├─') +
-          ` ${theme.fg('muted', '◦')} ${theme.fg('dim', `${queued.length} queued`)}`,
+        truncate(
+          theme.fg('dim', '├─') +
+            ` ${theme.fg('muted', '◦')} ${theme.fg('dim', `${queued.length} queued`)}`,
+        ),
       );
       budget--;
     }
@@ -288,8 +295,10 @@ export class FlowAgentWidget {
             : theme.fg('dim', '■');
       const dur = formatMs((a.completedAt ?? Date.now()) - a.startedAt);
       lines.push(
-        theme.fg('dim', '├─') +
-          ` ${icon} ${theme.fg('dim', a.agent.name)}  ${theme.fg('dim', a.description)} ${theme.fg('dim', '·')} ${theme.fg('dim', dur)}`,
+        truncate(
+          theme.fg('dim', '├─') +
+            ` ${icon} ${theme.fg('dim', a.agent.name)}  ${theme.fg('dim', a.description)} ${theme.fg('dim', '·')} ${theme.fg('dim', dur)}`,
+        ),
       );
       budget--;
     }

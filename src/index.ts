@@ -42,11 +42,13 @@ import {
 import { hashToolCall, detectLoop } from './guardrails.js';
 import { shouldBlockToolCall } from './tool-blocking.js';
 import type { FlowDispatchDetails, FlowState, SessionState } from './types.js';
-import { BackgroundManager, GroupJoinManager } from './background.js';
+import { BackgroundManager, GroupJoinManager, type BackgroundRecord } from './background.js';
 import { getFinalOutput } from './result-utils.js';
 import { getAgentConversation } from './context.js';
 import { pruneWorktrees } from './worktree.js';
 import { registerRpcHandlers } from './cross-extension-rpc.js';
+import { formatTaskNotification, buildNotificationDetails } from './notification.js';
+import type { NotificationDetails } from './notification.js';
 
 // ─── Module-level state ───────────────────────────────────────────────────────
 
@@ -102,6 +104,59 @@ function updateFooterStatus(ui: ExtensionContext['ui']): void {
 export default function piFlow(pi: ExtensionAPI) {
   const extensionDir = path.dirname(fileURLToPath(import.meta.url));
   const rootDir = path.resolve(extensionDir, '..');
+
+  // ─── 0. Custom notification renderer (gap 2) ───────────────────────────────
+
+  pi.registerMessageRenderer<NotificationDetails>(
+    'flow-notification',
+    (message, { expanded }, theme) => {
+      const d = message.details;
+      if (!d) return undefined;
+
+      function renderOne(det: NotificationDetails): string {
+        const isError = det.status === 'error' || det.status === 'aborted';
+        const icon = isError
+          ? theme.fg('error' as ThemeColor, '✗')
+          : theme.fg('success' as ThemeColor, '✓');
+        const statusText = isError
+          ? det.status
+          : det.status === 'steered'
+            ? 'completed (steered)'
+            : 'completed';
+
+        let line = `${icon} ${theme.bold(det.description)} ${theme.fg('dim' as ThemeColor, statusText)}`;
+
+        const parts: string[] = [];
+        if (det.toolUses > 0)
+          parts.push(`${det.toolUses} tool use${det.toolUses === 1 ? '' : 's'}`);
+        if (det.durationMs > 0) parts.push(`${(det.durationMs / 1000).toFixed(1)}s`);
+        if (parts.length) {
+          line +=
+            '\n  ' +
+            parts
+              .map((p) => theme.fg('dim' as ThemeColor, p))
+              .join(' ' + theme.fg('dim' as ThemeColor, '·') + ' ');
+        }
+
+        if (expanded) {
+          const lines = det.resultPreview.split('\n').slice(0, 30);
+          for (const l of lines) line += '\n' + theme.fg('dim' as ThemeColor, `  ${l}`);
+        } else {
+          const preview = det.resultPreview.split('\n')[0]?.slice(0, 80) ?? '';
+          line += '\n  ' + theme.fg('dim' as ThemeColor, `⎿  ${preview}`);
+        }
+
+        if (det.outputFile) {
+          line += '\n  ' + theme.fg('muted' as ThemeColor, `transcript: ${det.outputFile}`);
+        }
+
+        return line;
+      }
+
+      const all = [d, ...(d.others ?? [])];
+      return new Text(all.map(renderOne).join('\n'), 0, 0);
+    },
+  );
 
   // ─── 1. Tool: dispatch_flow ─────────────────────────────────────────────────
 
@@ -249,6 +304,41 @@ export default function piFlow(pi: ExtensionAPI) {
           isolated: params.isolated,
           isolation: params.isolation,
           inherit_context: params.inherit_context,
+          // Gap 10: Wire activity tracking for live widget
+          activityCallbacks: {
+            onAgentStart: (id) => {
+              agentActivity.set(id, {
+                activeTools: new Map(),
+                toolUses: 0,
+                responseText: '',
+                turnCount: 1,
+                maxTurns: params.max_turns,
+              });
+            },
+            onToolActivity: (id, activity) => {
+              const state = agentActivity.get(id);
+              if (!state) return;
+              if (activity.type === 'start') {
+                state.activeTools.set(activity.toolName + '_' + Date.now(), activity.toolName);
+              } else {
+                for (const [key, name] of state.activeTools) {
+                  if (name === activity.toolName) {
+                    state.activeTools.delete(key);
+                    break;
+                  }
+                }
+                state.toolUses++;
+              }
+            },
+            onTextDelta: (id, _, fullText) => {
+              const state = agentActivity.get(id);
+              if (state) state.responseText = fullText;
+            },
+            onTurnEnd: (id, turnCount) => {
+              const state = agentActivity.get(id);
+              if (state) state.turnCount = turnCount;
+            },
+          },
         },
         ctx.cwd,
         rootDir,
@@ -330,43 +420,62 @@ export default function piFlow(pi: ExtensionAPI) {
   // ─── 2. Background agent tools ──────────────────────────────────────────────
 
   // Initialize group join manager for batching parallel notifications
-  function sendCompletionNotification(
-    agentName: string,
-    id: string,
-    task: string,
-    status: string,
-    error?: string,
-    messages?: Record<string, unknown>[],
-  ) {
-    const preview = messages ? getFinalOutput(messages).slice(0, 500) : '';
-    pi.sendMessage(
+  function sendCompletionNotification(record: BackgroundRecord) {
+    const notification = formatTaskNotification(record, 500);
+    const footer = record.outputFile ? `\nFull transcript available at: ${record.outputFile}` : '';
+    const details = buildNotificationDetails(record, 500);
+    const activity = agentActivity.get(record.id);
+    if (activity) {
+      // Enrich with live turn count if available
+      details.toolUses = activity.toolUses;
+    }
+
+    pi.sendMessage<NotificationDetails>(
       {
-        customType: 'flow-agent-complete',
-        content:
-          `Background agent completed: ${agentName}\n` +
-          `Task: ${task}\n` +
-          `Status: ${status}\n` +
-          (error ? `Error: ${error}\n` : '') +
-          (preview ? `\nResult preview:\n${preview}\n` : '') +
-          `\nUse get_agent_result({ agent_id: "${id}" }) for full results.`,
+        customType: 'flow-notification',
+        content: notification + footer,
         display: true,
+        details,
       },
       { deliverAs: 'followUp', triggerTurn: true },
     );
   }
 
   groupJoinManager = new GroupJoinManager((results, partial) => {
+    // Clean up activity tracking for completed agents
+    for (const r of results) {
+      agentActivity.delete(`bg-${r.agent}`);
+    }
+
+    const unconsumedResults = results.filter((r) => {
+      const rec = backgroundManager?.listAgents().find((a) => a.result === r);
+      return !rec?.resultConsumed;
+    });
+    if (unconsumedResults.length === 0) return;
+
     const label = partial
-      ? `${results.length} agent(s) finished (partial — others still running)`
-      : `${results.length} agent(s) finished`;
-    const summaries = results
+      ? `${unconsumedResults.length} agent(s) finished (partial — others still running)`
+      : `${unconsumedResults.length} agent(s) finished`;
+    const notifications = unconsumedResults
       .map((r) => `- ${r.agent}: ${r.exitCode === 0 ? 'completed' : 'error'}`)
       .join('\n');
-    pi.sendMessage(
+
+    // Build grouped notification details
+    const records = unconsumedResults
+      .map((r) => backgroundManager?.listAgents().find((a) => a.result === r))
+      .filter(Boolean) as BackgroundRecord[];
+    const [first, ...rest] = records;
+    const details = first ? buildNotificationDetails(first, 300) : undefined;
+    if (details && rest.length > 0) {
+      details.others = rest.map((r) => buildNotificationDetails(r, 300));
+    }
+
+    pi.sendMessage<NotificationDetails>(
       {
-        customType: 'flow-agent-group-complete',
-        content: `Background agent group: ${label}\n\n${summaries}\n\nUse get_agent_result for full results.`,
+        customType: 'flow-notification',
+        content: `Background agent group completed: ${label}\n\n${notifications}\n\nUse get_agent_result for full output.`,
         display: true,
+        details,
       },
       { deliverAs: 'followUp', triggerTurn: true },
     );
@@ -393,6 +502,20 @@ export default function piFlow(pi: ExtensionAPI) {
         error: record.error,
       });
 
+      // Gap 1: Persist agent record for cross-session history
+      pi.appendEntry('flow:record', {
+        id: record.id,
+        type: record.agent.name,
+        description: record.description,
+        status: record.status,
+        error: record.error,
+        startedAt: record.startedAt,
+        completedAt: record.completedAt,
+      });
+
+      // Clean up activity tracking
+      agentActivity.delete(record.id);
+
       // Skip notification if result was already consumed via get_agent_result
       if (record.resultConsumed) return;
 
@@ -400,25 +523,12 @@ export default function piFlow(pi: ExtensionAPI) {
       if (record.result) {
         const joinResult = gjm.onAgentComplete(record.id, record.result);
         if (joinResult === 'pass') {
-          sendCompletionNotification(
-            record.agent.name,
-            record.id,
-            record.task,
-            record.status,
-            record.error,
-            record.result.messages,
-          );
+          sendCompletionNotification(record);
         }
         // 'held' → group will fire later; 'delivered' → group callback already fired
       } else {
         // Error case — no result, send individual notification
-        sendCompletionNotification(
-          record.agent.name,
-          record.id,
-          record.task,
-          record.status,
-          record.error,
-        );
+        sendCompletionNotification(record);
       }
     },
   });
@@ -631,7 +741,8 @@ export default function piFlow(pi: ExtensionAPI) {
       const allAgents = discoverAgents(rootDir, ctx.cwd);
       options.push(`Agent types (${allAgents.length})`);
 
-      // Settings
+      // Actions
+      options.push('Create new agent');
       options.push('Settings');
 
       const header = `[Flow Status]\n${statusLine}\n`;
@@ -675,7 +786,8 @@ export default function piFlow(pi: ExtensionAPI) {
             await ctx.ui.custom(
               (tui: unknown, theme: unknown, _: unknown, done: (r: undefined) => void) => {
                 return new FlowConversationViewer(
-                  tui as { terminal: { columns: number; rows: number }; requestRender(): void },
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TUI interface is complex
+                  tui as any,
                   record.session as {
                     messages: Array<{ role: string; content: unknown }>;
                     subscribe(fn: (e: { type: string }) => void): () => void;
@@ -729,13 +841,18 @@ export default function piFlow(pi: ExtensionAPI) {
             .filter(Boolean)
             .join('\n');
 
-          // Build action menu (#97-103)
+          // Build action menu with proper CRUD (gaps 3-5)
           const actions: string[] = ['Back'];
           const isCustom = agent.source === 'custom';
           const isBuiltin = agent.source === 'builtin';
           if (isCustom && ctx.ui?.editor) actions.unshift('Edit');
           if (isCustom) actions.unshift('Delete');
-          if (isBuiltin && ctx.ui?.editor) actions.unshift('Eject (export as .md)');
+          if (isBuiltin) actions.unshift('Eject (export as .md)');
+          if (agent.enabled === false) {
+            actions.unshift('Enable');
+          } else {
+            actions.unshift('Disable');
+          }
 
           const actionChoice = await ctx.ui?.select?.(`${agent.name}\n\n${detail}`, actions);
 
@@ -756,24 +873,81 @@ export default function piFlow(pi: ExtensionAPI) {
               );
             }
           } else if (actionChoice === 'Delete') {
-            // #103: Delete custom agent
-            const { unlinkSync } = await import('node:fs');
+            // Gap 5: Delete with confirmation dialog
+            const confirmed = ctx.ui?.confirm
+              ? await ctx.ui.confirm(
+                  'Delete agent',
+                  `Delete "${agent.name}" from ${agent.filePath}?`,
+                )
+              : true;
+            if (confirmed) {
+              const { unlinkSync } = await import('node:fs');
+              try {
+                unlinkSync(agent.filePath);
+                ctx.ui.notify?.(`Agent "${agent.name}" deleted.`, 'info');
+              } catch (err: unknown) {
+                ctx.ui.notify?.(
+                  `Failed to delete: ${err instanceof Error ? err.message : String(err)}`,
+                  'warning',
+                );
+              }
+            }
+          } else if (actionChoice === 'Disable') {
+            // Gap 4: Disable agent — patch frontmatter or create stub
+            const {
+              readFileSync: readFs,
+              writeFileSync: writeFs,
+              mkdirSync: mkFs,
+            } = await import('node:fs');
+            if (isCustom) {
+              try {
+                const content = readFs(agent.filePath, 'utf-8');
+                if (!content.includes('\nenabled: false\n')) {
+                  const updated = content.replace(/^---\n/, '---\nenabled: false\n');
+                  writeFs(agent.filePath, updated, 'utf-8');
+                }
+                ctx.ui.notify?.(`Disabled "${agent.name}"`, 'info');
+              } catch (err: unknown) {
+                ctx.ui.notify?.(
+                  `Failed: ${err instanceof Error ? err.message : String(err)}`,
+                  'warning',
+                );
+              }
+            } else {
+              const customDir = path.join(ctx.cwd, '.flow', 'agents', 'custom');
+              mkFs(customDir, { recursive: true });
+              const stubPath = path.join(customDir, `${agent.name}.md`);
+              writeFs(stubPath, '---\nenabled: false\n---\n', 'utf-8');
+              ctx.ui.notify?.(`Disabled "${agent.name}" (${stubPath})`, 'info');
+            }
+          } else if (actionChoice === 'Enable') {
+            // Gap 4: Enable agent — remove enabled: false or delete stub
+            const {
+              readFileSync: readFs,
+              writeFileSync: writeFs,
+              unlinkSync: unlinkFs,
+            } = await import('node:fs');
             try {
-              unlinkSync(agent.filePath);
-              ctx.ui.notify?.(`Agent "${agent.name}" deleted.`, 'info');
+              const content = readFs(agent.filePath, 'utf-8');
+              const updated = content.replace(/^(---\n)enabled: false\n/, '$1');
+              if (updated.trim() === '---\n---' || updated.trim() === '---\n---\n') {
+                unlinkFs(agent.filePath);
+                ctx.ui.notify?.(`Enabled "${agent.name}" (removed stub)`, 'info');
+              } else {
+                writeFs(agent.filePath, updated, 'utf-8');
+                ctx.ui.notify?.(`Enabled "${agent.name}"`, 'info');
+              }
             } catch (err: unknown) {
               ctx.ui.notify?.(
-                `Failed to delete: ${err instanceof Error ? err.message : String(err)}`,
+                `Failed: ${err instanceof Error ? err.message : String(err)}`,
                 'warning',
               );
             }
           } else if (actionChoice?.startsWith('Eject')) {
-            // #101: Eject builtin agent to .md file
             const { mkdirSync, writeFileSync, readFileSync } = await import('node:fs');
-            const { join } = await import('node:path');
-            const customDir = join(ctx.cwd, '.flow', 'agents', 'custom');
+            const customDir = path.join(ctx.cwd, '.flow', 'agents', 'custom');
             mkdirSync(customDir, { recursive: true });
-            const targetPath = join(customDir, `${agent.name}.md`);
+            const targetPath = path.join(customDir, `${agent.name}.md`);
             try {
               const content = readFileSync(agent.filePath, 'utf-8');
               writeFileSync(targetPath, content, 'utf-8');
@@ -786,6 +960,35 @@ export default function piFlow(pi: ExtensionAPI) {
             }
           } else if (!actionChoice || actionChoice === 'Back') {
             // Do nothing
+          }
+        }
+      } else if (choice === 'Create new agent') {
+        // Gap 3: Agent creation wizard
+        if (!ctx.ui?.input) {
+          ctx.ui?.notify?.('UI not available for agent creation.', 'warning');
+        } else {
+          const name = await ctx.ui.input('Agent name (filename, no spaces)');
+          if (name) {
+            const description = await ctx.ui.input('Description (one line)');
+            if (description) {
+              const { mkdirSync, writeFileSync, existsSync } = await import('node:fs');
+              const customDir = path.join(ctx.cwd, '.flow', 'agents', 'custom');
+              mkdirSync(customDir, { recursive: true });
+              const targetPath = path.join(customDir, `${name}.md`);
+              if (existsSync(targetPath)) {
+                const overwrite = ctx.ui?.confirm
+                  ? await ctx.ui.confirm('Overwrite', `${targetPath} already exists. Overwrite?`)
+                  : false;
+                if (!overwrite) return;
+              }
+              let content = `---\nname: ${name}\ndescription: ${description}\ntools:\n  - read\n  - bash\n  - grep\n  - find\n  - ls\nthinking: medium\nwritable: false\n---\n\n`;
+              if (ctx.ui?.editor) {
+                const edited = await ctx.ui.editor(`Edit ${name} system prompt`, content);
+                if (edited !== undefined) content = edited;
+              }
+              writeFileSync(targetPath, content, 'utf-8');
+              ctx.ui.notify?.(`Created agent "${name}" at ${targetPath}`, 'info');
+            }
           }
         }
       } else if (choice === 'Settings') {
