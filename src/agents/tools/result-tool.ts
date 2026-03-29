@@ -62,9 +62,9 @@ export function registerResultTool({
       } else {
         const full = record.result?.trim() || "No output.";
         const lines = full.split("\n");
-        if (lines.length > 30) {
-          output += lines.slice(0, 30).join("\n");
-          output += `\n\n... (${lines.length - 30} more lines — use verbose: true for full conversation)`;
+        if (lines.length > 15) {
+          output += lines.slice(0, 15).join("\n");
+          output += `\n\n... (${lines.length - 15} more lines — use verbose: true for full conversation)`;
         } else {
           output += full;
         }

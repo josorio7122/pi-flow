@@ -54,7 +54,7 @@ export function createNotificationSystem({
       {
         customType: "subagent-notification",
         content: notification,
-        display: true,
+        display: false,
         details: buildNotificationDetails({ record, resultMaxLen: 500, activity: agentActivity.get(record.id) }),
       },
       { deliverAs: "followUp", triggerTurn: true },
