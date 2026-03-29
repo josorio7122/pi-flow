@@ -13,6 +13,7 @@ export async function executeSinglePhase({
   definition,
   state,
   previousHandoff,
+  continuationContext,
   cwd,
   workflowId,
   pi,
@@ -24,6 +25,7 @@ export async function executeSinglePhase({
   definition: WorkflowDefinition;
   state: WorkflowState;
   previousHandoff?: AgentHandoff | undefined;
+  continuationContext?: string | undefined;
   cwd: string;
   workflowId: string;
   pi: ExtensionAPI;
@@ -36,7 +38,8 @@ export async function executeSinglePhase({
   emitEvent({ type: "phase_start", phase: phase.name, ts: Date.now() });
   emitEvent({ type: "agent_start", role, agentId: "", phase: phase.name, ts: Date.now() });
 
-  const prompt = buildPhasePrompt({ phase, definition, state, previousHandoff });
+  const basePrompt = buildPhasePrompt({ phase, definition, state, previousHandoff });
+  const prompt = continuationContext ? `${continuationContext}\n\n${basePrompt}` : basePrompt;
 
   const record = await manager.spawnAndWait({
     pi,

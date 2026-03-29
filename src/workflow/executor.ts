@@ -5,13 +5,13 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
-import { accumulateTokens, resolveContextHandoff } from "./executor-helpers.js";
+import { accumulateTokens, buildInterruptedContext, resolveContextHandoff } from "./executor-helpers.js";
 import { executeGatePhase } from "./phase-gate.js";
 import { executeParallelPhase } from "./phase-parallel.js";
 import { executeReviewLoop } from "./phase-review.js";
 import { executeSinglePhase } from "./phase-single.js";
 import { checkTokenLimit, updatePhaseStatus } from "./pipeline.js";
-import { appendEvent, writeState } from "./store.js";
+import { appendEvent, listHandoffs, writeState } from "./store.js";
 import type { AgentHandoff, PhaseDefinition, WorkflowDefinition, WorkflowEvent, WorkflowState } from "./types.js";
 
 export type PhaseOutcome =
@@ -58,6 +58,14 @@ export async function executeCurrentPhase({
     return { type: "workflow-complete", exitReason: "token_limit" };
   }
 
+  // Detect interrupted phase (crash recovery) before marking running
+  const continuationContext = buildInterruptedContext({
+    state,
+    phaseName: phase.name,
+    role: phase.role ?? "unknown",
+    handoffs: listHandoffs(cwd, workflowId),
+  });
+
   // Mark phase running
   updatePhaseStatus({ state, phase: phase.name, status: "running", onEvent: emitEvent });
   writeState(cwd, workflowId, state);
@@ -71,6 +79,7 @@ export async function executeCurrentPhase({
       definition,
       state,
       previousHandoff,
+      continuationContext,
       cwd,
       workflowId,
       pi,
@@ -107,6 +116,7 @@ async function dispatchPhase({
   definition,
   state,
   previousHandoff,
+  continuationContext,
   cwd,
   workflowId,
   pi,
@@ -118,6 +128,7 @@ async function dispatchPhase({
   definition: WorkflowDefinition;
   state: WorkflowState;
   previousHandoff?: AgentHandoff | undefined;
+  continuationContext?: string | undefined;
   cwd: string;
   workflowId: string;
   pi: ExtensionAPI;
@@ -135,6 +146,7 @@ async function dispatchPhase({
         definition,
         state,
         previousHandoff,
+        continuationContext,
         cwd,
         workflowId,
         pi,
