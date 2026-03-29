@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import type { AgentToolUpdateCallback } from "@mariozechner/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import type { AgentManager } from "../agents/manager.js";
@@ -22,9 +23,29 @@ import {
 } from "./helpers.js";
 import { loadWorkflowDefinitions } from "./loader.js";
 import { createWorkflowState, updatePhaseStatus } from "./pipeline.js";
+import { buildStatusText } from "./progress.js";
 import { findStalled, formatStalledMessage } from "./recovery.js";
 import { appendEvent, initWorkflowDir, readState, writeState } from "./store.js";
 import type { WorkflowDefinition, WorkflowEvent } from "./types.js";
+
+const PROGRESS_INTERVAL_MS = 3000;
+
+function startProgressTimer({
+  cwd,
+  workflowId,
+  onUpdate,
+}: {
+  cwd: string;
+  workflowId: string;
+  onUpdate: AgentToolUpdateCallback;
+}) {
+  const timer = setInterval(() => {
+    const state = readState({ cwd, workflowId });
+    if (!state) return;
+    onUpdate({ content: [{ type: "text", text: buildStatusText(state) }], details: {} });
+  }, PROGRESS_INTERVAL_MS);
+  return () => clearInterval(timer);
+}
 
 export function registerWorkflowExtension(
   pi: ExtensionAPI,
@@ -66,10 +87,16 @@ export function registerWorkflowExtension(
       description: Type.Optional(Type.String({ description: "What the user wants done (required for start)" })),
     }),
     // biome-ignore lint/complexity/useMaxParams: pi tool execute callback signature is fixed
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, signal, onUpdate, ctx) {
       if (params.action === "status") return buildWorkflowStatusText({ ctx, activeWorkflowId });
-      if (params.action === "continue") return continueWorkflow(ctx, signal);
-      return startWorkflow({ typeName: params.workflow_type, desc: params.description ?? "", ctx, signal });
+      if (params.action === "continue") return continueWorkflow({ ctx, signal, onUpdate });
+      return startWorkflow({
+        typeName: params.workflow_type,
+        desc: params.description ?? "",
+        ctx,
+        signal,
+        onUpdate,
+      });
     },
   });
 
@@ -78,11 +105,13 @@ export function registerWorkflowExtension(
     desc,
     ctx,
     signal,
+    onUpdate,
   }: {
     typeName: string | undefined;
     desc: string;
     ctx: ExtensionContext;
     signal?: AbortSignal | undefined;
+    onUpdate?: AgentToolUpdateCallback | undefined;
   }) {
     if (!typeName) return textResult("Error: workflow_type is required for action 'start'.", true);
     const definition = workflows.get(typeName);
@@ -113,26 +142,43 @@ export function registerWorkflowExtension(
       );
     }
 
-    return runPhaseAndReport(ctx, signal);
+    return runPhaseAndReport({ ctx, signal, onUpdate });
   }
 
-  async function runPhaseAndReport(ctx: ExtensionContext, signal?: AbortSignal | undefined) {
+  async function runPhaseAndReport({
+    ctx,
+    signal,
+    onUpdate,
+  }: {
+    ctx: ExtensionContext;
+    signal?: AbortSignal | undefined;
+    onUpdate?: AgentToolUpdateCallback | undefined;
+  }) {
     if (!activeWorkflowId || !activeDefinition || !deps?.manager) {
       return textResult("No active workflow or manager not available.", true);
     }
     const state = readState({ cwd: ctx.cwd, workflowId: activeWorkflowId });
     if (!state) return textResult("Workflow state not found.", true);
 
-    const outcome = await executeCurrentPhase({
-      definition: activeDefinition,
-      state,
-      cwd: ctx.cwd,
-      workflowId: activeWorkflowId,
-      pi,
-      ctx,
-      manager: deps.manager,
-      signal,
-    });
+    const stopProgress = onUpdate
+      ? startProgressTimer({ cwd: ctx.cwd, workflowId: activeWorkflowId, onUpdate })
+      : undefined;
+
+    let outcome: Awaited<ReturnType<typeof executeCurrentPhase>>;
+    try {
+      outcome = await executeCurrentPhase({
+        definition: activeDefinition,
+        state,
+        cwd: ctx.cwd,
+        workflowId: activeWorkflowId,
+        pi,
+        ctx,
+        manager: deps.manager,
+        signal,
+      });
+    } finally {
+      stopProgress?.();
+    }
 
     doRefreshWidget(ctx);
 
@@ -157,7 +203,15 @@ export function registerWorkflowExtension(
     return textResult("Phase completed.");
   }
 
-  async function continueWorkflow(ctx: ExtensionContext, signal?: AbortSignal | undefined) {
+  async function continueWorkflow({
+    ctx,
+    signal,
+    onUpdate,
+  }: {
+    ctx: ExtensionContext;
+    signal?: AbortSignal | undefined;
+    onUpdate?: AgentToolUpdateCallback | undefined;
+  }) {
     if (!activeWorkflowId || !activeDefinition) {
       return textResult("No active workflow to continue.", true);
     }
@@ -196,7 +250,7 @@ export function registerWorkflowExtension(
       );
     }
 
-    return runPhaseAndReport(ctx, signal);
+    return runPhaseAndReport({ ctx, signal, onUpdate });
   }
 
   // ── /flow Command ──────────────────────────────────────────────
