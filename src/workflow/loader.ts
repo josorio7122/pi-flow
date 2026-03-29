@@ -127,7 +127,6 @@ function parsePhases(val: unknown) {
       contextFrom: typeof raw.contextFrom === "string" ? raw.contextFrom : undefined,
       fixRole: typeof raw.fixRole === "string" ? raw.fixRole : undefined,
       maxCycles: typeof raw.maxCycles === "number" ? raw.maxCycles : undefined,
-      taskSource: typeof raw.taskSource === "string" ? raw.taskSource : undefined,
     });
   }
 
@@ -141,6 +140,5 @@ function parseConfig(val: unknown) {
 
   return {
     tokenLimit: typeof raw.tokenLimit === "number" ? raw.tokenLimit : defaults.tokenLimit,
-    maxTurnsPerAgent: typeof raw.maxTurnsPerAgent === "number" ? raw.maxTurnsPerAgent : undefined,
   };
 }

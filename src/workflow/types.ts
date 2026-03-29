@@ -24,12 +24,10 @@ export interface PhaseDefinition {
   contextFrom?: string | undefined;
   fixRole?: string | undefined;
   maxCycles?: number | undefined;
-  taskSource?: string | undefined;
 }
 
 export interface WorkflowConfig {
   tokenLimit: number;
-  maxTurnsPerAgent?: number | undefined;
 }
 
 // ── Workflow Runtime State (persisted to state.json) ─────────────────
