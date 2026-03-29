@@ -20,6 +20,7 @@ export function extractText(content: unknown[]) {
  * Used when inherit_context is true to give the subagent visibility
  * into what has been discussed/done so far.
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: iterates message types with type narrowing per role
 export function buildParentContext(ctx: ExtensionContext) {
   const entries = ctx.sessionManager.getBranch();
   if (!entries || entries.length === 0) return "";

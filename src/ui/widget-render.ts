@@ -112,6 +112,7 @@ export function renderRunningLine({
   };
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: layout logic with overflow budget allocation
 export function assembleWidgetLines({
   heading,
   finishedLines,

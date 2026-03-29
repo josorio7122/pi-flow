@@ -99,6 +99,7 @@ Guidelines:
     renderResult: (result, opts, theme) => renderAgentResult(result, { ...opts, theme }),
 
     // biome-ignore lint/complexity/useMaxParams: pi tool execute callback signature is fixed
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: orchestrates model resolution, background/foreground/resume paths
     async execute(toolCallId, params, signal, onUpdate, ctx) {
       widget.setUICtx(ctx.ui);
       deps.reloadCustomAgents();

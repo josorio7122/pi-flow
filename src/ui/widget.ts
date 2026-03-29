@@ -112,6 +112,7 @@ export class AgentWidget {
     });
   }
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: tracks widget lifecycle across running/queued/finished states
   update() {
     if (!this.uiCtx) return;
     const allAgents = this.manager.listAgents();

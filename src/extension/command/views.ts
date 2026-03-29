@@ -111,6 +111,7 @@ async function viewAgentConversation({
   );
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: interactive menu with branching per agent action
 export async function showAgentDetail({
   deps,
   ctx,

@@ -40,6 +40,7 @@ export function renderAgentCall({
   );
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: branches over all agent status variants for TUI rendering
 export function renderAgentResult(
   result: { content: { type: string; text?: string }[]; details?: unknown },
   { expanded, isPartial, theme }: { expanded: boolean; isPartial: boolean; theme: Theme },

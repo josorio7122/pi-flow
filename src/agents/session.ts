@@ -47,6 +47,7 @@ function resolveDefaultModel({
   return parentModel;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: resolves tools, memory, skills, prompt, model, extensions in one pass
 export async function buildAgentSession({
   ctx,
   type,

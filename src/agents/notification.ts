@@ -85,6 +85,7 @@ export function registerMessageRenderer(pi: ExtensionAPI) {
     const d = message.details;
     if (!d) return undefined;
 
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: renders all agent status variants with conditional formatting
     function renderOne(d: NotificationDetails) {
       const isError = d.status === "error" || d.status === "stopped" || d.status === "aborted";
       const icon = isError ? theme.fg("error", "✗") : theme.fg("success", "✓");

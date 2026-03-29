@@ -24,6 +24,12 @@
 					"options": {
 						"max": 2
 					}
+				},
+				"noExcessiveCognitiveComplexity": {
+					"level": "error",
+					"options": {
+						"maxAllowedComplexity": 25
+					}
 				}
 			},
 			"correctness": {

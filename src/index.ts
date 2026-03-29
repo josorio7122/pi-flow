@@ -87,8 +87,19 @@ export default function (pi: ExtensionAPI) {
   (globalThis as Record<symbol, unknown>)[MANAGER_KEY] = {
     waitForAll: () => manager.waitForAll(),
     hasRunning: () => manager.hasRunning(),
-    // biome-ignore lint/complexity/useMaxParams: cross-package API contract — consumers call spawn(pi, ctx, type, prompt, options)
-    spawn: (piRef: unknown, ctx: unknown, type: string, prompt: string, options: unknown) =>
+    spawn: ({
+      pi: piRef,
+      ctx,
+      type,
+      prompt,
+      options,
+    }: {
+      pi: unknown;
+      ctx: unknown;
+      type: string;
+      prompt: string;
+      options: unknown;
+    }) =>
       manager.spawn({ pi: piRef as ExtensionAPI, ctx: ctx as ExtensionContext, type, prompt, options } as Parameters<
         typeof manager.spawn
       >[0]),

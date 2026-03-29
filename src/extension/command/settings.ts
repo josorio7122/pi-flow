@@ -6,6 +6,7 @@ import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
 import { normalizeMaxTurns } from "../../agents/runner-types.js";
 import type { CommandDeps } from "./types.js";
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: interactive menu with branching per settings option
 export async function showSettings(deps: CommandDeps, ctx: ExtensionCommandContext) {
   const { manager, runnerSettings, getDefaultJoinMode, setDefaultJoinMode } = deps;
 
