@@ -98,6 +98,10 @@ Uses **late-bound getters** (`getWidget()`, `getBatch()`, `getNotifications()`) 
 
 **`defaults.ts`** — Embedded default agents (`general-purpose`, `Explore`, `Plan`).
 
+**`manager-types.ts`** — Manager interfaces: `SpawnArgs`, `SpawnOptions`, `OnAgentComplete`, `DEFAULT_MAX_CONCURRENT`.
+
+**`runner-types.ts`** — Runner interfaces: `RunOptions`, `RunnerSettings`, `ToolActivity`. Also `createRunnerSettings()` and `normalizeMaxTurns()`.
+
 **`batch.ts`** — Smart join: groups agents spawned in the same turn (100ms debounce).
 
 **`lifecycle.ts`** — Completion routing: emits events, writes records, routes to group join or individual notification.
@@ -105,6 +109,8 @@ Uses **late-bound getters** (`getWidget()`, `getBatch()`, `getNotifications()`) 
 **`notification.ts`** — Debounced delivery of completion notifications with custom message rendering.
 
 **`tools/agent-tool.ts`** — The `Agent` tool: handles model resolution, background/foreground/resume paths, live progress updates via `onUpdate`.
+
+**`tools/agent-render.ts`** — Pure render functions for `Agent` tool call/result display: spinner, stats, status icons.
 
 **`tools/result-tool.ts`** — `get_subagent_result`: check status, wait for completion, retrieve full output including conversation.
 
@@ -122,7 +128,13 @@ Uses **late-bound getters** (`getWidget()`, `getBatch()`, `getNotifications()`) 
 
 ### `src/extension/` — pi Extension Integration
 
-**`command/`** — The `/agents` interactive menu: list agents, view details, create (manual or Claude-generated), edit, disable, eject to `.md`, settings.
+**`command/`** — The `/agents` interactive menu:
+- `command.ts` — Entry point and top-level menu
+- `types.ts` — Shared types, helpers, model label formatting
+- `views.ts` — Read-only views: agent list, running agents, agent detail, conversation viewer
+- `mutations.ts` — Mutating operations: eject to `.md`, disable, enable
+- `wizards.ts` — Agent creation: generate with Claude or manual configuration
+- `settings.ts` — Settings submenu: concurrency, max turns, grace turns, join mode
 
 **`group-join.ts`** — Groups background agent completions. Pure core (processCompletion, processTimeout) + impure shell (setTimeout scheduling).
 

@@ -61,7 +61,7 @@ Workflows orchestrate multiple agents through defined phases:
 > Start the feature workflow: Add rate limiting to the API
 ```
 
-This triggers: **plan** → **approve-plan** (gate) → **test** → **build** → **review** (loop).
+This triggers: **plan** (single) → **approve-plan** (gate) → **test** (single) → **build** (single) → **review** (review-loop).
 
 Use `/flow` to check progress or abort.
 
@@ -120,6 +120,7 @@ Report findings with severity, file, line, and suggested fix.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `description` | string | name | One-line description shown in UI |
+| `display_name` | string | filename | Display name in UI (defaults to filename) |
 | `tools` | CSV | all | Built-in tools: `read, bash, edit, write, grep, find, ls` |
 | `disallowed_tools` | CSV | none | Tools to block even if extensions provide them |
 | `model` | string | inherit | Model as `provider/modelId` |
@@ -169,10 +170,10 @@ Workflows define multi-phase pipelines using the same `.md` format as agents.
 
 | Name | Phases | Description |
 |------|--------|-------------|
-| `research` | scout | Scout the codebase and report findings |
-| `explore` | scout → plan | Scout, then plan based on findings |
-| `fix` | scout → approve → build → review | Scout a bug, approve fix plan, implement, review |
-| `feature` | plan → approve → test → build → review | Full TDD workflow with planning and review |
+| `research` | scout | Scout the codebase to understand structure, find patterns, and report |
+| `explore` | scout → plan | Deep exploration with planning — scout first, then plan |
+| `fix` | scout → approve → build → review | Scout a bug, get approval, fix it, then review |
+| `feature` | plan → approve-plan → test → build → review | Full TDD workflow with planning and review |
 
 ### Custom Workflows
 
@@ -206,7 +207,6 @@ phases:
 
 config:
   tokenLimit: 150000
-  maxTurnsPerAgent: 30
 ---
 
 Build and deploy instructions for the orchestrator.
@@ -224,7 +224,7 @@ This text is injected into every agent prompt as context.
 | `triggers` | string[] | Hint phrases for when to use this workflow |
 | `phases` | PhaseDefinition[] | Ordered list of phases (see below) |
 | `config.tokenLimit` | number | Total token budget (default: 100,000) |
-| `config.maxTurnsPerAgent` | number | Per-agent turn limit |
+
 
 **Body text** becomes `orchestratorInstructions` — injected into every agent prompt.
 
@@ -248,7 +248,7 @@ This text is injected into every agent prompt as context.
 | `contextFrom` | string | no | Phase name whose handoff provides context |
 | `fixRole` | string | no | Agent type for fixes in `review-loop` mode |
 | `maxCycles` | number | no | Max review-fix cycles (default: 3) |
-| `taskSource` | string | no | Phase whose handoff seeds tasks for `parallel` mode |
+
 
 ### Workflow Data Flow
 
@@ -322,10 +322,16 @@ src/
 │   ├── registry.ts      # Merged agent type registry (defaults + custom)
 │   ├── custom.ts        # Load .md agent configs
 │   ├── defaults.ts      # Embedded default agents
+│   ├── manager-types.ts # Manager interfaces (SpawnArgs, SpawnOptions)
+│   ├── runner-types.ts  # Runner interfaces (RunOptions, RunnerSettings)
 │   ├── batch.ts         # Smart join batching
 │   ├── lifecycle.ts     # Completion routing, group delivery
 │   ├── notification.ts  # Debounced completion notifications
-│   └── tools/           # LLM-callable tools (Agent, get_subagent_result, steer_subagent)
+│   └── tools/
+│       ├── agent-tool.ts    # Agent tool (spawn sub-agents)
+│       ├── agent-render.ts  # Agent tool TUI rendering
+│       ├── result-tool.ts   # get_subagent_result tool
+│       └── steer-tool.ts    # steer_subagent tool
 ├── config/              # Agent configuration resolution
 │   ├── invocation.ts    # Merge agent config + tool params
 │   ├── model-resolver.ts # Fuzzy model name resolution
@@ -333,6 +339,12 @@ src/
 │   └── skill-loader.ts  # Preload named skills into prompt
 ├── extension/           # pi extension integration
 │   ├── command/         # /agents interactive menu
+│   │   ├── command.ts       # Entry point and top-level menu
+│   │   ├── types.ts         # Shared types and helpers
+│   │   ├── views.ts         # Agent list, detail, conversation viewer
+│   │   ├── mutations.ts     # Eject, disable, enable operations
+│   │   ├── wizards.ts       # Agent creation wizards
+│   │   └── settings.ts      # Settings submenu
 │   ├── group-join.ts    # Group completion notifications
 │   ├── helpers.ts       # Shared formatting + notification builders
 │   ├── activity-tracker.ts # Live tool/turn/token tracking

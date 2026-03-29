@@ -166,10 +166,6 @@ Use it for:
 
 Total token budget across all phases. When reached, the workflow completes with `exitReason: "token_limit"`. Tokens are tracked per-phase and accumulated after each phase completes.
 
-### `config.maxTurnsPerAgent` (number, optional)
-
-Per-agent turn limit. Overrides the default from `/agents > Settings`.
-
 ## Runtime State
 
 Each workflow run creates a directory at `.pi/flow/<workflow-id>/`:

@@ -38,6 +38,9 @@ This is the body text that becomes the agent's instructions.
 ### `description` (string)
 One-line description shown in the agent list UI and tool description. Defaults to the filename.
 
+### `display_name` (string)
+Name shown in the TUI widget and notifications. Defaults to the filename. Use this when the filename is a slug but you want a friendlier display name.
+
 ### `tools` (CSV string)
 Comma-separated list of built-in tools to give this agent. Available tools:
 
