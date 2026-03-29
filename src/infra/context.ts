@@ -7,7 +7,10 @@ import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 /** Extract text from a message content block array. */
 export function extractText(content: unknown[]) {
   return content
-    .filter((c): c is { type: "text"; text: string } => typeof c === "object" && c !== null && "type" in c && c.type === "text")
+    .filter(
+      (c): c is { type: "text"; text: string } =>
+        typeof c === "object" && c !== null && "type" in c && c.type === "text",
+    )
     .map((c) => c.text ?? "")
     .join("\n");
 }
@@ -27,9 +30,7 @@ export function buildParentContext(ctx: ExtensionContext) {
     if (entry.type === "message") {
       const msg = entry.message;
       if (msg.role === "user") {
-        const text = typeof msg.content === "string"
-          ? msg.content
-          : extractText(msg.content);
+        const text = typeof msg.content === "string" ? msg.content : extractText(msg.content);
         if (text.trim()) parts.push(`[User]: ${text.trim()}`);
       } else if (msg.role === "assistant") {
         const text = extractText(msg.content);

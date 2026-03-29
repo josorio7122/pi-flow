@@ -64,7 +64,11 @@ export function createWorktree(cwd: string, agentId: string) {
  * - If no changes: remove worktree entirely.
  * - If changes exist: create a branch, commit changes, return branch info.
  */
-export function cleanupWorktree({ cwd, worktree, agentDescription }: {
+export function cleanupWorktree({
+  cwd,
+  worktree,
+  agentDescription,
+}: {
   cwd: string;
   worktree: WorktreeInfo;
   agentDescription: string;
@@ -79,7 +83,9 @@ export function cleanupWorktree({ cwd, worktree, agentDescription }: {
       cwd: worktree.path,
       stdio: "pipe",
       timeout: 10000,
-    }).toString().trim();
+    })
+      .toString()
+      .trim();
 
     if (!status) {
       // No changes — remove worktree
@@ -129,7 +135,11 @@ export function cleanupWorktree({ cwd, worktree, agentDescription }: {
     };
   } catch {
     // Best effort cleanup on error
-    try { removeWorktree(cwd, worktree.path); } catch { /* ignore */ }
+    try {
+      removeWorktree(cwd, worktree.path);
+    } catch {
+      /* ignore */
+    }
     return { hasChanges: false };
   }
 }
@@ -148,7 +158,9 @@ function removeWorktree(cwd: string, worktreePath: string) {
     // If git worktree remove fails, try pruning
     try {
       execFileSync("git", ["worktree", "prune"], { cwd, stdio: "pipe", timeout: 5000 });
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -158,5 +170,7 @@ function removeWorktree(cwd: string, worktreePath: string) {
 export function pruneWorktrees(cwd: string) {
   try {
     execFileSync("git", ["worktree", "prune"], { cwd, stdio: "pipe", timeout: 5000 });
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }

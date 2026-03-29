@@ -23,7 +23,17 @@ export function createOutputFilePath({ cwd, agentId, sessionId }: { cwd: string;
 }
 
 /** Write the initial user prompt entry. */
-export function writeInitialEntry({ path, agentId, prompt, cwd }: { path: string; agentId: string; prompt: string; cwd: string }) {
+export function writeInitialEntry({
+  path,
+  agentId,
+  prompt,
+  cwd,
+}: {
+  path: string;
+  agentId: string;
+  prompt: string;
+  cwd: string;
+}) {
   const entry = {
     isSidechain: true,
     agentId,
@@ -39,7 +49,17 @@ export function writeInitialEntry({ path, agentId, prompt, cwd }: { path: string
  * Subscribe to session events and flush new messages to the output file on each turn_end.
  * Returns a cleanup function that does a final flush and unsubscribes.
  */
-export function streamToOutputFile({ session, path, agentId, cwd }: { session: AgentSession; path: string; agentId: string; cwd: string }): () => void {
+export function streamToOutputFile({
+  session,
+  path,
+  agentId,
+  cwd,
+}: {
+  session: AgentSession;
+  path: string;
+  agentId: string;
+  cwd: string;
+}): () => void {
   let writtenCount = 1; // initial user prompt already written
 
   const flush = () => {
@@ -56,7 +76,9 @@ export function streamToOutputFile({ session, path, agentId, cwd }: { session: A
       };
       try {
         appendFileSync(path, JSON.stringify(entry) + "\n", "utf-8");
-      } catch { /* ignore write errors */ }
+      } catch {
+        /* ignore write errors */
+      }
       writtenCount++;
     }
   };

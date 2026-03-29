@@ -28,7 +28,11 @@ describe("worktree", () => {
 
   afterEach(() => {
     // Clean up any lingering worktrees first, then remove repo
-    try { pruneWorktrees(repoDir); } catch { /* ignore */ }
+    try {
+      pruneWorktrees(repoDir);
+    } catch {
+      /* ignore */
+    }
     rmSync(repoDir, { recursive: true, force: true });
   });
 
@@ -43,7 +47,11 @@ describe("worktree", () => {
       expect(existsSync(join(wt!.path, "README.md"))).toBe(true);
 
       // Cleanup
-      try { execFileSync("git", ["worktree", "remove", "--force", wt!.path], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+      try {
+        execFileSync("git", ["worktree", "remove", "--force", wt!.path], { cwd: repoDir, stdio: "pipe" });
+      } catch {
+        /* ignore */
+      }
     });
 
     it("returns undefined for non-git directory", () => {
@@ -75,8 +83,16 @@ describe("worktree", () => {
       expect(wt1!.path).not.toBe(wt2!.path);
 
       // Cleanup
-      try { execFileSync("git", ["worktree", "remove", "--force", wt1!.path], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
-      try { execFileSync("git", ["worktree", "remove", "--force", wt2!.path], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+      try {
+        execFileSync("git", ["worktree", "remove", "--force", wt1!.path], { cwd: repoDir, stdio: "pipe" });
+      } catch {
+        /* ignore */
+      }
+      try {
+        execFileSync("git", ["worktree", "remove", "--force", wt2!.path], { cwd: repoDir, stdio: "pipe" });
+      } catch {
+        /* ignore */
+      }
     });
   });
 
@@ -104,18 +120,28 @@ describe("worktree", () => {
 
       // Verify the branch exists in the main repo
       const branches = execFileSync("git", ["branch", "--list", result.branch!], {
-        cwd: repoDir, stdio: "pipe",
-      }).toString().trim();
+        cwd: repoDir,
+        stdio: "pipe",
+      })
+        .toString()
+        .trim();
       expect(branches).toContain(result.branch!);
 
       // Verify the commit message
       const log = execFileSync("git", ["log", "--oneline", "-1", result.branch!], {
-        cwd: repoDir, stdio: "pipe",
-      }).toString().trim();
+        cwd: repoDir,
+        stdio: "pipe",
+      })
+        .toString()
+        .trim();
       expect(log).toContain("pi-agent: added new file");
 
       // Cleanup branch
-      try { execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+      try {
+        execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" });
+      } catch {
+        /* ignore */
+      }
     });
 
     it("does not force-overwrite existing branch", () => {
@@ -138,14 +164,25 @@ describe("worktree", () => {
 
       // Both branches should exist
       const branches = execFileSync("git", ["branch", "--list", "pi-agent-conflict-1*"], {
-        cwd: repoDir, stdio: "pipe",
-      }).toString().trim();
+        cwd: repoDir,
+        stdio: "pipe",
+      })
+        .toString()
+        .trim();
       expect(branches).toContain("pi-agent-conflict-1");
       expect(branches).toContain(result2.branch!);
 
       // Cleanup
-      try { execFileSync("git", ["branch", "-D", result1.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
-      try { execFileSync("git", ["branch", "-D", result2.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+      try {
+        execFileSync("git", ["branch", "-D", result1.branch!], { cwd: repoDir, stdio: "pipe" });
+      } catch {
+        /* ignore */
+      }
+      try {
+        execFileSync("git", ["branch", "-D", result2.branch!], { cwd: repoDir, stdio: "pipe" });
+      } catch {
+        /* ignore */
+      }
     });
 
     it("handles already-deleted worktree gracefully", () => {
@@ -165,13 +202,20 @@ describe("worktree", () => {
       expect(result.hasChanges).toBe(true);
 
       const log = execFileSync("git", ["log", "--oneline", "-1", result.branch!], {
-        cwd: repoDir, stdio: "pipe",
-      }).toString().trim();
+        cwd: repoDir,
+        stdio: "pipe",
+      })
+        .toString()
+        .trim();
       // "pi-agent: " prefix (10 chars) + 200 chars of x = 210 total max
       expect(log.length).toBeLessThanOrEqual(220); // some slack for hash prefix
 
       // Cleanup
-      try { execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+      try {
+        execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" });
+      } catch {
+        /* ignore */
+      }
     });
   });
 

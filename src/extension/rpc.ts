@@ -11,7 +11,6 @@
 
 import type { EventBus } from "@mariozechner/pi-coding-agent";
 
-
 /** RPC protocol version — bumped when the envelope or method contracts change. */
 export const PROTOCOL_VERSION = 2;
 
@@ -23,8 +22,8 @@ export interface SpawnCapable {
 
 export interface RpcDeps {
   events: EventBus;
-  pi: unknown;                    // passed through to manager.spawn
-  getCtx: () => unknown | undefined;  // returns current ExtensionContext
+  pi: unknown; // passed through to manager.spawn
+  getCtx: () => unknown | undefined; // returns current ExtensionContext
   manager: SpawnCapable;
 }
 
@@ -52,7 +51,8 @@ function handleRpc<P extends { requestId: string }>(
       events.emit(`${channel}:reply:${params.requestId}`, reply);
     } catch (err: unknown) {
       events.emit(`${channel}:reply:${params.requestId}`, {
-        success: false, error: err instanceof Error ? err.message : String(err),
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
   });
@@ -70,18 +70,18 @@ export function registerRpcHandlers(deps: RpcDeps) {
   });
 
   const unsubSpawn = handleRpc<{ requestId: string; type: string; prompt: string; options?: unknown }>(
-    events, "subagents:rpc:spawn", ({ type, prompt, options }) => {
+    events,
+    "subagents:rpc:spawn",
+    ({ type, prompt, options }) => {
       const ctx = getCtx();
       if (!ctx) throw new Error("No active session");
       return { id: manager.spawn({ pi, ctx, type, prompt, options: options ?? {} }) };
     },
   );
 
-  const unsubStop = handleRpc<{ requestId: string; agentId: string }>(
-    events, "subagents:rpc:stop", ({ agentId }) => {
-      if (!manager.abort(agentId)) throw new Error("Agent not found");
-    },
-  );
+  const unsubStop = handleRpc<{ requestId: string; agentId: string }>(events, "subagents:rpc:stop", ({ agentId }) => {
+    if (!manager.abort(agentId)) throw new Error("Agent not found");
+  });
 
   return { unsubPing, unsubSpawn, unsubStop };
 }

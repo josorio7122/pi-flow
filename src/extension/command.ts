@@ -34,7 +34,16 @@ function getModelLabelFromConfig(modelStr: string) {
 }
 
 export function registerAgentsCommand(deps: AgentsCommandDeps) {
-  const { pi, manager, agentActivity, reloadCustomAgents, getDefaultJoinMode, setDefaultJoinMode, runnerSettings, registry } = deps;
+  const {
+    pi,
+    manager,
+    agentActivity,
+    reloadCustomAgents,
+    getDefaultJoinMode,
+    setDefaultJoinMode,
+    runnerSettings,
+    registry,
+  } = deps;
   const { getAgentConfig, getAllTypes } = registry;
 
   const projectAgentsDir = () => join(process.cwd(), ".pi", "agents");
@@ -65,8 +74,8 @@ export function registerAgentsCommand(deps: AgentsCommandDeps) {
     const options: string[] = [];
     const agents = manager.listAgents();
     if (agents.length > 0) {
-      const running = agents.filter(a => a.status === "running" || a.status === "queued").length;
-      const done = agents.filter(a => a.status === "completed" || a.status === "steered").length;
+      const running = agents.filter((a) => a.status === "running" || a.status === "queued").length;
+      const done = agents.filter((a) => a.status === "completed" || a.status === "steered").length;
       options.push(`Running agents (${agents.length}) — ${running} running, ${done} done`);
     }
     if (allNames.length > 0) {
@@ -75,11 +84,12 @@ export function registerAgentsCommand(deps: AgentsCommandDeps) {
     options.push("Create new agent");
     options.push("Settings");
 
-    const noAgentsMsg = allNames.length === 0 && agents.length === 0
-      ? "No agents found. Create specialized subagents that can be delegated to.\n\n" +
-        "Each subagent has its own context window, custom system prompt, and specific tools.\n\n" +
-        "Try creating: Code Reviewer, Security Auditor, Test Writer, or Documentation Writer.\n\n"
-      : "";
+    const noAgentsMsg =
+      allNames.length === 0 && agents.length === 0
+        ? "No agents found. Create specialized subagents that can be delegated to.\n\n" +
+          "Each subagent has its own context window, custom system prompt, and specific tools.\n\n" +
+          "Try creating: Code Reviewer, Security Auditor, Test Writer, or Documentation Writer.\n\n"
+        : "";
     if (noAgentsMsg) ctx.ui.notify(noAgentsMsg, "info");
 
     const choice = await ctx.ui.select("Agents", options);
@@ -114,7 +124,7 @@ export function registerAgentsCommand(deps: AgentsCommandDeps) {
       return "   ";
     };
 
-    const entries = allNames.map(name => {
+    const entries = allNames.map((name) => {
       const cfg = getAgentConfig(name);
       const disabled = cfg?.enabled === false;
       const model = getModelLabel(name, ctx.modelRegistry);
@@ -123,24 +133,29 @@ export function registerAgentsCommand(deps: AgentsCommandDeps) {
       const desc = disabled ? "(disabled)" : (cfg?.description ?? name);
       return { name, prefix, desc };
     });
-    const maxPrefix = Math.max(...entries.map(e => e.prefix.length));
+    const maxPrefix = Math.max(...entries.map((e) => e.prefix.length));
 
-    const hasCustom = allNames.some(n => { const c = getAgentConfig(n); return c && !c.isDefault && c.enabled !== false; });
-    const hasDisabled = allNames.some(n => getAgentConfig(n)?.enabled === false);
+    const hasCustom = allNames.some((n) => {
+      const c = getAgentConfig(n);
+      return c && !c.isDefault && c.enabled !== false;
+    });
+    const hasDisabled = allNames.some((n) => getAgentConfig(n)?.enabled === false);
     const legendParts: string[] = [];
     if (hasCustom) legendParts.push("• = project  ◦ = global");
     if (hasDisabled) legendParts.push("✕ = disabled");
     const legend = legendParts.length ? "\n" + legendParts.join("  ") : "";
 
-    const options = entries.map(({ prefix, desc }) =>
-      `${prefix.padEnd(maxPrefix)} — ${desc}`,
-    );
+    const options = entries.map(({ prefix, desc }) => `${prefix.padEnd(maxPrefix)} — ${desc}`);
     if (legend) options.push(legend);
 
     const choice = await ctx.ui.select("Agent types", options);
     if (!choice) return;
 
-    const agentName = choice.split(" · ")[0]?.replace(/^[•◦✕\s]+/, "").trim() ?? "";
+    const agentName =
+      choice
+        .split(" · ")[0]
+        ?.replace(/^[•◦✕\s]+/, "")
+        .trim() ?? "";
     if (agentName && getAgentConfig(agentName)) {
       await showAgentDetail(ctx, agentName);
       await showAllAgentsList(ctx);
@@ -154,7 +169,7 @@ export function registerAgentsCommand(deps: AgentsCommandDeps) {
       return;
     }
 
-    const options = agents.map(a => {
+    const options = agents.map((a) => {
       const acfg = getAgentConfig(a.type);
       const dn = getDisplayName(a.type, acfg?.displayName);
       const dur = formatDuration(a.startedAt, a.completedAt);
@@ -240,7 +255,10 @@ export function registerAgentsCommand(deps: AgentsCommandDeps) {
         }
       }
     } else if (choice === "Reset to default" && file) {
-      const confirmed = await ctx.ui.confirm("Reset to default", `Delete override ${file.path} and restore embedded default?`);
+      const confirmed = await ctx.ui.confirm(
+        "Reset to default",
+        `Delete override ${file.path} and restore embedded default?`,
+      );
       if (confirmed) {
         unlinkSync(file.path);
         reloadCustomAgents();
@@ -426,10 +444,16 @@ Guidelines for choosing settings:
 
 Write the file using the write tool. Only write the file, nothing else.`;
 
-    const record = await manager.spawnAndWait({ pi, ctx, type: "general-purpose", prompt: generatePrompt, options: {
-      description: `Generate ${name} agent`,
-      maxTurns: 5,
-    }});
+    const record = await manager.spawnAndWait({
+      pi,
+      ctx,
+      type: "general-purpose",
+      prompt: generatePrompt,
+      options: {
+        description: `Generate ${name} agent`,
+        maxTurns: 5,
+      },
+    });
 
     if (record.status === "error") {
       ctx.ui.notify(`Generation failed: ${record.error}`, "warning");
@@ -452,7 +476,12 @@ Write the file using the write tool. Only write the file, nothing else.`;
     const description = await ctx.ui.input("Description (one line)");
     if (!description) return;
 
-    const toolChoice = await ctx.ui.select("Tools", ["all", "none", "read-only (read, bash, grep, find, ls)", "custom..."]);
+    const toolChoice = await ctx.ui.select("Tools", [
+      "all",
+      "none",
+      "read-only (read, bash, grep, find, ls)",
+      "custom...",
+    ]);
     if (!toolChoice) return;
 
     let tools: string;
@@ -547,7 +576,10 @@ ${systemPrompt}
         }
       }
     } else if (choice.startsWith("Default max turns")) {
-      const val = await ctx.ui.input("Default max turns before wrap-up (0 = unlimited)", String(runnerSettings.defaultMaxTurns ?? 0));
+      const val = await ctx.ui.input(
+        "Default max turns before wrap-up (0 = unlimited)",
+        String(runnerSettings.defaultMaxTurns ?? 0),
+      );
       if (val) {
         const n = parseInt(val, 10);
         if (n === 0) {
@@ -587,6 +619,8 @@ ${systemPrompt}
 
   pi.registerCommand("agents", {
     description: "Manage agents",
-    handler: async (_args, ctx) => { await showAgentsMenu(ctx); },
+    handler: async (_args, ctx) => {
+      await showAgentsMenu(ctx);
+    },
   });
 }

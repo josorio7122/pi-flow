@@ -10,7 +10,7 @@ import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import { randomUUID } from "node:crypto";
 import type { Api, Model } from "@mariozechner/pi-ai";
 import type { AgentSession, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { cleanupWorktree, createWorktree, pruneWorktrees, } from "../infra/worktree.js";
+import { cleanupWorktree, createWorktree, pruneWorktrees } from "../infra/worktree.js";
 import type { AgentRecord, IsolationMode, SubagentType } from "../types.js";
 import type { Registry } from "./registry.js";
 import { type RunnerSettings, resumeAgent, runAgent, type ToolActivity } from "./runner.js";
@@ -49,14 +49,16 @@ interface SpawnOptions {
   onTurnEnd?: ((turnCount: number) => void) | undefined;
 }
 
-export function createAgentManager({ onComplete, maxConcurrent: initMaxConcurrent = DEFAULT_MAX_CONCURRENT, onStart }: {
+export function createAgentManager({
+  onComplete,
+  maxConcurrent: initMaxConcurrent = DEFAULT_MAX_CONCURRENT,
+  onStart,
+}: {
   onComplete?: OnAgentComplete | undefined;
   maxConcurrent?: number;
   onStart?: OnAgentStart | undefined;
 } = {}) {
   const agents = new Map<string, AgentRecord>();
-
-
 
   let maxConcurrent = initMaxConcurrent;
 
@@ -72,11 +74,9 @@ export function createAgentManager({ onComplete, maxConcurrent: initMaxConcurren
     settings = s;
   }
 
-
   function setRegistry(r: Registry) {
     registry = r;
   }
-
 
   function setMaxConcurrent(n: number) {
     maxConcurrent = Math.max(1, n);
@@ -134,42 +134,48 @@ export function createAgentManager({ onComplete, maxConcurrent: initMaxConcurren
         record.worktree = wt;
         worktreeCwd = wt.path;
       } else {
-        worktreeWarning = "\n\n[WARNING: Worktree isolation was requested but failed (not a git repo, or no commits yet). Running in the main working directory instead.]";
+        worktreeWarning =
+          "\n\n[WARNING: Worktree isolation was requested but failed (not a git repo, or no commits yet). Running in the main working directory instead.]";
       }
     }
 
     // Prepend worktree warning to prompt if isolation failed
     const effectivePrompt = worktreeWarning ? worktreeWarning + "\n\n" + prompt : prompt;
 
-    const promise = runAgent({ ctx, type, prompt: effectivePrompt, options: {
-      settings: settings,
-      registry: registry,
-      pi,
-      model: options.model,
-      maxTurns: options.maxTurns,
-      isolated: options.isolated,
-      inheritContext: options.inheritContext,
-      thinkingLevel: options.thinkingLevel,
-      cwd: worktreeCwd,
-      signal: record.abortController!.signal,
-      onToolActivity: (activity) => {
-        if (activity.type === "end") record.toolUses++;
-        options.onToolActivity?.(activity);
-      },
-      onTurnEnd: options.onTurnEnd,
-      onTextDelta: options.onTextDelta,
-      onSessionCreated: (session) => {
-        record.session = session;
-        // Flush any steers that arrived before the session was ready
-        if (record.pendingSteers?.length) {
-          for (const msg of record.pendingSteers) {
-            session.steer(msg).catch(() => {});
+    const promise = runAgent({
+      ctx,
+      type,
+      prompt: effectivePrompt,
+      options: {
+        settings: settings,
+        registry: registry,
+        pi,
+        model: options.model,
+        maxTurns: options.maxTurns,
+        isolated: options.isolated,
+        inheritContext: options.inheritContext,
+        thinkingLevel: options.thinkingLevel,
+        cwd: worktreeCwd,
+        signal: record.abortController!.signal,
+        onToolActivity: (activity) => {
+          if (activity.type === "end") record.toolUses++;
+          options.onToolActivity?.(activity);
+        },
+        onTurnEnd: options.onTurnEnd,
+        onTextDelta: options.onTextDelta,
+        onSessionCreated: (session) => {
+          record.session = session;
+          // Flush any steers that arrived before the session was ready
+          if (record.pendingSteers?.length) {
+            for (const msg of record.pendingSteers) {
+              session.steer(msg).catch(() => {});
+            }
+            record.pendingSteers = undefined;
           }
-          record.pendingSteers = undefined;
-        }
-        options.onSessionCreated?.(session);
+          options.onSessionCreated?.(session);
+        },
       },
-    }})
+    })
       .then(({ responseText, session, aborted, steered }) => {
         if (record.status !== "stopped") {
           record.status = aborted ? "aborted" : steered ? "steered" : "completed";
@@ -195,7 +201,11 @@ export function createAgentManager({ onComplete, maxConcurrent: initMaxConcurren
     record.completedAt ??= Date.now();
 
     if (record.outputCleanup) {
-      try { record.outputCleanup(); } catch { /* ignore */ }
+      try {
+        record.outputCleanup();
+      } catch {
+        /* ignore */
+      }
       record.outputCleanup = undefined;
     }
 
@@ -204,10 +214,13 @@ export function createAgentManager({ onComplete, maxConcurrent: initMaxConcurren
         const wtResult = cleanupWorktree({ cwd, worktree: record.worktree, agentDescription: options.description });
         record.worktreeResult = wtResult;
         if (wtResult.hasChanges && wtResult.branch) {
-          record.result = (record.result ?? "") +
+          record.result =
+            (record.result ?? "") +
             `\n\n---\nChanges saved to branch \`${wtResult.branch}\`. Merge with: \`git merge ${wtResult.branch}\``;
         }
-      } catch { /* ignore cleanup errors */ }
+      } catch {
+        /* ignore cleanup errors */
+      }
     }
 
     if (options.isBackground) {
@@ -230,15 +243,19 @@ export function createAgentManager({ onComplete, maxConcurrent: initMaxConcurren
    * Spawn an agent and wait for completion (foreground use).
    * Foreground agents bypass the concurrency queue.
    */
-  async function spawnAndWait(
-    { pi, ctx, type, prompt, options }: {
-      pi: ExtensionAPI;
-      ctx: ExtensionContext;
-      type: SubagentType;
-      prompt: string;
-      options: Omit<SpawnOptions, "isBackground">;
-    },
-  ) {
+  async function spawnAndWait({
+    pi,
+    ctx,
+    type,
+    prompt,
+    options,
+  }: {
+    pi: ExtensionAPI;
+    ctx: ExtensionContext;
+    type: SubagentType;
+    prompt: string;
+    options: Omit<SpawnOptions, "isBackground">;
+  }) {
     const id = spawn({ pi, ctx, type, prompt, options: { ...options, isBackground: false } });
     const record = agents.get(id)!;
     await record.promise;
@@ -248,11 +265,7 @@ export function createAgentManager({ onComplete, maxConcurrent: initMaxConcurren
   /**
    * Resume an existing agent session with a new prompt.
    */
-  async function resume({ id, prompt, signal }: {
-    id: string;
-    prompt: string;
-    signal?: AbortSignal | undefined;
-  }) {
+  async function resume({ id, prompt, signal }: { id: string; prompt: string; signal?: AbortSignal | undefined }) {
     const record = agents.get(id);
     if (!record?.session) return undefined;
 
@@ -290,9 +303,7 @@ export function createAgentManager({ onComplete, maxConcurrent: initMaxConcurren
   }
 
   function listAgents() {
-    return [...agents.values()].sort(
-      (a, b) => b.startedAt - a.startedAt,
-    );
+    return [...agents.values()].sort((a, b) => b.startedAt - a.startedAt);
   }
 
   function abort(id: string) {
@@ -301,7 +312,7 @@ export function createAgentManager({ onComplete, maxConcurrent: initMaxConcurren
 
     // Remove from queue if queued
     if (record.status === "queued") {
-      queue = queue.filter(q => q.id !== id);
+      queue = queue.filter((q) => q.id !== id);
       record.status = "stopped";
       record.completedAt = Date.now();
       return true;
@@ -341,9 +352,7 @@ export function createAgentManager({ onComplete, maxConcurrent: initMaxConcurren
   }
 
   function hasRunning() {
-    return [...agents.values()].some(
-      r => r.status === "running" || r.status === "queued",
-    );
+    return [...agents.values()].some((r) => r.status === "running" || r.status === "queued");
   }
 
   function abortAll() {
@@ -376,8 +385,8 @@ export function createAgentManager({ onComplete, maxConcurrent: initMaxConcurren
     while (true) {
       drainQueue();
       const pending = [...agents.values()]
-        .filter(r => r.status === "running" || r.status === "queued")
-        .map(r => r.promise)
+        .filter((r) => r.status === "running" || r.status === "queued")
+        .map((r) => r.promise)
         .filter(Boolean);
       if (pending.length === 0) break;
       await Promise.allSettled(pending);
@@ -393,13 +402,29 @@ export function createAgentManager({ onComplete, maxConcurrent: initMaxConcurren
     }
     agents.clear();
     // Prune any orphaned git worktrees (crash recovery)
-    try { pruneWorktrees(process.cwd()); } catch { /* ignore */ }
+    try {
+      pruneWorktrees(process.cwd());
+    } catch {
+      /* ignore */
+    }
   }
 
   return {
-    setRunnerSettings, setRegistry, setMaxConcurrent, getMaxConcurrent,
-    spawn, spawnAndWait, resume, getRecord, listAgents,
-    abort, clearCompleted, hasRunning, abortAll, waitForAll, dispose,
+    setRunnerSettings,
+    setRegistry,
+    setMaxConcurrent,
+    getMaxConcurrent,
+    spawn,
+    spawnAndWait,
+    resume,
+    getRecord,
+    listAgents,
+    abort,
+    clearCompleted,
+    hasRunning,
+    abortAll,
+    waitForAll,
+    dispose,
   };
 }
 

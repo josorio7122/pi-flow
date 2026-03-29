@@ -10,7 +10,7 @@
  *   /agents                 — Interactive agent management menu
  */
 
-import type { AgentSession, ExtensionAPI, ExtensionContext, } from "@mariozechner/pi-coding-agent";
+import type { AgentSession, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { loadCustomAgents } from "./agents/custom.js";
@@ -21,7 +21,15 @@ import { resolveAgentInvocationConfig, resolveJoinMode } from "./config/invocati
 import { resolveModel } from "./config/model-resolver.js";
 import { registerAgentsCommand } from "./extension/command.js";
 import { createGroupJoinManager } from "./extension/group-join.js";
-import { buildDetails, buildNotificationDetails, createActivityTracker, formatTaskNotification, getStatusNote, safeFormatTokens, textResult } from "./extension/helpers.js";
+import {
+  buildDetails,
+  buildNotificationDetails,
+  createActivityTracker,
+  formatTaskNotification,
+  getStatusNote,
+  safeFormatTokens,
+  textResult,
+} from "./extension/helpers.js";
 import { registerRpcHandlers } from "./extension/rpc.js";
 import { createOutputFilePath, streamToOutputFile, writeInitialEntry } from "./infra/output-file.js";
 import { type AgentRecord, type JoinMode, type NotificationDetails, type SubagentType } from "./types.js";
@@ -44,53 +52,48 @@ export default function (pi: ExtensionAPI) {
   const registry = createRegistry();
 
   // ---- Agent manager ----
-  pi.registerMessageRenderer<NotificationDetails>(
-    "subagent-notification",
-    (message, { expanded }, theme) => {
-      const d = message.details;
-      if (!d) return undefined;
+  pi.registerMessageRenderer<NotificationDetails>("subagent-notification", (message, { expanded }, theme) => {
+    const d = message.details;
+    if (!d) return undefined;
 
-      function renderOne(d: NotificationDetails) {
-        const isError = d.status === "error" || d.status === "stopped" || d.status === "aborted";
-        const icon = isError ? theme.fg("error", "✗") : theme.fg("success", "✓");
-        const statusText = isError ? d.status
-          : d.status === "steered" ? "completed (steered)"
-          : "completed";
+    function renderOne(d: NotificationDetails) {
+      const isError = d.status === "error" || d.status === "stopped" || d.status === "aborted";
+      const icon = isError ? theme.fg("error", "✗") : theme.fg("success", "✓");
+      const statusText = isError ? d.status : d.status === "steered" ? "completed (steered)" : "completed";
 
-        // Line 1: icon + agent description + status
-        let line = `${icon} ${theme.bold(d.description)} ${theme.fg("dim", statusText)}`;
+      // Line 1: icon + agent description + status
+      let line = `${icon} ${theme.bold(d.description)} ${theme.fg("dim", statusText)}`;
 
-        // Line 2: stats
-        const parts: string[] = [];
-        if (d.turnCount > 0) parts.push(formatTurns(d.turnCount, d.maxTurns));
-        if (d.toolUses > 0) parts.push(`${d.toolUses} tool use${d.toolUses === 1 ? "" : "s"}`);
-        if (d.totalTokens > 0) parts.push(formatTokens(d.totalTokens));
-        if (d.durationMs > 0) parts.push(formatMs(d.durationMs));
-        if (parts.length) {
-          line += "\n  " + parts.map(p => theme.fg("dim", p)).join(" " + theme.fg("dim", "·") + " ");
-        }
-
-        // Line 3: result preview (collapsed) or full (expanded)
-        if (expanded) {
-          const lines = d.resultPreview.split("\n").slice(0, 30);
-          for (const l of lines) line += "\n" + theme.fg("dim", `  ${l}`);
-        } else {
-          const preview = d.resultPreview.split("\n")[0]?.slice(0, 80) ?? "";
-          line += "\n  " + theme.fg("dim", `⎿  ${preview}`);
-        }
-
-        // Line 4: output file link (if present)
-        if (d.outputFile) {
-          line += "\n  " + theme.fg("muted", `transcript: ${d.outputFile}`);
-        }
-
-        return line;
+      // Line 2: stats
+      const parts: string[] = [];
+      if (d.turnCount > 0) parts.push(formatTurns(d.turnCount, d.maxTurns));
+      if (d.toolUses > 0) parts.push(`${d.toolUses} tool use${d.toolUses === 1 ? "" : "s"}`);
+      if (d.totalTokens > 0) parts.push(formatTokens(d.totalTokens));
+      if (d.durationMs > 0) parts.push(formatMs(d.durationMs));
+      if (parts.length) {
+        line += "\n  " + parts.map((p) => theme.fg("dim", p)).join(" " + theme.fg("dim", "·") + " ");
       }
 
-      const all = [d, ...(d.others ?? [])];
-      return new Text(all.map(renderOne).join("\n"), 0, 0);
+      // Line 3: result preview (collapsed) or full (expanded)
+      if (expanded) {
+        const lines = d.resultPreview.split("\n").slice(0, 30);
+        for (const l of lines) line += "\n" + theme.fg("dim", `  ${l}`);
+      } else {
+        const preview = d.resultPreview.split("\n")[0]?.slice(0, 80) ?? "";
+        line += "\n  " + theme.fg("dim", `⎿  ${preview}`);
+      }
+
+      // Line 4: output file link (if present)
+      if (d.outputFile) {
+        line += "\n  " + theme.fg("muted", `transcript: ${d.outputFile}`);
+      }
+
+      return line;
     }
-  );
+
+    const all = [d, ...(d.others ?? [])];
+    return new Text(all.map(renderOne).join("\n"), 0, 0);
+  });
 
   /** Reload agents from .pi/agents/*.md and merge with defaults (called on init and each Agent invocation). */
   const reloadCustomAgents = () => {
@@ -112,10 +115,13 @@ export default function (pi: ExtensionAPI) {
 
   function scheduleNudge(key: string, send: () => void, delay = NUDGE_HOLD_MS) {
     cancelNudge(key);
-    pendingNudges.set(key, setTimeout(() => {
-      pendingNudges.delete(key);
-      send();
-    }, delay));
+    pendingNudges.set(
+      key,
+      setTimeout(() => {
+        pendingNudges.delete(key);
+        send();
+      }, delay),
+    );
   }
 
   function cancelNudge(key: string) {
@@ -128,17 +134,20 @@ export default function (pi: ExtensionAPI) {
 
   // ---- Individual nudge helper (async join mode) ----
   function emitIndividualNudge(record: AgentRecord) {
-    if (record.resultConsumed) return;  // re-check at send time
+    if (record.resultConsumed) return; // re-check at send time
 
     const notification = formatTaskNotification(record, 500);
-    const footer = record.outputFile ? `\nFull transcript available at: ${record.outputFile}` : '';
+    const footer = record.outputFile ? `\nFull transcript available at: ${record.outputFile}` : "";
 
-    pi.sendMessage<NotificationDetails>({
-      customType: "subagent-notification",
-      content: notification + footer,
-      display: true,
-      details: buildNotificationDetails({ record, resultMaxLen: 500, activity: agentActivity.get(record.id) }),
-    }, { deliverAs: "followUp", triggerTurn: true });
+    pi.sendMessage<NotificationDetails>(
+      {
+        customType: "subagent-notification",
+        content: notification + footer,
+        display: true,
+        details: buildNotificationDetails({ record, resultMaxLen: 500, activity: agentActivity.get(record.id) }),
+      },
+      { deliverAs: "followUp", triggerTurn: true },
+    );
   }
 
   function sendIndividualNudge(record: AgentRecord) {
@@ -149,39 +158,51 @@ export default function (pi: ExtensionAPI) {
   }
 
   // ---- Group join manager ----
-  const groupJoin = createGroupJoinManager(
-    (records, partial) => {
-      for (const r of records) { agentActivity.delete(r.id); widget.markFinished(r.id); }
+  const groupJoin = createGroupJoinManager((records, partial) => {
+    for (const r of records) {
+      agentActivity.delete(r.id);
+      widget.markFinished(r.id);
+    }
 
-      const groupKey = `group:${records.map(r => r.id).join(",")}`;
-      scheduleNudge(groupKey, () => {
-        // Re-check at send time
-        const unconsumed = records.filter(r => !r.resultConsumed);
-        if (unconsumed.length === 0) { widget.update(); return; }
+    const groupKey = `group:${records.map((r) => r.id).join(",")}`;
+    scheduleNudge(groupKey, () => {
+      // Re-check at send time
+      const unconsumed = records.filter((r) => !r.resultConsumed);
+      if (unconsumed.length === 0) {
+        widget.update();
+        return;
+      }
 
-        const notifications = unconsumed.map(r => formatTaskNotification(r, 300)).join('\n\n');
-        const label = partial
-          ? `${unconsumed.length} agent(s) finished (partial — others still running)`
-          : `${unconsumed.length} agent(s) finished`;
+      const notifications = unconsumed.map((r) => formatTaskNotification(r, 300)).join("\n\n");
+      const label = partial
+        ? `${unconsumed.length} agent(s) finished (partial — others still running)`
+        : `${unconsumed.length} agent(s) finished`;
 
-        const [first, ...rest] = unconsumed;
-        if (!first) return;
-        const details = buildNotificationDetails({ record: first, resultMaxLen: 300, activity: agentActivity.get(first.id) });
-        if (rest.length > 0) {
-          details.others = rest.map(r => buildNotificationDetails({ record: r, resultMaxLen: 300, activity: agentActivity.get(r.id) }));
-        }
+      const [first, ...rest] = unconsumed;
+      if (!first) return;
+      const details = buildNotificationDetails({
+        record: first,
+        resultMaxLen: 300,
+        activity: agentActivity.get(first.id),
+      });
+      if (rest.length > 0) {
+        details.others = rest.map((r) =>
+          buildNotificationDetails({ record: r, resultMaxLen: 300, activity: agentActivity.get(r.id) }),
+        );
+      }
 
-        pi.sendMessage<NotificationDetails>({
+      pi.sendMessage<NotificationDetails>(
+        {
           customType: "subagent-notification",
           content: `Background agent group completed: ${label}\n\n${notifications}\n\nUse get_subagent_result for full output.`,
           display: true,
           details,
-        }, { deliverAs: "followUp", triggerTurn: true });
-      });
-      widget.update();
-    },
-    30_000,
-  );
+        },
+        { deliverAs: "followUp", triggerTurn: true },
+      );
+    });
+    widget.update();
+  }, 30_000);
 
   /** Helper: build event data for lifecycle events from an AgentRecord. */
   function buildEventData(record: AgentRecord) {
@@ -196,7 +217,9 @@ export default function (pi: ExtensionAPI) {
           total: stats.tokens?.total ?? 0,
         };
       }
-    } catch { /* session stats unavailable */ }
+    } catch {
+      /* session stats unavailable */
+    }
     return {
       id: record.id,
       type: record.type,
@@ -211,53 +234,61 @@ export default function (pi: ExtensionAPI) {
   }
 
   // Background completion: route through group join or send individual nudge
-  const manager = createAgentManager({ onComplete: (record) => {
-    // Emit lifecycle event based on terminal status
-    const isError = record.status === "error" || record.status === "stopped" || record.status === "aborted";
-    const eventData = buildEventData(record);
-    if (isError) {
-      pi.events.emit("subagents:failed", eventData);
-    } else {
-      pi.events.emit("subagents:completed", eventData);
-    }
+  const manager = createAgentManager({
+    onComplete: (record) => {
+      // Emit lifecycle event based on terminal status
+      const isError = record.status === "error" || record.status === "stopped" || record.status === "aborted";
+      const eventData = buildEventData(record);
+      if (isError) {
+        pi.events.emit("subagents:failed", eventData);
+      } else {
+        pi.events.emit("subagents:completed", eventData);
+      }
 
-    // Persist final record for cross-extension history reconstruction
-    pi.appendEntry("subagents:record", {
-      id: record.id, type: record.type, description: record.description,
-      status: record.status, result: record.result, error: record.error,
-      startedAt: record.startedAt, completedAt: record.completedAt,
-    });
+      // Persist final record for cross-extension history reconstruction
+      pi.appendEntry("subagents:record", {
+        id: record.id,
+        type: record.type,
+        description: record.description,
+        status: record.status,
+        result: record.result,
+        error: record.error,
+        startedAt: record.startedAt,
+        completedAt: record.completedAt,
+      });
 
-    // Skip notification if result was already consumed via get_subagent_result
-    if (record.resultConsumed) {
-      agentActivity.delete(record.id);
-      widget.markFinished(record.id);
+      // Skip notification if result was already consumed via get_subagent_result
+      if (record.resultConsumed) {
+        agentActivity.delete(record.id);
+        widget.markFinished(record.id);
+        widget.update();
+        return;
+      }
+
+      // If this agent is pending batch finalization (debounce window still open),
+      // don't send an individual nudge — finalizeBatch will pick it up retroactively.
+      if (currentBatchAgents.some((a) => a.id === record.id)) {
+        widget.update();
+        return;
+      }
+
+      const result = groupJoin.onAgentComplete(record);
+      if (result === "pass") {
+        sendIndividualNudge(record);
+      }
+      // 'held' → do nothing, group will fire later
+      // 'delivered' → group callback already fired
       widget.update();
-      return;
-    }
-
-    // If this agent is pending batch finalization (debounce window still open),
-    // don't send an individual nudge — finalizeBatch will pick it up retroactively.
-    if (currentBatchAgents.some(a => a.id === record.id)) {
-      widget.update();
-      return;
-    }
-
-    const result = groupJoin.onAgentComplete(record);
-    if (result === 'pass') {
-      sendIndividualNudge(record);
-    }
-    // 'held' → do nothing, group will fire later
-    // 'delivered' → group callback already fired
-    widget.update();
-  }, onStart: (record) => {
-    // Emit started event when agent transitions to running (including from queue)
-    pi.events.emit("subagents:started", {
-      id: record.id,
-      type: record.type,
-      description: record.description,
-    });
-  }});
+    },
+    onStart: (record) => {
+      // Emit started event when agent transitions to running (including from queue)
+      pi.events.emit("subagents:started", {
+        id: record.id,
+        type: record.type,
+        description: record.description,
+      });
+    },
+  });
   manager.setRunnerSettings(runnerSettings);
   manager.setRegistry(registry);
 
@@ -268,7 +299,9 @@ export default function (pi: ExtensionAPI) {
     waitForAll: () => manager.waitForAll(),
     hasRunning: () => manager.hasRunning(),
     spawn: (piRef: unknown, ctx: unknown, type: string, prompt: string, options: unknown) =>
-      manager.spawn({ pi: piRef as ExtensionAPI, ctx: ctx as ExtensionContext, type, prompt, options } as Parameters<typeof manager.spawn>[0]),
+      manager.spawn({ pi: piRef as ExtensionAPI, ctx: ctx as ExtensionContext, type, prompt, options } as Parameters<
+        typeof manager.spawn
+      >[0]),
     getRecord: (id: string) => manager.getRecord(id),
   };
 
@@ -278,12 +311,18 @@ export default function (pi: ExtensionAPI) {
   // Capture ctx from session_start for RPC spawn handler
   pi.on("session_start", async (_event, ctx) => {
     currentCtx = ctx;
-    manager.clearCompleted();           // preserve existing behavior
+    manager.clearCompleted(); // preserve existing behavior
   });
 
-  pi.on("session_switch", () => { manager.clearCompleted(); });
+  pi.on("session_switch", () => {
+    manager.clearCompleted();
+  });
 
-  const { unsubPing: unsubPingRpc, unsubSpawn: unsubSpawnRpc, unsubStop: unsubStopRpc } = registerRpcHandlers({
+  const {
+    unsubPing: unsubPingRpc,
+    unsubSpawn: unsubSpawnRpc,
+    unsubStop: unsubStopRpc,
+  } = registerRpcHandlers({
     events: pi.events,
     pi,
     getCtx: () => currentCtx,
@@ -311,9 +350,13 @@ export default function (pi: ExtensionAPI) {
   const widget = new AgentWidget(manager, agentActivity, registry);
 
   // ---- Join mode configuration ----
-  let defaultJoinMode: JoinMode = 'smart';
-  function getDefaultJoinMode() { return defaultJoinMode; }
-  function setDefaultJoinMode(mode: JoinMode) { defaultJoinMode = mode; }
+  let defaultJoinMode: JoinMode = "smart";
+  function getDefaultJoinMode() {
+    return defaultJoinMode;
+  }
+  function setDefaultJoinMode(mode: JoinMode) {
+    defaultJoinMode = mode;
+  }
 
   // ---- Batch tracking for smart join mode ----
   // Collects background agent IDs spawned in the current turn for smart grouping.
@@ -330,10 +373,10 @@ export default function (pi: ExtensionAPI) {
     const batchAgents = [...currentBatchAgents];
     currentBatchAgents = [];
 
-    const smartAgents = batchAgents.filter(a => a.joinMode === 'smart' || a.joinMode === 'group');
+    const smartAgents = batchAgents.filter((a) => a.joinMode === "smart" || a.joinMode === "group");
     if (smartAgents.length >= 2) {
       const groupId = `batch-${++batchCounter}`;
-      const ids = smartAgents.map(a => a.id);
+      const ids = smartAgents.map((a) => a.id);
       groupJoin.registerGroup(groupId, ids);
       // Retroactively process agents that already completed during the debounce window.
       // Their onComplete fired but was deferred (agent was in currentBatchAgents),
@@ -455,7 +498,8 @@ Guidelines:
       ),
       run_in_background: Type.Optional(
         Type.Boolean({
-          description: "Set to true to run in background. Returns agent ID immediately. You will be notified on completion.",
+          description:
+            "Set to true to run in background. Returns agent ID immediately. You will be notified on completion.",
         }),
       ),
       resume: Type.Optional(
@@ -475,7 +519,8 @@ Guidelines:
       ),
       isolation: Type.Optional(
         Type.Literal("worktree", {
-          description: 'Set to "worktree" to run the agent in a temporary git worktree (isolated copy of the repo). Changes are saved to a branch on completion.',
+          description:
+            'Set to "worktree" to run the agent in a temporary git worktree (isolated copy of the repo). Changes are saved to a branch on completion.',
         }),
       ),
     }),
@@ -486,7 +531,11 @@ Guidelines:
       const argConfig = args.subagent_type ? registry.getAgentConfig(args.subagent_type) : undefined;
       const displayName = args.subagent_type ? getDisplayName(args.subagent_type, argConfig?.displayName) : "Agent";
       const desc = args.description ?? "";
-      return new Text("▸ " + theme.fg("toolTitle", theme.bold(displayName)) + (desc ? "  " + theme.fg("muted", desc) : ""), 0, 0);
+      return new Text(
+        "▸ " + theme.fg("toolTitle", theme.bold(displayName)) + (desc ? "  " + theme.fg("muted", desc) : ""),
+        0,
+        0,
+      );
     },
 
     renderResult(result, { expanded, isPartial }, theme) {
@@ -506,7 +555,7 @@ Guidelines:
         }
         if (d.toolUses > 0) parts.push(`${d.toolUses} tool use${d.toolUses === 1 ? "" : "s"}`);
         if (d.tokens) parts.push(d.tokens);
-        return parts.map(p => theme.fg("dim", p)).join(" " + theme.fg("dim", "·") + " ");
+        return parts.map((p) => theme.fg("dim", p)).join(" " + theme.fg("dim", "·") + " ");
       };
 
       // ---- While running (streaming) ----
@@ -612,9 +661,10 @@ Guidelines:
       // Build display tags for non-default config
       const parentModelId = ctx.model?.id;
       const effectiveModelId = model?.id;
-      const agentModelName = effectiveModelId && effectiveModelId !== parentModelId
-        ? (model?.name ?? effectiveModelId).replace(/^Claude\s+/i, "").toLowerCase()
-        : undefined;
+      const agentModelName =
+        effectiveModelId && effectiveModelId !== parentModelId
+          ? (model?.name ?? effectiveModelId).replace(/^Claude\s+/i, "").toLowerCase()
+          : undefined;
       const agentTags: string[] = [];
       const modeLabel = getPromptModeLabel(customConfig?.promptMode);
       if (modeLabel) agentTags.push(modeLabel);
@@ -663,21 +713,32 @@ Guidelines:
           origBgOnSession(session);
           const rec = manager.getRecord(id);
           if (rec?.outputFile) {
-            rec.outputCleanup = streamToOutputFile({ session: session as AgentSession, path: rec.outputFile, agentId: id, cwd: ctx.cwd });
+            rec.outputCleanup = streamToOutputFile({
+              session: session as AgentSession,
+              path: rec.outputFile,
+              agentId: id,
+              cwd: ctx.cwd,
+            });
           }
         };
 
-        id = manager.spawn({ pi, ctx, type: subagentType, prompt: params.prompt, options: {
-          description: params.description,
-          model,
-          maxTurns: effectiveMaxTurns,
-          isolated,
-          inheritContext,
-          thinkingLevel: thinking,
-          isBackground: true,
-          isolation,
-          ...bgCallbacks,
-        }});
+        id = manager.spawn({
+          pi,
+          ctx,
+          type: subagentType,
+          prompt: params.prompt,
+          options: {
+            description: params.description,
+            model,
+            maxTurns: effectiveMaxTurns,
+            isolated,
+            inheritContext,
+            thinkingLevel: thinking,
+            isBackground: true,
+            isolation,
+            ...bgCallbacks,
+          },
+        });
 
         // Set output file + join mode synchronously after spawn, before the
         // event loop yields — onSessionCreated is async so this is safe.
@@ -686,11 +747,15 @@ Guidelines:
         if (record && joinMode) {
           record.joinMode = joinMode;
           record.toolCallId = toolCallId;
-          record.outputFile = createOutputFilePath({ cwd: ctx.cwd, agentId: id, sessionId: ctx.sessionManager.getSessionId() });
+          record.outputFile = createOutputFilePath({
+            cwd: ctx.cwd,
+            agentId: id,
+            sessionId: ctx.sessionManager.getSessionId(),
+          });
           writeInitialEntry({ path: record.outputFile, agentId: id, prompt: params.prompt, cwd: ctx.cwd });
         }
 
-        if (joinMode == null || joinMode === 'async') {
+        if (joinMode == null || joinMode === "async") {
           // Foreground/no join mode or explicit async — not part of any batch
         } else {
           // smart or group — add to current batch
@@ -716,14 +781,14 @@ Guidelines:
         const isQueued = record?.status === "queued";
         return textResult(
           `Agent ${isQueued ? "queued" : "started"} in background.\n` +
-          `Agent ID: ${id}\n` +
-          `Type: ${displayName}\n` +
-          `Description: ${params.description}\n` +
-          (record?.outputFile ? `Output file: ${record.outputFile}\n` : "") +
-          (isQueued ? `Position: queued (max ${manager.getMaxConcurrent()} concurrent)\n` : "") +
-          `\nYou will be notified when this agent completes.\n` +
-          `Use get_subagent_result to retrieve full results, or steer_subagent to send it messages.\n` +
-          `Do not duplicate this agent's work.`,
+            `Agent ID: ${id}\n` +
+            `Type: ${displayName}\n` +
+            `Description: ${params.description}\n` +
+            (record?.outputFile ? `Output file: ${record.outputFile}\n` : "") +
+            (isQueued ? `Position: queued (max ${manager.getMaxConcurrent()} concurrent)\n` : "") +
+            `\nYou will be notified when this agent completes.\n` +
+            `Use get_subagent_result to retrieve full results, or steer_subagent to send it messages.\n` +
+            `Do not duplicate this agent's work.`,
           { ...detailBase, toolUses: 0, tokens: "", durationMs: 0, status: "background" as const, agentId: id },
         );
       }
@@ -775,16 +840,22 @@ Guidelines:
 
       streamUpdate();
 
-      const record = await manager.spawnAndWait({ pi, ctx, type: subagentType, prompt: params.prompt, options: {
-        description: params.description,
-        model,
-        maxTurns: effectiveMaxTurns,
-        isolated,
-        inheritContext,
-        thinkingLevel: thinking,
-        isolation,
-        ...fgCallbacks,
-      }});
+      const record = await manager.spawnAndWait({
+        pi,
+        ctx,
+        type: subagentType,
+        prompt: params.prompt,
+        options: {
+          description: params.description,
+          model,
+          maxTurns: effectiveMaxTurns,
+          isolated,
+          inheritContext,
+          thinkingLevel: thinking,
+          isolation,
+          ...fgCallbacks,
+        },
+      });
 
       clearInterval(spinnerInterval);
 
@@ -799,9 +870,7 @@ Guidelines:
 
       const details = buildDetails({ base: detailBase, record, activity: fgState, overrides: { tokens: tokenText } });
 
-      const fallbackNote = fellBack
-        ? `Note: Unknown agent type "${rawType}" — using general-purpose.\n\n`
-        : "";
+      const fallbackNote = fellBack ? `Note: Unknown agent type "${rawType}" — using general-purpose.\n\n` : "";
 
       if (record.status === "error") {
         return textResult(`${fallbackNote}Agent failed: ${record.error}`, details);
@@ -812,7 +881,7 @@ Guidelines:
       if (tokenText) statsParts.push(tokenText);
       return textResult(
         `${fallbackNote}Agent completed in ${formatMs(durationMs)} (${statsParts.join(", ")})${getStatusNote(record.status)}.\n\n` +
-        (record.result?.trim() || "No output."),
+          (record.result?.trim() || "No output."),
         details,
       );
     },
@@ -915,20 +984,26 @@ Guidelines:
         return textResult(`Agent not found: "${params.agent_id}". It may have been cleaned up.`);
       }
       if (record.status !== "running") {
-        return textResult(`Agent "${params.agent_id}" is not running (status: ${record.status}). Cannot steer a non-running agent.`);
+        return textResult(
+          `Agent "${params.agent_id}" is not running (status: ${record.status}). Cannot steer a non-running agent.`,
+        );
       }
       if (!record.session) {
         // Session not ready yet — queue the steer for delivery once initialized
         if (!record.pendingSteers) record.pendingSteers = [];
         record.pendingSteers.push(params.message);
         pi.events.emit("subagents:steered", { id: record.id, message: params.message });
-        return textResult(`Steering message queued for agent ${record.id}. It will be delivered once the session initializes.`);
+        return textResult(
+          `Steering message queued for agent ${record.id}. It will be delivered once the session initializes.`,
+        );
       }
 
       try {
         await steerAgent(record.session, params.message);
         pi.events.emit("subagents:steered", { id: record.id, message: params.message });
-        return textResult(`Steering message sent to agent ${record.id}. The agent will process it after its current tool execution.`);
+        return textResult(
+          `Steering message sent to agent ${record.id}. The agent will process it after its current tool execution.`,
+        );
       } catch (err) {
         return textResult(`Failed to steer agent: ${err instanceof Error ? err.message : String(err)}`);
       }
@@ -936,6 +1011,14 @@ Guidelines:
   });
 
   // ---- /agents interactive menu ----
-  registerAgentsCommand({ pi, manager, agentActivity, reloadCustomAgents, getDefaultJoinMode, setDefaultJoinMode, runnerSettings, registry });
+  registerAgentsCommand({
+    pi,
+    manager,
+    agentActivity,
+    reloadCustomAgents,
+    getDefaultJoinMode,
+    setDefaultJoinMode,
+    runnerSettings,
+    registry,
+  });
 }
-

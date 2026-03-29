@@ -7,11 +7,25 @@
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { AgentSession, Theme, ThemeColor } from "@mariozechner/pi-coding-agent";
-import { type Component, matchesKey, type TUI, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
+import {
+  type Component,
+  matchesKey,
+  type TUI,
+  truncateToWidth,
+  visibleWidth,
+  wrapTextWithAnsi,
+} from "@mariozechner/pi-tui";
 import type { Registry } from "../agents/registry.js";
 import { extractText } from "../infra/context.js";
 import type { AgentRecord } from "../types.js";
-import { type AgentActivity, describeActivity, formatDuration, formatTokens, getDisplayName, getPromptModeLabel } from "./formatters.js";
+import {
+  type AgentActivity,
+  describeActivity,
+  formatDuration,
+  formatTokens,
+  getDisplayName,
+  getPromptModeLabel,
+} from "./formatters.js";
 
 /** Lines consumed by chrome: top border + header + header sep + footer sep + footer + bottom border. */
 const CHROME_LINES = 6;
@@ -95,8 +109,12 @@ export class ConversationViewer implements Component {
     const modeLabel = getPromptModeLabel(cfg.promptMode);
     const modeTag = modeLabel ? ` ${th.fg("dim", `(${modeLabel})`)}` : "";
     const statusIcons: Record<string, [ThemeColor, string]> = {
-      running: ["accent", "●"], completed: ["success", "✓"], steered: ["warning", "✓"],
-      error: ["error", "✗"], aborted: ["error", "✗"], stopped: ["dim", "■"],
+      running: ["accent", "●"],
+      completed: ["success", "✓"],
+      steered: ["warning", "✓"],
+      error: ["error", "✗"],
+      aborted: ["error", "✗"],
+      stopped: ["dim", "■"],
     };
     const [iconColor, iconChar] = statusIcons[this.record.status] ?? ["dim", "○"];
     const statusIcon = th.fg(iconColor, iconChar);
@@ -109,12 +127,16 @@ export class ConversationViewer implements Component {
       try {
         const tokens = this.activity.session.getSessionStats().tokens.total;
         if (tokens > 0) headerParts.push(formatTokens(tokens));
-      } catch { /* */ }
+      } catch {
+        /* */
+      }
     }
 
-    lines.push(row(
-      `${statusIcon} ${th.bold(name)}${modeTag}  ${th.fg("muted", this.record.description)} ${th.fg("dim", "·")} ${th.fg("dim", headerParts.join(" · "))}`,
-    ));
+    lines.push(
+      row(
+        `${statusIcon} ${th.bold(name)}${modeTag}  ${th.fg("muted", this.record.description)} ${th.fg("dim", "·")} ${th.fg("dim", headerParts.join(" · "))}`,
+      ),
+    );
     lines.push(hrMid);
 
     // Content area — rebuild every render (live data, no cache needed)
@@ -135,9 +157,10 @@ export class ConversationViewer implements Component {
 
     // Footer
     lines.push(hrMid);
-    const scrollPct = contentLines.length <= viewportHeight
-      ? "100%"
-      : `${Math.round(((visibleStart + viewportHeight) / contentLines.length) * 100)}%`;
+    const scrollPct =
+      contentLines.length <= viewportHeight
+        ? "100%"
+        : `${Math.round(((visibleStart + viewportHeight) / contentLines.length) * 100)}%`;
     const footerLeft = th.fg("dim", `${contentLines.length} lines · ${scrollPct}`);
     const footerRight = th.fg("dim", "↑↓ scroll · PgUp/PgDn · Esc close");
     const footerGap = Math.max(1, innerW - visibleWidth(footerLeft) - visibleWidth(footerRight));
@@ -147,7 +170,9 @@ export class ConversationViewer implements Component {
     return lines;
   }
 
-  invalidate() { /* no cached state to clear */ }
+  invalidate() {
+    /* no cached state to clear */
+  }
 
   dispose() {
     this.closed = true;
@@ -175,40 +200,46 @@ export class ConversationViewer implements Component {
 }
 
 /** Pure — builds conversation content lines from messages and activity state. */
-function buildConversationLines({ messages, activity, status, width, theme }: {
+function buildConversationLines({
+  messages,
+  activity,
+  status,
+  width,
+  theme,
+}: {
   messages: readonly AgentMessage[];
   activity: AgentActivity | undefined;
   status: string;
   width: number;
   theme: Theme;
 }) {
-    if (width <= 0) return [];
+  if (width <= 0) return [];
 
-    const th = theme;
-    const lines: string[] = [];
+  const th = theme;
+  const lines: string[] = [];
 
-    if (messages.length === 0) {
-      lines.push(th.fg("dim", "(waiting for first message...)"));
-      return lines;
-    }
+  if (messages.length === 0) {
+    lines.push(th.fg("dim", "(waiting for first message...)"));
+    return lines;
+  }
 
-    let needsSeparator = false;
-    for (const msg of messages) {
-      const rendered = renderMessage(msg, th, width);
-      if (!rendered) continue;
-      if (needsSeparator) lines.push(th.fg("dim", "───"));
-      lines.push(...rendered);
-      needsSeparator = true;
-    }
+  let needsSeparator = false;
+  for (const msg of messages) {
+    const rendered = renderMessage(msg, th, width);
+    if (!rendered) continue;
+    if (needsSeparator) lines.push(th.fg("dim", "───"));
+    lines.push(...rendered);
+    needsSeparator = true;
+  }
 
-    // Streaming indicator for running agents
-    if (status === "running" && activity) {
-      const act = describeActivity(activity.activeTools, activity.responseText);
-      lines.push("");
-      lines.push(truncateToWidth(th.fg("accent", "▍ ") + th.fg("dim", act), width));
-    }
+  // Streaming indicator for running agents
+  if (status === "running" && activity) {
+    const act = describeActivity(activity.activeTools, activity.responseText);
+    lines.push("");
+    lines.push(truncateToWidth(th.fg("accent", "▍ ") + th.fg("dim", act), width));
+  }
 
-    return lines.map(l => truncateToWidth(l, width));
+  return lines.map((l) => truncateToWidth(l, width));
 }
 
 /** Render a single message to lines, or undefined to skip. */
@@ -220,8 +251,10 @@ function renderMessage(msg: AgentMessage, th: Theme, width: number) {
       return [th.fg("accent", "[User]"), ...wrapTextWithAnsi(text.trim(), width)];
     }
     case "assistant": {
-      const textParts = msg.content.filter(c => c.type === "text" && c.text).map(c => (c as { text: string }).text);
-      const toolCalls = msg.content.filter(c => c.type === "toolCall").map(c => (c as { name: string }).name ?? "unknown");
+      const textParts = msg.content.filter((c) => c.type === "text" && c.text).map((c) => (c as { text: string }).text);
+      const toolCalls = msg.content
+        .filter((c) => c.type === "toolCall")
+        .map((c) => (c as { name: string }).name ?? "unknown");
       const lines: string[] = [th.bold("[Assistant]")];
       if (textParts.length > 0) lines.push(...wrapTextWithAnsi(textParts.join("\n").trim(), width));
       for (const name of toolCalls) lines.push(truncateToWidth(th.fg("muted", `  [Tool: ${name}]`), width));
@@ -231,7 +264,7 @@ function renderMessage(msg: AgentMessage, th: Theme, width: number) {
       const text = extractText(msg.content);
       const truncated = text.length > 500 ? text.slice(0, 500) + "... (truncated)" : text;
       if (!truncated.trim()) return undefined;
-      return [th.fg("dim", "[Result]"), ...wrapTextWithAnsi(truncated.trim(), width).map(l => th.fg("dim", l))];
+      return [th.fg("dim", "[Result]"), ...wrapTextWithAnsi(truncated.trim(), width).map((l) => th.fg("dim", l))];
     }
     default: {
       const raw = msg as { role: string; command?: string; output?: string };
@@ -239,7 +272,7 @@ function renderMessage(msg: AgentMessage, th: Theme, width: number) {
       const lines = [truncateToWidth(th.fg("muted", `  $ ${raw.command}`), width)];
       if (raw.output?.trim()) {
         const out = raw.output.length > 500 ? raw.output.slice(0, 500) + "... (truncated)" : raw.output;
-        lines.push(...wrapTextWithAnsi(out.trim(), width).map(l => th.fg("dim", l)));
+        lines.push(...wrapTextWithAnsi(out.trim(), width).map((l) => th.fg("dim", l)));
       }
       return lines;
     }

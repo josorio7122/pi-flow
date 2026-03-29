@@ -5,8 +5,6 @@
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
 
-
-
 /** Agent type: any string name (built-in defaults or user-defined). */
 export type SubagentType = string;
 
@@ -53,7 +51,7 @@ export interface AgentConfig {
   source?: "default" | "project" | "global" | undefined;
 }
 
-export type JoinMode = 'async' | 'group' | 'smart';
+export type JoinMode = "async" | "group" | "smart";
 
 export interface AgentRecord {
   id: string;

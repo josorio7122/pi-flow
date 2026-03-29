@@ -2,7 +2,16 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildMemoryBlock, buildReadOnlyMemoryBlock, ensureMemoryDir, isSymlink, isUnsafeName, readMemoryIndex, resolveMemoryDir, safeReadFile } from "./memory.js";
+import {
+  buildMemoryBlock,
+  buildReadOnlyMemoryBlock,
+  ensureMemoryDir,
+  isSymlink,
+  isUnsafeName,
+  readMemoryIndex,
+  resolveMemoryDir,
+  safeReadFile,
+} from "./memory.js";
 
 describe("memory", () => {
   let tmpDir: string;
@@ -33,31 +42,45 @@ describe("memory", () => {
     });
 
     it("throws on names with path traversal (..)", () => {
-      expect(() => resolveMemoryDir({ agentName: "../../etc/evil", scope: "project", cwd: "/workspace" })).toThrow("Unsafe agent name");
+      expect(() => resolveMemoryDir({ agentName: "../../etc/evil", scope: "project", cwd: "/workspace" })).toThrow(
+        "Unsafe agent name",
+      );
     });
 
     it("throws on names with forward slash", () => {
-      expect(() => resolveMemoryDir({ agentName: "foo/bar", scope: "project", cwd: "/workspace" })).toThrow("Unsafe agent name");
+      expect(() => resolveMemoryDir({ agentName: "foo/bar", scope: "project", cwd: "/workspace" })).toThrow(
+        "Unsafe agent name",
+      );
     });
 
     it("throws on names with backslash", () => {
-      expect(() => resolveMemoryDir({ agentName: "foo\\bar", scope: "project", cwd: "/workspace" })).toThrow("Unsafe agent name");
+      expect(() => resolveMemoryDir({ agentName: "foo\\bar", scope: "project", cwd: "/workspace" })).toThrow(
+        "Unsafe agent name",
+      );
     });
 
     it("throws on names with null byte", () => {
-      expect(() => resolveMemoryDir({ agentName: "foo\0bar", scope: "project", cwd: "/workspace" })).toThrow("Unsafe agent name");
+      expect(() => resolveMemoryDir({ agentName: "foo\0bar", scope: "project", cwd: "/workspace" })).toThrow(
+        "Unsafe agent name",
+      );
     });
 
     it("throws on empty name", () => {
-      expect(() => resolveMemoryDir({ agentName: "", scope: "project", cwd: "/workspace" })).toThrow("Unsafe agent name");
+      expect(() => resolveMemoryDir({ agentName: "", scope: "project", cwd: "/workspace" })).toThrow(
+        "Unsafe agent name",
+      );
     });
 
     it("throws on names starting with dot", () => {
-      expect(() => resolveMemoryDir({ agentName: ".hidden", scope: "project", cwd: "/workspace" })).toThrow("Unsafe agent name");
+      expect(() => resolveMemoryDir({ agentName: ".hidden", scope: "project", cwd: "/workspace" })).toThrow(
+        "Unsafe agent name",
+      );
     });
 
     it("throws on names with spaces", () => {
-      expect(() => resolveMemoryDir({ agentName: "foo bar", scope: "project", cwd: "/workspace" })).toThrow("Unsafe agent name");
+      expect(() => resolveMemoryDir({ agentName: "foo bar", scope: "project", cwd: "/workspace" })).toThrow(
+        "Unsafe agent name",
+      );
     });
 
     it("allows hyphens, underscores, and dots in names", () => {
@@ -285,8 +308,12 @@ describe("memory", () => {
     });
 
     it("includes scope label in header", () => {
-      expect(buildReadOnlyMemoryBlock({ agentName: "a", scope: "project", cwd: tmpDir })).toContain("Memory scope: project");
-      expect(buildReadOnlyMemoryBlock({ agentName: "a", scope: "local", cwd: tmpDir })).toContain("Memory scope: local");
+      expect(buildReadOnlyMemoryBlock({ agentName: "a", scope: "project", cwd: tmpDir })).toContain(
+        "Memory scope: project",
+      );
+      expect(buildReadOnlyMemoryBlock({ agentName: "a", scope: "local", cwd: tmpDir })).toContain(
+        "Memory scope: local",
+      );
       expect(buildReadOnlyMemoryBlock({ agentName: "a", scope: "user", cwd: tmpDir })).toContain("Memory scope: user");
     });
 

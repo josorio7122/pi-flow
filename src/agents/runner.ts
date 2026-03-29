@@ -44,7 +44,11 @@ export function createRunnerSettings(): RunnerSettings {
  * Try to find the right model for an agent type.
  * Priority: explicit option > config.model > parent model.
  */
-function resolveDefaultModel({ parentModel, registry, configModel }: {
+function resolveDefaultModel({
+  parentModel,
+  registry,
+  configModel,
+}: {
   parentModel: Model<Api> | undefined;
   registry: ModelRegistry;
   configModel?: string | undefined;
@@ -57,11 +61,8 @@ function resolveDefaultModel({ parentModel, registry, configModel }: {
 
       // Build a set of available model keys for fast lookup
       const available = registry.getAvailable?.();
-      const availableKeys = available
-        ? new Set(available.map((m) => `${m.provider}/${m.id}`))
-        : undefined;
-      const isAvailable = (p: string, id: string) =>
-        !availableKeys || availableKeys.has(`${p}/${id}`);
+      const availableKeys = available ? new Set(available.map((m) => `${m.provider}/${m.id}`)) : undefined;
+      const isAvailable = (p: string, id: string) => !availableKeys || availableKeys.has(`${p}/${id}`);
 
       const found = registry.find(provider, modelId);
       if (found && isAvailable(provider, modelId)) return found;
@@ -100,7 +101,6 @@ interface RunOptions {
   /** Agent registry for resolving types and tools. */
   registry?: Registry | undefined;
 }
-
 
 /**
  * Subscribe to a session and collect the last assistant message text.
@@ -141,7 +141,12 @@ function forwardAbortSignal(session: AgentSession, signal?: AbortSignal): () => 
   return () => signal.removeEventListener("abort", onAbort);
 }
 
-export async function runAgent({ ctx, type, prompt, options }: {
+export async function runAgent({
+  ctx,
+  type,
+  prompt,
+  options,
+}: {
   ctx: ExtensionContext;
   type: SubagentType;
   prompt: string;
@@ -178,7 +183,7 @@ export async function runAgent({ ctx, type, prompt, options }: {
   // Persistent memory: detect write capability and branch accordingly.
   // Account for disallowedTools — a tool in the base set but on the denylist is not truly available.
   if (agentConfig?.memory) {
-    const existingNames = new Set(tools.map(t => t.name));
+    const existingNames = new Set(tools.map((t) => t.name));
     const denied = agentConfig.disallowedTools ? new Set(agentConfig.disallowedTools) : undefined;
     const effectivelyHas = (name: string) => existingNames.has(name) && !denied?.has(name);
     const hasWriteTools = effectivelyHas("write") || effectivelyHas("edit");
@@ -187,14 +192,22 @@ export async function runAgent({ ctx, type, prompt, options }: {
       // Read-write memory: add any missing memory tools (read/write/edit)
       const memTools = options.registry!.getMemoryTools(effectiveCwd, existingNames);
       if (memTools.length > 0) tools = [...tools, ...memTools];
-      extras.memoryBlock = buildMemoryBlock({ agentName: agentConfig.name, scope: agentConfig.memory, cwd: effectiveCwd });
+      extras.memoryBlock = buildMemoryBlock({
+        agentName: agentConfig.name,
+        scope: agentConfig.memory,
+        cwd: effectiveCwd,
+      });
     } else {
       // Read-only memory: only add read tool, use read-only prompt
       if (!existingNames.has("read")) {
         const readTools = options.registry!.getReadOnlyMemoryTools(effectiveCwd, existingNames);
         if (readTools.length > 0) tools = [...tools, ...readTools];
       }
-      extras.memoryBlock = buildReadOnlyMemoryBlock({ agentName: agentConfig.name, scope: agentConfig.memory, cwd: effectiveCwd });
+      extras.memoryBlock = buildReadOnlyMemoryBlock({
+        agentName: agentConfig.name,
+        scope: agentConfig.memory,
+        cwd: effectiveCwd,
+      });
     }
   }
 
@@ -240,9 +253,13 @@ export async function runAgent({ ctx, type, prompt, options }: {
   await loader.reload();
 
   // Resolve model: explicit option > config.model > parent model
-  const model = options.model ?? resolveDefaultModel({
-    parentModel: ctx.model, registry: ctx.modelRegistry, configModel: agentConfig?.model,
-  });
+  const model =
+    options.model ??
+    resolveDefaultModel({
+      parentModel: ctx.model,
+      registry: ctx.modelRegistry,
+      configModel: agentConfig?.model,
+    });
 
   // Resolve thinking level: explicit option > agent config > undefined (inherit)
   const thinkingLevel = options.thinkingLevel ?? agentConfig?.thinking;
@@ -264,27 +281,25 @@ export async function runAgent({ ctx, type, prompt, options }: {
   const { session } = await createAgentSession(sessionOpts as Parameters<typeof createAgentSession>[0]);
 
   // Build disallowed tools set from agent config
-  const disallowedSet = agentConfig?.disallowedTools
-    ? new Set(agentConfig.disallowedTools)
-    : undefined;
+  const disallowedSet = agentConfig?.disallowedTools ? new Set(agentConfig.disallowedTools) : undefined;
 
   // Filter active tools: remove our own tools to prevent nesting,
   // apply extension allowlist if specified, and apply disallowedTools denylist
   if (extensions !== false) {
-    const builtinToolNames = new Set(tools.map(t => t.name));
+    const builtinToolNames = new Set(tools.map((t) => t.name));
     const activeTools = session.getActiveToolNames().filter((t) => {
       if (EXCLUDED_TOOL_NAMES.includes(t)) return false;
       if (disallowedSet?.has(t)) return false;
       if (builtinToolNames.has(t)) return true;
       if (Array.isArray(extensions)) {
-        return extensions.some(ext => t.startsWith(ext) || t.includes(ext));
+        return extensions.some((ext) => t.startsWith(ext) || t.includes(ext));
       }
       return true;
     });
     session.setActiveToolsByName(activeTools);
   } else if (disallowedSet) {
     // Even with extensions disabled, apply denylist to built-in tools
-    const activeTools = session.getActiveToolNames().filter(t => !disallowedSet.has(t));
+    const activeTools = session.getActiveToolNames().filter((t) => !disallowedSet.has(t));
     session.setActiveToolsByName(activeTools);
   }
 
@@ -366,7 +381,11 @@ export async function runAgent({ ctx, type, prompt, options }: {
 /**
  * Send a new prompt to an existing session (resume).
  */
-export async function resumeAgent({ session, prompt, options = {} }: {
+export async function resumeAgent({
+  session,
+  prompt,
+  options = {},
+}: {
   session: AgentSession;
   prompt: string;
   options?: { onToolActivity?: (activity: ToolActivity) => void; signal?: AbortSignal };
@@ -396,10 +415,7 @@ export async function resumeAgent({ session, prompt, options = {} }: {
  * Send a steering message to a running subagent.
  * The message will interrupt the agent after its current tool execution.
  */
-export async function steerAgent(
-  session: AgentSession,
-  message: string,
-) {
+export async function steerAgent(session: AgentSession, message: string) {
   await session.steer(message);
 }
 
@@ -411,16 +427,16 @@ export function getAgentConversation(session: AgentSession) {
 
   for (const msg of session.messages) {
     if (msg.role === "user") {
-      const text = typeof msg.content === "string"
-        ? msg.content
-        : extractText(msg.content);
+      const text = typeof msg.content === "string" ? msg.content : extractText(msg.content);
       if (text.trim()) parts.push(`[User]: ${text.trim()}`);
     } else if (msg.role === "assistant") {
       const textParts: string[] = [];
       const toolCalls: string[] = [];
       for (const c of msg.content) {
         if (c.type === "text" && c.text) textParts.push(c.text);
-        else if (c.type === "toolCall") { toolCalls.push(`  Tool: ${c.name ?? "unknown"}`); }
+        else if (c.type === "toolCall") {
+          toolCalls.push(`  Tool: ${c.name ?? "unknown"}`);
+        }
       }
       if (textParts.length > 0) parts.push(`[Assistant]: ${textParts.join("\n")}`);
       if (toolCalls.length > 0) parts.push(`[Tool Calls]:\n${toolCalls.join("\n")}`);

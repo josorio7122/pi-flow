@@ -19,7 +19,12 @@ function scoreModel(m: ModelEntry, query: string) {
   if (id === query || full === query) return 100;
   if (id.includes(query) || full.includes(query)) return 60 + (query.length / id.length) * 30;
   if (name.includes(query)) return 40 + (query.length / name.length) * 20;
-  if (query.split(/[\s\-/]+/).every(part => id.includes(part) || name.includes(part) || m.provider.toLowerCase().includes(part))) return 20;
+  if (
+    query
+      .split(/[\s\-/]+/)
+      .every((part) => id.includes(part) || name.includes(part) || m.provider.toLowerCase().includes(part))
+  )
+    return 20;
   return 0;
 }
 
@@ -28,13 +33,10 @@ function scoreModel(m: ModelEntry, query: string) {
  * Tries exact match first ("provider/modelId"), then fuzzy match against all available models.
  * Returns the Model on success, or an error message string on failure.
  */
-export function resolveModel(
-  input: string,
-  registry: ModelRegistry,
-) {
+export function resolveModel(input: string, registry: ModelRegistry) {
   // Available models (those with auth configured)
   const all = (registry.getAvailable?.() ?? registry.getAll()) as ModelEntry[];
-  const availableSet = new Set(all.map(m => `${m.provider}/${m.id}`.toLowerCase()));
+  const availableSet = new Set(all.map((m) => `${m.provider}/${m.id}`.toLowerCase()));
 
   // 1. Exact match: "provider/modelId" — only if available (has auth)
   const slashIdx = input.indexOf("/");
@@ -50,7 +52,7 @@ export function resolveModel(
   // 2. Fuzzy match against available models
   const query = input.toLowerCase();
   const best = all
-    .map(m => ({ model: m, score: scoreModel(m, query) }))
+    .map((m) => ({ model: m, score: scoreModel(m, query) }))
     .reduce((a, b) => (b.score > a.score ? b : a), { model: undefined as ModelEntry | undefined, score: 0 });
 
   if (best.model && best.score >= 20) {
@@ -60,7 +62,7 @@ export function resolveModel(
 
   // 3. No match — list available models
   const modelList = all
-    .map(m => `  ${m.provider}/${m.id}`)
+    .map((m) => `  ${m.provider}/${m.id}`)
     .sort()
     .join("\n");
   return `Model not found: "${input}".\n\nAvailable models:\n${modelList}`;

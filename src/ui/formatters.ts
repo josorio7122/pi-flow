@@ -21,8 +21,6 @@ const TOOL_DISPLAY: Record<string, string> = {
   ls: "listing",
 };
 
-
-
 /** Per-agent live activity state. */
 export interface AgentActivity {
   activeTools: Map<string, string>;
@@ -91,7 +89,7 @@ export function describeActivity(activeTools: Map<string, string>, responseText?
   if (activeTools.size > 0) {
     const names = [...activeTools.values()];
     const unique = [...new Set(names)];
-    const descriptions = unique.map(n => TOOL_DISPLAY[n] ?? n);
+    const descriptions = unique.map((n) => TOOL_DISPLAY[n] ?? n);
     return descriptions.join(", ");
   }
   if (responseText) {

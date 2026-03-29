@@ -7,7 +7,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
-import type { AgentConfig, } from "../types.js";
+import type { AgentConfig } from "../types.js";
 import { BUILTIN_TOOL_NAMES } from "./registry.js";
 
 /**
@@ -24,18 +24,26 @@ export function loadCustomAgents(cwd: string) {
   const projectDir = join(cwd, ".pi", "agents");
 
   const agents = new Map<string, AgentConfig>();
-  loadFromDir({ dir: globalDir, agents, source: "global" });   // lower priority
-  loadFromDir({ dir: projectDir, agents, source: "project" });  // higher priority (overwrites)
+  loadFromDir({ dir: globalDir, agents, source: "global" }); // lower priority
+  loadFromDir({ dir: projectDir, agents, source: "project" }); // higher priority (overwrites)
   return agents;
 }
 
 /** Load agent configs from a directory into the map. */
-function loadFromDir({ dir, agents, source }: { dir: string; agents: Map<string, AgentConfig>; source: "project" | "global" }) {
+function loadFromDir({
+  dir,
+  agents,
+  source,
+}: {
+  dir: string;
+  agents: Map<string, AgentConfig>;
+  source: "project" | "global";
+}) {
   if (!existsSync(dir)) return;
 
   let files: string[];
   try {
-    files = readdirSync(dir).filter(f => f.endsWith(".md"));
+    files = readdirSync(dir).filter((f) => f.endsWith(".md"));
   } catch {
     return;
   }
@@ -70,7 +78,7 @@ function loadFromDir({ dir, agents, source }: { dir: string; agents: Map<string,
       isolated: fm.isolated != null ? fm.isolated === true : undefined,
       memory: parseMemory(fm.memory),
       isolation: fm.isolation === "worktree" ? "worktree" : undefined,
-      enabled: fm.enabled !== false,  // default true; explicitly false disables
+      enabled: fm.enabled !== false, // default true; explicitly false disables
       source,
     });
   }
@@ -96,7 +104,10 @@ function parseCsvField(val: unknown) {
   if (val === undefined || val === null) return undefined;
   const s = String(val).trim();
   if (!s || s === "none") return undefined;
-  const items = s.split(",").map(t => t.trim()).filter(Boolean);
+  const items = s
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
   return items.length > 0 ? items : undefined;
 }
 

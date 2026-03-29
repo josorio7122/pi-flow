@@ -18,7 +18,7 @@ import { runAgent } from "./runner.js";
 const mockPi = {} as any;
 const mockCtx = { cwd: "/tmp" } as any;
 
-const mockSession = () => ({ dispose: vi.fn() } as any);
+const mockSession = () => ({ dispose: vi.fn() }) as any;
 
 const resolvedRun = () =>
   vi.mocked(runAgent).mockResolvedValue({
@@ -37,15 +37,23 @@ describe("AgentManager — Bug 1 race condition (resultConsumed vs onComplete)",
 
   it("reproduces bug: onComplete fires with resultConsumed=false when set after await", async () => {
     let seenConsumed: boolean | undefined;
-    manager = createAgentManager({ onComplete: (r) => {
-      seenConsumed = r.resultConsumed;
-    }});
+    manager = createAgentManager({
+      onComplete: (r) => {
+        seenConsumed = r.resultConsumed;
+      },
+    });
     resolvedRun();
 
-    const id = manager.spawn({ pi: mockPi, ctx: mockCtx, type: "general-purpose", prompt: "test", options: {
-      description: "test",
-      isBackground: true,
-    }});
+    const id = manager.spawn({
+      pi: mockPi,
+      ctx: mockCtx,
+      type: "general-purpose",
+      prompt: "test",
+      options: {
+        description: "test",
+        isBackground: true,
+      },
+    });
     const record = manager.getRecord(id)!;
 
     // Simulate the buggy get_subagent_result: await THEN mark consumed
@@ -58,15 +66,23 @@ describe("AgentManager — Bug 1 race condition (resultConsumed vs onComplete)",
 
   it("fix: onComplete sees resultConsumed=true when pre-marked before await", async () => {
     let seenConsumed: boolean | undefined;
-    manager = createAgentManager({ onComplete: (r) => {
-      seenConsumed = r.resultConsumed;
-    }});
+    manager = createAgentManager({
+      onComplete: (r) => {
+        seenConsumed = r.resultConsumed;
+      },
+    });
     resolvedRun();
 
-    const id = manager.spawn({ pi: mockPi, ctx: mockCtx, type: "general-purpose", prompt: "test", options: {
-      description: "test",
-      isBackground: true,
-    }});
+    const id = manager.spawn({
+      pi: mockPi,
+      ctx: mockCtx,
+      type: "general-purpose",
+      prompt: "test",
+      options: {
+        description: "test",
+        isBackground: true,
+      },
+    });
     const record = manager.getRecord(id)!;
 
     // The fix: pre-mark BEFORE awaiting
@@ -78,15 +94,23 @@ describe("AgentManager — Bug 1 race condition (resultConsumed vs onComplete)",
 
   it("normal case: onComplete fires with resultConsumed falsy when no explicit polling", async () => {
     let completedRecord: AgentRecord | undefined;
-    manager = createAgentManager({ onComplete: (r) => {
-      completedRecord = r;
-    }});
+    manager = createAgentManager({
+      onComplete: (r) => {
+        completedRecord = r;
+      },
+    });
     resolvedRun();
 
-    const id = manager.spawn({ pi: mockPi, ctx: mockCtx, type: "general-purpose", prompt: "test", options: {
-      description: "test",
-      isBackground: true,
-    }});
+    const id = manager.spawn({
+      pi: mockPi,
+      ctx: mockCtx,
+      type: "general-purpose",
+      prompt: "test",
+      options: {
+        description: "test",
+        isBackground: true,
+      },
+    });
     await manager.getRecord(id)!.promise;
 
     expect(completedRecord).toBeDefined();
@@ -95,14 +119,22 @@ describe("AgentManager — Bug 1 race condition (resultConsumed vs onComplete)",
 
   it("onComplete is not called for foreground agents", async () => {
     let onCompleteCalled = false;
-    manager = createAgentManager({ onComplete: () => {
-      onCompleteCalled = true;
-    }});
+    manager = createAgentManager({
+      onComplete: () => {
+        onCompleteCalled = true;
+      },
+    });
     resolvedRun();
 
-    await manager.spawnAndWait({ pi: mockPi, ctx: mockCtx, type: "general-purpose", prompt: "test", options: {
-      description: "test",
-    }});
+    await manager.spawnAndWait({
+      pi: mockPi,
+      ctx: mockCtx,
+      type: "general-purpose",
+      prompt: "test",
+      options: {
+        description: "test",
+      },
+    });
 
     expect(onCompleteCalled).toBe(false);
   });
@@ -119,10 +151,16 @@ describe("AgentManager — Bug 3 clearCompleted", () => {
     manager = createAgentManager();
     resolvedRun();
 
-    const id = manager.spawn({ pi: mockPi, ctx: mockCtx, type: "general-purpose", prompt: "test", options: {
-      description: "test",
-      isBackground: true,
-    }});
+    const id = manager.spawn({
+      pi: mockPi,
+      ctx: mockCtx,
+      type: "general-purpose",
+      prompt: "test",
+      options: {
+        description: "test",
+        isBackground: true,
+      },
+    });
     await manager.getRecord(id)!.promise;
 
     expect(manager.listAgents()).toHaveLength(1);
@@ -139,15 +177,27 @@ describe("AgentManager — Bug 3 clearCompleted", () => {
       () => new Promise(() => {}), // hangs forever
     );
 
-    const id1 = manager.spawn({ pi: mockPi, ctx: mockCtx, type: "general-purpose", prompt: "test1", options: {
-      description: "running agent",
-      isBackground: true,
-    }});
+    const id1 = manager.spawn({
+      pi: mockPi,
+      ctx: mockCtx,
+      type: "general-purpose",
+      prompt: "test1",
+      options: {
+        description: "running agent",
+        isBackground: true,
+      },
+    });
     // Second agent should be queued (limit=1)
-    const id2 = manager.spawn({ pi: mockPi, ctx: mockCtx, type: "general-purpose", prompt: "test2", options: {
-      description: "queued agent",
-      isBackground: true,
-    }});
+    const id2 = manager.spawn({
+      pi: mockPi,
+      ctx: mockCtx,
+      type: "general-purpose",
+      prompt: "test2",
+      options: {
+        description: "queued agent",
+        isBackground: true,
+      },
+    });
 
     expect(manager.getRecord(id1)!.status).toBe("running");
     expect(manager.getRecord(id2)!.status).toBe("queued");
@@ -174,10 +224,16 @@ describe("AgentManager — Bug 3 clearCompleted", () => {
       steered: false,
     });
 
-    const id = manager.spawn({ pi: mockPi, ctx: mockCtx, type: "general-purpose", prompt: "test", options: {
-      description: "test",
-      isBackground: true,
-    }});
+    const id = manager.spawn({
+      pi: mockPi,
+      ctx: mockCtx,
+      type: "general-purpose",
+      prompt: "test",
+      options: {
+        description: "test",
+        isBackground: true,
+      },
+    });
     await manager.getRecord(id)!.promise;
 
     manager.clearCompleted();
@@ -189,10 +245,16 @@ describe("AgentManager — Bug 3 clearCompleted", () => {
     manager = createAgentManager();
     vi.mocked(runAgent).mockRejectedValue(new Error("boom"));
 
-    const id = manager.spawn({ pi: mockPi, ctx: mockCtx, type: "general-purpose", prompt: "test", options: {
-      description: "test",
-      isBackground: true,
-    }});
+    const id = manager.spawn({
+      pi: mockPi,
+      ctx: mockCtx,
+      type: "general-purpose",
+      prompt: "test",
+      options: {
+        description: "test",
+        isBackground: true,
+      },
+    });
     await manager.getRecord(id)!.promise;
     expect(manager.getRecord(id)!.status).toBe("error");
 

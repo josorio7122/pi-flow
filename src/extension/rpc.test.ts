@@ -9,7 +9,9 @@ function createEventBus(): EventBus {
     on(event, handler) {
       if (!listeners.has(event)) listeners.set(event, new Set());
       listeners.get(event)!.add(handler);
-      return () => { listeners.get(event)?.delete(handler); };
+      return () => {
+        listeners.get(event)?.delete(handler);
+      };
     },
     emit(event, data) {
       for (const handler of listeners.get(event) ?? []) handler(data);
@@ -74,13 +76,19 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:req-s1", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "req-s1", type: "general-purpose", prompt: "do stuff",
+        requestId: "req-s1",
+        type: "general-purpose",
+        prompt: "do stuff",
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
       expect(reply).toHaveBeenCalledWith({ success: true, data: { id: "agent-42" } });
       expect(manager.spawn).toHaveBeenCalledWith({
-        pi: deps.pi, ctx, type: "general-purpose", prompt: "do stuff", options: {},
+        pi: deps.pi,
+        ctx,
+        type: "general-purpose",
+        prompt: "do stuff",
+        options: {},
       });
     });
 
@@ -89,13 +97,18 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:req-s2", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "req-s2", type: "Explore", prompt: "find it",
+        requestId: "req-s2",
+        type: "Explore",
+        prompt: "find it",
         options: { description: "search", isBackground: true },
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
       expect(manager.spawn).toHaveBeenCalledWith({
-        pi: deps.pi, ctx, type: "Explore", prompt: "find it",
+        pi: deps.pi,
+        ctx,
+        type: "Explore",
+        prompt: "find it",
         options: { description: "search", isBackground: true },
       });
     });
@@ -106,7 +119,9 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:req-s3", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "req-s3", type: "general-purpose", prompt: "x",
+        requestId: "req-s3",
+        type: "general-purpose",
+        prompt: "x",
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
@@ -122,7 +137,9 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:req-s4", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "req-s4", type: "bad-type", prompt: "x",
+        requestId: "req-s4",
+        type: "bad-type",
+        prompt: "x",
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
@@ -136,7 +153,9 @@ describe("cross-extension RPC", () => {
       events.on("subagents:rpc:spawn:reply:req-other", wrongReply);
       events.on("subagents:rpc:spawn:reply:req-s5", rightReply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "req-s5", type: "general-purpose", prompt: "x",
+        requestId: "req-s5",
+        type: "general-purpose",
+        prompt: "x",
       });
 
       await vi.waitFor(() => expect(rightReply).toHaveBeenCalled());
@@ -150,7 +169,9 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:req-s6", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "req-s6", type: "general-purpose", prompt: "x",
+        requestId: "req-s6",
+        type: "general-purpose",
+        prompt: "x",
       });
 
       // Give any potential async handler time to fire

@@ -22,22 +22,29 @@ import {
   SPINNER,
 } from "./formatters.js";
 
-
-
 /** Maximum number of rendered lines before overflow collapse kicks in. */
 const MAX_WIDGET_LINES = 12;
 
 const STATUS_DISPLAY: Record<string, { color: ThemeColor; char: string; label: string }> = {
   completed: { color: "success", char: "✓", label: "" },
-  steered:   { color: "warning", char: "✓", label: " (turn limit)" },
-  stopped:   { color: "dim",     char: "■", label: " stopped" },
-  error:     { color: "error",   char: "✗", label: " error" },
-  aborted:   { color: "error",   char: "✗", label: " aborted" },
+  steered: { color: "warning", char: "✓", label: " (turn limit)" },
+  stopped: { color: "dim", char: "■", label: " stopped" },
+  error: { color: "error", char: "✗", label: " error" },
+  aborted: { color: "error", char: "✗", label: " aborted" },
 };
 
 /** Pure — render a single finished agent line. */
 function renderFinishedLine(
-  a: { id: string; type: SubagentType; status: string; description: string; toolUses: number; startedAt: number; completedAt?: number | undefined; error?: string | undefined },
+  a: {
+    id: string;
+    type: SubagentType;
+    status: string;
+    description: string;
+    toolUses: number;
+    startedAt: number;
+    completedAt?: number | undefined;
+    error?: string | undefined;
+  },
   theme: Theme,
   activity?: AgentActivity,
   config?: { displayName: string; promptMode: "replace" | "append" },
@@ -49,9 +56,12 @@ function renderFinishedLine(
 
   const display = STATUS_DISPLAY[a.status] ?? STATUS_DISPLAY.aborted!;
   const icon = theme.fg(display.color, display.char);
-  const statusSuffix = a.status === "error" && a.error
-    ? theme.fg(display.color, `${display.label}: ${a.error.slice(0, 60)}`)
-    : display.label ? theme.fg(display.color, display.label) : "";
+  const statusSuffix =
+    a.status === "error" && a.error
+      ? theme.fg(display.color, `${display.label}: ${a.error.slice(0, 60)}`)
+      : display.label
+        ? theme.fg(display.color, display.label)
+        : "";
 
   const parts = [
     ...(activity ? [formatTurns(activity.turnCount, activity.maxTurns)] : []),
@@ -132,7 +142,19 @@ export class AgentWidget {
   }
 
   /** Render a finished agent line — delegates to pure function. */
-  private renderFinishedLine(a: { id: string; type: SubagentType; status: string; description: string; toolUses: number; startedAt: number; completedAt?: number | undefined; error?: string | undefined }, theme: Theme) {
+  private renderFinishedLine(
+    a: {
+      id: string;
+      type: SubagentType;
+      status: string;
+      description: string;
+      toolUses: number;
+      startedAt: number;
+      completedAt?: number | undefined;
+      error?: string | undefined;
+    },
+    theme: Theme,
+  ) {
     return renderFinishedLine(a, theme, this.agentActivity.get(a.id), this.registry.getConfig(a.type));
   }
 
@@ -142,11 +164,11 @@ export class AgentWidget {
    */
   private renderWidget(tui: TUI, theme: Theme) {
     const allAgents = this.manager.listAgents();
-    const running = allAgents.filter(a => a.status === "running");
-    const queued = allAgents.filter(a => a.status === "queued");
-    const finished = allAgents.filter(a =>
-      a.status !== "running" && a.status !== "queued" && a.completedAt
-      && this.shouldShowFinished(a.id, a.status),
+    const running = allAgents.filter((a) => a.status === "running");
+    const queued = allAgents.filter((a) => a.status === "queued");
+    const finished = allAgents.filter(
+      (a) =>
+        a.status !== "running" && a.status !== "queued" && a.completedAt && this.shouldShowFinished(a.id, a.status),
     );
 
     const hasActive = running.length > 0 || queued.length > 0;
@@ -181,7 +203,11 @@ export class AgentWidget {
       const toolUses = bg?.toolUses ?? a.toolUses;
       let tokenText = "";
       if (bg?.session) {
-        try { tokenText = formatTokens(bg.session.getSessionStats().tokens.total); } catch { /* */ }
+        try {
+          tokenText = formatTokens(bg.session.getSessionStats().tokens.total);
+        } catch {
+          /* */
+        }
       }
 
       const parts: string[] = [];
@@ -194,14 +220,18 @@ export class AgentWidget {
       const activity = bg ? describeActivity(bg.activeTools, bg.responseText) : "thinking…";
 
       runningLines.push([
-        truncate(theme.fg("dim", "├─") + ` ${theme.fg("accent", frame)} ${theme.bold(name)}${modeTag}  ${theme.fg("muted", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", statsText)}`),
+        truncate(
+          theme.fg("dim", "├─") +
+            ` ${theme.fg("accent", frame)} ${theme.bold(name)}${modeTag}  ${theme.fg("muted", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", statsText)}`,
+        ),
         truncate(theme.fg("dim", "│  ") + theme.fg("dim", `  ⎿  ${activity}`)),
       ]);
     }
 
-    const queuedLine = queued.length > 0
-      ? truncate(theme.fg("dim", "├─") + ` ${theme.fg("muted", "◦")} ${theme.fg("dim", `${queued.length} queued`)}`)
-      : undefined;
+    const queuedLine =
+      queued.length > 0
+        ? truncate(theme.fg("dim", "├─") + ` ${theme.fg("muted", "◦")} ${theme.fg("dim", `${queued.length} queued`)}`)
+        : undefined;
 
     // Assemble with overflow cap (heading + overflow indicator = 2 reserved lines).
     const maxBody = MAX_WIDGET_LINES - 1; // heading takes 1 line
@@ -267,7 +297,10 @@ export class AgentWidget {
       if (hiddenRunning > 0) overflowParts.push(`${hiddenRunning} running`);
       if (hiddenFinished > 0) overflowParts.push(`${hiddenFinished} finished`);
       const overflowText = overflowParts.join(", ");
-      lines.push(truncate(theme.fg("dim", "└─") + ` ${theme.fg("dim", `+${hiddenRunning + hiddenFinished} more (${overflowText})`)}`)
+      lines.push(
+        truncate(
+          theme.fg("dim", "└─") + ` ${theme.fg("dim", `+${hiddenRunning + hiddenFinished} more (${overflowText})`)}`,
+        ),
       );
     }
 
@@ -284,9 +317,13 @@ export class AgentWidget {
     let queuedCount = 0;
     let hasFinished = false;
     for (const a of allAgents) {
-      if (a.status === "running") { runningCount++; }
-      else if (a.status === "queued") { queuedCount++; }
-      else if (a.completedAt && this.shouldShowFinished(a.id, a.status)) { hasFinished = true; }
+      if (a.status === "running") {
+        runningCount++;
+      } else if (a.status === "queued") {
+        queuedCount++;
+      } else if (a.completedAt && this.shouldShowFinished(a.id, a.status)) {
+        hasFinished = true;
+      }
     }
     const hasActive = runningCount > 0 || queuedCount > 0;
 
@@ -301,10 +338,13 @@ export class AgentWidget {
         this.uiCtx.setStatus("subagents", undefined);
         this.lastStatusText = undefined;
       }
-      if (this.widgetInterval) { clearInterval(this.widgetInterval); this.widgetInterval = undefined; }
+      if (this.widgetInterval) {
+        clearInterval(this.widgetInterval);
+        this.widgetInterval = undefined;
+      }
       // Clean up stale entries
       for (const [id] of this.finishedTurnAge) {
-        if (!allAgents.some(a => a.id === id)) this.finishedTurnAge.delete(id);
+        if (!allAgents.some((a) => a.id === id)) this.finishedTurnAge.delete(id);
       }
       return;
     }
@@ -328,17 +368,21 @@ export class AgentWidget {
     // Register widget callback once; subsequent updates use requestRender()
     // which re-invokes render() without replacing the component (avoids layout thrashing).
     if (!this.widgetRegistered) {
-      this.uiCtx.setWidget("agents", (tui, theme) => {
-        this.tui = tui;
-        return {
-          render: () => this.renderWidget(tui, theme),
-          invalidate: () => {
-            // Theme changed — force re-registration so factory captures fresh theme.
-            this.widgetRegistered = false;
-            this.tui = undefined;
-          },
-        };
-      }, { placement: "aboveEditor" });
+      this.uiCtx.setWidget(
+        "agents",
+        (tui, theme) => {
+          this.tui = tui;
+          return {
+            render: () => this.renderWidget(tui, theme),
+            invalidate: () => {
+              // Theme changed — force re-registration so factory captures fresh theme.
+              this.widgetRegistered = false;
+              this.tui = undefined;
+            },
+          };
+        },
+        { placement: "aboveEditor" },
+      );
       this.widgetRegistered = true;
     } else {
       // Widget already registered — just request a re-render of existing components.

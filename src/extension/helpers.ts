@@ -8,13 +8,20 @@ import { type AgentActivity, type AgentDetails, formatTokens } from "../ui/forma
 
 /** Tool execute return value for a text response. */
 export function textResult(msg: string, details?: AgentDetails | undefined) {
-  return { content: [{ type: "text" as const, text: msg }], details } as { content: { type: "text"; text: string }[]; details: AgentDetails };
+  return { content: [{ type: "text" as const, text: msg }], details } as {
+    content: { type: "text"; text: string }[];
+    details: AgentDetails;
+  };
 }
 
 /** Safe token formatting — wraps session.getSessionStats() in try-catch. */
 export function safeFormatTokens(session: { getSessionStats(): { tokens: { total: number } } } | undefined) {
   if (!session) return "";
-  try { return formatTokens(session.getSessionStats().tokens.total); } catch { return ""; }
+  try {
+    return formatTokens(session.getSessionStats().tokens.total);
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -27,14 +34,25 @@ function applyToolActivity(state: AgentActivity, activity: { type: "start" | "en
     state.activeTools.set(activity.toolName + "_" + Date.now(), activity.toolName);
   } else {
     for (const [key, name] of state.activeTools) {
-      if (name === activity.toolName) { state.activeTools.delete(key); break; }
+      if (name === activity.toolName) {
+        state.activeTools.delete(key);
+        break;
+      }
     }
     state.toolUses++;
   }
 }
 
 export function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => void) {
-  const state: AgentActivity = { activeTools: new Map(), toolUses: 0, turnCount: 1, maxTurns, tokens: "", responseText: "", session: undefined };
+  const state: AgentActivity = {
+    activeTools: new Map(),
+    toolUses: 0,
+    turnCount: 1,
+    maxTurns,
+    tokens: "",
+    responseText: "",
+    session: undefined,
+  };
 
   const callbacks = {
     onToolActivity: (activity: { type: "start" | "end"; toolName: string }) => {
@@ -61,21 +79,30 @@ export function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => 
 /** Human-readable status label for agent completion. */
 function getStatusLabel(status: string, error?: string) {
   switch (status) {
-    case "error": return `Error: ${error ?? "unknown"}`;
-    case "aborted": return "Aborted (max turns exceeded)";
-    case "steered": return "Wrapped up (turn limit)";
-    case "stopped": return "Stopped";
-    default: return "Done";
+    case "error":
+      return `Error: ${error ?? "unknown"}`;
+    case "aborted":
+      return "Aborted (max turns exceeded)";
+    case "steered":
+      return "Wrapped up (turn limit)";
+    case "stopped":
+      return "Stopped";
+    default:
+      return "Done";
   }
 }
 
 /** Parenthetical status note for completed agent result text. */
 export function getStatusNote(status: string) {
   switch (status) {
-    case "aborted": return " (aborted — max turns exceeded, output may be incomplete)";
-    case "steered": return " (wrapped up — reached turn limit)";
-    case "stopped": return " (stopped by user)";
-    default: return "";
+    case "aborted":
+      return " (aborted — max turns exceeded, output may be incomplete)";
+    case "steered":
+      return " (wrapped up — reached turn limit)";
+    case "stopped":
+      return " (stopped by user)";
+    default:
+      return "";
   }
 }
 
@@ -87,7 +114,11 @@ function escapeXml(s: string) {
 /** Format a structured task notification matching Claude Code's <task-notification> XML. */
 /** Safely extract total token count from a session. */
 function getTokenCount(session: { getSessionStats(): { tokens: { total: number } } } | undefined) {
-  try { return session?.getSessionStats().tokens?.total ?? 0; } catch { return 0; }
+  try {
+    return session?.getSessionStats().tokens?.total ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
 export function formatTaskNotification(record: AgentRecord, resultMaxLen: number) {
@@ -111,13 +142,34 @@ export function formatTaskNotification(record: AgentRecord, resultMaxLen: number
     `<result>${escapeXml(resultPreview)}</result>`,
     `<usage><total_tokens>${totalTokens}</total_tokens><tool_uses>${record.toolUses}</tool_uses><duration_ms>${durationMs}</duration_ms></usage>`,
     `</task-notification>`,
-  ].filter(Boolean).join('\n');
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 /** Build AgentDetails from a base + record-specific fields. */
-export function buildDetails({ base, record, activity, overrides }: {
-  base: { displayName: string; description: string; subagentType: string; modelName?: string | undefined; tags?: string[] | undefined };
-  record: { toolUses: number; startedAt: number; completedAt?: number | undefined; status: string; error?: string | undefined; id?: string | undefined; session?: { getSessionStats(): { tokens: { total: number } } } | undefined };
+export function buildDetails({
+  base,
+  record,
+  activity,
+  overrides,
+}: {
+  base: {
+    displayName: string;
+    description: string;
+    subagentType: string;
+    modelName?: string | undefined;
+    tags?: string[] | undefined;
+  };
+  record: {
+    toolUses: number;
+    startedAt: number;
+    completedAt?: number | undefined;
+    status: string;
+    error?: string | undefined;
+    id?: string | undefined;
+    session?: { getSessionStats(): { tokens: { total: number } } } | undefined;
+  };
   activity?: AgentActivity | undefined;
   overrides?: Partial<AgentDetails> | undefined;
 }) {
@@ -136,7 +188,15 @@ export function buildDetails({ base, record, activity, overrides }: {
 }
 
 /** Build notification details for the custom message renderer. */
-export function buildNotificationDetails({ record, resultMaxLen, activity }: { record: AgentRecord; resultMaxLen: number; activity?: AgentActivity | undefined }): NotificationDetails {
+export function buildNotificationDetails({
+  record,
+  resultMaxLen,
+  activity,
+}: {
+  record: AgentRecord;
+  resultMaxLen: number;
+  activity?: AgentActivity | undefined;
+}): NotificationDetails {
   const totalTokens = getTokenCount(record.session);
 
   return {

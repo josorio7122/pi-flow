@@ -56,12 +56,7 @@ vi.mock("../config/skill-loader.js", () => ({
   preloadSkills: vi.fn(() => []),
 }));
 
-import {
-  createRunnerSettings,
-  normalizeMaxTurns,
-  resumeAgent,
-  runAgent,
-} from "./runner.js";
+import { createRunnerSettings, normalizeMaxTurns, resumeAgent, runAgent } from "./runner.js";
 
 function createSession(finalText: string) {
   const listeners: Array<(event: any) => void> = [];
@@ -105,7 +100,12 @@ describe("agent-runner final output capture", () => {
     const { session } = createSession("LOCKED");
     createAgentSession.mockResolvedValue({ session });
 
-    const result = await runAgent({ ctx, type: "Explore", prompt: "Say LOCKED", options: { pi, registry: mockRegistry } });
+    const result = await runAgent({
+      ctx,
+      type: "Explore",
+      prompt: "Say LOCKED",
+      options: { pi, registry: mockRegistry },
+    });
 
     expect(result.responseText).toBe("LOCKED");
   });
@@ -117,9 +117,7 @@ describe("agent-runner final output capture", () => {
     await runAgent({ ctx, type: "Explore", prompt: "Say BOUND", options: { pi, registry: mockRegistry } });
 
     expect(session.bindExtensions).toHaveBeenCalledTimes(1);
-    expect(session.bindExtensions).toHaveBeenCalledWith(
-      expect.objectContaining({ onError: expect.any(Function) }),
-    );
+    expect(session.bindExtensions).toHaveBeenCalledWith(expect.objectContaining({ onError: expect.any(Function) }));
 
     const bindOrder = session.bindExtensions.mock.invocationCallOrder[0]!;
     const promptOrder = session.prompt.mock.invocationCallOrder[0]!;

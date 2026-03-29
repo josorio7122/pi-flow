@@ -173,7 +173,12 @@ describe("buildAgentPrompt", () => {
       runInBackground: false,
       isolated: false,
     };
-    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env, parentSystemPrompt: "SECRET parent prompt content" });
+    const prompt = buildAgentPrompt({
+      config,
+      cwd: "/workspace",
+      env,
+      parentSystemPrompt: "SECRET parent prompt content",
+    });
     expect(prompt).toContain("You are a standalone agent.");
     expect(prompt).not.toContain("SECRET parent prompt content");
     expect(prompt).not.toContain("<sub_agent_context>");

@@ -14,7 +14,7 @@ const MODELS = [
 function makeRegistry(models = MODELS, available?: typeof MODELS) {
   return {
     find(provider: string, modelId: string) {
-      return models.find(m => m.provider === provider && m.id === modelId);
+      return models.find((m) => m.provider === provider && m.id === modelId);
     },
     getAll() {
       return models;

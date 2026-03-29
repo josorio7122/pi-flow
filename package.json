@@ -26,7 +26,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check src/",
     "lint:fix": "biome check --fix src/",
-    "check": "npm run lint && npm run typecheck && npm run test"
+    "check": "npm run lint && npm run typecheck && npm run test",
+    "format": "biome format --write src/"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.9",

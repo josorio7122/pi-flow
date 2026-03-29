@@ -22,7 +22,13 @@ export interface PromptExtras {
  * @param parentSystemPrompt  The parent agent's effective system prompt (for append mode).
  * @param extras  Optional extra sections to inject (memory, preloaded skills).
  */
-export function buildAgentPrompt({ config, cwd, env, parentSystemPrompt, extras }: {
+export function buildAgentPrompt({
+  config,
+  cwd,
+  env,
+  parentSystemPrompt,
+  extras,
+}: {
   config: AgentConfig;
   cwd: string;
   env: EnvInfo;
@@ -66,7 +72,15 @@ You are operating as a sub-agent invoked to handle a specific task.
       ? `\n\n<agent_instructions>\n${config.systemPrompt}\n</agent_instructions>`
       : "";
 
-    return envBlock + "\n\n<inherited_system_prompt>\n" + identity + "\n</inherited_system_prompt>\n\n" + bridge + customSection + extrasSuffix;
+    return (
+      envBlock +
+      "\n\n<inherited_system_prompt>\n" +
+      identity +
+      "\n</inherited_system_prompt>\n\n" +
+      bridge +
+      customSection +
+      extrasSuffix
+    );
   }
 
   // "replace" mode — env header + the config's full system prompt

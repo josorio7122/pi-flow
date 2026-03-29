@@ -67,9 +67,7 @@ export function createRegistry() {
     },
 
     getAvailableTypes() {
-      return [...agents.entries()]
-        .filter(([_, config]) => config.enabled !== false)
-        .map(([name]) => name);
+      return [...agents.entries()].filter(([_, config]) => config.enabled !== false).map(([name]) => name);
     },
 
     getAllTypes() {
@@ -77,15 +75,11 @@ export function createRegistry() {
     },
 
     getDefaultAgentNames() {
-      return [...agents.entries()]
-        .filter(([_, config]) => config.isDefault === true)
-        .map(([name]) => name);
+      return [...agents.entries()].filter(([_, config]) => config.isDefault === true).map(([name]) => name);
     },
 
     getUserAgentNames() {
-      return [...agents.entries()]
-        .filter(([_, config]) => config.isDefault !== true)
-        .map(([name]) => name);
+      return [...agents.entries()].filter(([_, config]) => config.isDefault !== true).map(([name]) => name);
     },
 
     isValidType(type: string) {
@@ -97,15 +91,15 @@ export function createRegistry() {
     // biome-ignore lint/suspicious/noExplicitAny: heterogeneous tool array requires any
     getMemoryTools(cwd: string, existingToolNames: Set<string>): AgentTool<any>[] {
       return ["read", "write", "edit"]
-        .filter(n => !existingToolNames.has(n) && n in TOOL_FACTORIES)
-        .map(n => TOOL_FACTORIES[n]!(cwd));
+        .filter((n) => !existingToolNames.has(n) && n in TOOL_FACTORIES)
+        .map((n) => TOOL_FACTORIES[n]!(cwd));
     },
 
     // biome-ignore lint/suspicious/noExplicitAny: heterogeneous tool array requires any
     getReadOnlyMemoryTools(cwd: string, existingToolNames: Set<string>): AgentTool<any>[] {
       return ["read"]
-        .filter(n => !existingToolNames.has(n) && n in TOOL_FACTORIES)
-        .map(n => TOOL_FACTORIES[n]!(cwd));
+        .filter((n) => !existingToolNames.has(n) && n in TOOL_FACTORIES)
+        .map((n) => TOOL_FACTORIES[n]!(cwd));
     },
 
     // biome-ignore lint/suspicious/noExplicitAny: heterogeneous tool array requires any

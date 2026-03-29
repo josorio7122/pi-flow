@@ -129,8 +129,7 @@ export function createGroupJoinManager(deliverCb: DeliveryCallback, groupTimeout
   }
 
   return {
-    registerGroup: (groupId: string, agentIds: string[]) =>
-      registerGroup(state, groupId, agentIds),
+    registerGroup: (groupId: string, agentIds: string[]) => registerGroup(state, groupId, agentIds),
 
     onAgentComplete: (record: AgentRecord): "delivered" | "held" | "pass" => {
       const result = processCompletion(state, record);

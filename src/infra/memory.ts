@@ -9,7 +9,7 @@
 
 import { existsSync, lstatSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, } from "node:path";
+import { join } from "node:path";
 import type { MemoryScope } from "../types.js";
 
 /** Maximum lines to read from MEMORY.md */
@@ -114,8 +114,15 @@ export function buildMemoryBlock({ agentName, scope, cwd }: { agentName: string;
 }
 
 /** Pure — builds the memory prompt string from already-read data. */
-function buildMemoryPrompt({ memoryDir, scope, existingMemory }: { memoryDir: string; scope: MemoryScope; existingMemory: string | undefined }) {
-
+function buildMemoryPrompt({
+  memoryDir,
+  scope,
+  existingMemory,
+}: {
+  memoryDir: string;
+  scope: MemoryScope;
+  existingMemory: string | undefined;
+}) {
   const header = `# Agent Memory
 
 You have a persistent memory directory at: ${memoryDir}/
@@ -151,15 +158,28 @@ This memory persists across sessions. Use it to build up knowledge over time.`;
  * Build a read-only memory block for agents that lack write/edit tools.
  * Does NOT create the memory directory — agents can only consume existing memory.
  */
-export function buildReadOnlyMemoryBlock({ agentName, scope, cwd }: { agentName: string; scope: MemoryScope; cwd: string }) {
+export function buildReadOnlyMemoryBlock({
+  agentName,
+  scope,
+  cwd,
+}: {
+  agentName: string;
+  scope: MemoryScope;
+  cwd: string;
+}) {
   const memoryDir = resolveMemoryDir({ agentName, scope, cwd });
   const existingMemory = readMemoryIndex(memoryDir);
   return buildReadOnlyMemoryPrompt({ scope, existingMemory });
 }
 
 /** Pure — builds the read-only memory prompt string from already-read data. */
-function buildReadOnlyMemoryPrompt({ scope, existingMemory }: { scope: MemoryScope; existingMemory: string | undefined }) {
-
+function buildReadOnlyMemoryPrompt({
+  scope,
+  existingMemory,
+}: {
+  scope: MemoryScope;
+  existingMemory: string | undefined;
+}) {
   const header = `# Agent Memory (read-only)
 
 Memory scope: ${scope}
