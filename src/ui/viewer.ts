@@ -8,7 +8,7 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { AgentSession, Theme } from "@mariozechner/pi-coding-agent";
 import { type Component, matchesKey, type TUI, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
-import { getConfig } from "../agents/registry.js";
+import type { Registry } from "../agents/registry.js";
 import { extractText } from "../infra/context.js";
 import type { AgentRecord } from "../types.js";
 import { type AgentActivity, describeActivity, formatDuration, formatTokens, getDisplayName, getPromptModeLabel } from "./formatters.js";
@@ -31,6 +31,7 @@ export class ConversationViewer implements Component {
     private activity: AgentActivity | undefined,
     private theme: Theme,
     private done: (result: undefined) => void,
+    private registry: Registry,
   ) {
     this.unsubscribe = session.subscribe(() => {
       if (this.closed) return;
@@ -89,7 +90,7 @@ export class ConversationViewer implements Component {
 
     // Header
     lines.push(hrTop);
-    const cfg = getConfig(this.record.type);
+    const cfg = this.registry.getConfig(this.record.type);
     const name = getDisplayName(this.record.type, cfg.displayName);
     const modeLabel = getPromptModeLabel(cfg.promptMode);
     const modeTag = modeLabel ? ` ${th.fg("dim", `(${modeLabel})`)}` : "";

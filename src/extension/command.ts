@@ -7,7 +7,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ModelRegistry } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
-import { BUILTIN_TOOL_NAMES, getAgentConfig, getAllTypes, resolveType } from "../agents/registry.js";
+import { BUILTIN_TOOL_NAMES, type Registry } from "../agents/registry.js";
 import { normalizeMaxTurns, type RunnerSettings } from "../agents/runner.js";
 import { resolveModel } from "../config/model-resolver.js";
 import type { AgentConfig, AgentRecord, JoinMode } from "../types.js";
@@ -21,6 +21,7 @@ export interface AgentsCommandDeps {
   getDefaultJoinMode: () => JoinMode;
   setDefaultJoinMode: (mode: JoinMode) => void;
   runnerSettings: RunnerSettings;
+  registry: Registry;
 }
 
 function getModelLabelFromConfig(modelStr: string) {
@@ -33,7 +34,8 @@ function getModelLabelFromConfig(modelStr: string) {
 }
 
 export function registerAgentsCommand(deps: AgentsCommandDeps) {
-  const { pi, manager, agentActivity, reloadCustomAgents, getDefaultJoinMode, setDefaultJoinMode, runnerSettings } = deps;
+  const { pi, manager, agentActivity, reloadCustomAgents, getDefaultJoinMode, setDefaultJoinMode, runnerSettings, registry } = deps;
+  const { getAgentConfig, getAllTypes, resolveType } = registry;
 
   const projectAgentsDir = () => join(process.cwd(), ".pi", "agents");
   const personalAgentsDir = () => join(homedir(), ".pi", "agent", "agents");
@@ -183,7 +185,7 @@ export function registerAgentsCommand(deps: AgentsCommandDeps) {
 
     await ctx.ui.custom<undefined>(
       (tui, theme, _keybindings, done) => {
-        return new ConversationViewer(tui, session, record, activity, theme, done);
+        return new ConversationViewer(tui, session, record, activity, theme, done, registry);
       },
       {
         overlay: true,

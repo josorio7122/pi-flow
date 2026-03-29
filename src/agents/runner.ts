@@ -20,7 +20,7 @@ import { buildParentContext, extractText } from "../infra/context.js";
 import { detectEnv } from "../infra/env.js";
 import { buildMemoryBlock, buildReadOnlyMemoryBlock } from "../infra/memory.js";
 import type { SubagentType } from "../types.js";
-import { getAgentConfig, getConfig, getMemoryTools, getReadOnlyMemoryTools, getToolsForType } from "./registry.js";
+import type { Registry } from "./registry.js";
 
 /** Names of tools registered by this extension that subagents must NOT inherit. */
 const EXCLUDED_TOOL_NAMES = ["Agent", "get_subagent_result", "steer_subagent"];
@@ -97,6 +97,8 @@ export interface RunOptions {
   onTurnEnd?: ((turnCount: number) => void) | undefined;
   /** Runner settings (max turns defaults, grace turns). */
   settings?: RunnerSettings | undefined;
+  /** Agent registry for resolving types and tools. */
+  registry?: Registry | undefined;
 }
 
 export interface RunResult {
@@ -153,8 +155,8 @@ export async function runAgent({ ctx, type, prompt, options }: {
   prompt: string;
   options: RunOptions;
 }) {
-  const config = getConfig(type);
-  const agentConfig = getAgentConfig(type);
+  const config = options.registry!.getConfig(type);
+  const agentConfig = options.registry!.getAgentConfig(type);
 
   // Resolve working directory: worktree override > parent cwd
   const effectiveCwd = options.cwd ?? ctx.cwd;
@@ -179,7 +181,7 @@ export async function runAgent({ ctx, type, prompt, options }: {
     }
   }
 
-  let tools = getToolsForType(type, effectiveCwd);
+  let tools = options.registry!.getToolsForType(type, effectiveCwd);
 
   // Persistent memory: detect write capability and branch accordingly.
   // Account for disallowedTools — a tool in the base set but on the denylist is not truly available.
@@ -191,13 +193,13 @@ export async function runAgent({ ctx, type, prompt, options }: {
 
     if (hasWriteTools) {
       // Read-write memory: add any missing memory tools (read/write/edit)
-      const memTools = getMemoryTools(effectiveCwd, existingNames);
+      const memTools = options.registry!.getMemoryTools(effectiveCwd, existingNames);
       if (memTools.length > 0) tools = [...tools, ...memTools];
       extras.memoryBlock = buildMemoryBlock({ agentName: agentConfig.name, scope: agentConfig.memory, cwd: effectiveCwd });
     } else {
       // Read-only memory: only add read tool, use read-only prompt
       if (!existingNames.has("read")) {
-        const readTools = getReadOnlyMemoryTools(effectiveCwd, existingNames);
+        const readTools = options.registry!.getReadOnlyMemoryTools(effectiveCwd, existingNames);
         if (readTools.length > 0) tools = [...tools, ...readTools];
       }
       extras.memoryBlock = buildReadOnlyMemoryBlock({ agentName: agentConfig.name, scope: agentConfig.memory, cwd: effectiveCwd });

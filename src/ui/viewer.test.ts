@@ -71,6 +71,10 @@ function assertAllLinesFit(lines: string[], width: number) {
 
 // ── Tests ──────────────────────────────────────────────────────────────
 
+const mockRegistry = {
+  getConfig: () => ({ displayName: "Agent", description: "", builtinToolNames: [], extensions: true, skills: true, promptMode: "append" as const }),
+} as any;
+
 beforeEach(() => {
   wrapOverride = null;
 });
@@ -82,7 +86,7 @@ describe("ConversationViewer", () => {
     it("no line exceeds width with empty messages", () => {
       for (const w of widths) {
         const viewer = new ConversationViewer(
-          mockTui(30, w), mockSession([]), mockRecord(), undefined, ansiTheme(), vi.fn(),
+          mockTui(30, w), mockSession([]), mockRecord(), undefined, ansiTheme(), vi.fn(), mockRegistry,
         );
         assertAllLinesFit(viewer.render(w), w);
       }
@@ -95,7 +99,7 @@ describe("ConversationViewer", () => {
       ];
       for (const w of widths) {
         const viewer = new ConversationViewer(
-          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(),
+          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(), mockRegistry,
         );
         assertAllLinesFit(viewer.render(w), w);
       }
@@ -110,7 +114,7 @@ describe("ConversationViewer", () => {
       ];
       for (const w of widths) {
         const viewer = new ConversationViewer(
-          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(),
+          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(), mockRegistry,
         );
         assertAllLinesFit(viewer.render(w), w);
       }
@@ -123,7 +127,7 @@ describe("ConversationViewer", () => {
       ];
       for (const w of widths) {
         const viewer = new ConversationViewer(
-          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(),
+          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(), mockRegistry,
         );
         assertAllLinesFit(viewer.render(w), w);
       }
@@ -136,7 +140,7 @@ describe("ConversationViewer", () => {
       ];
       for (const w of widths) {
         const viewer = new ConversationViewer(
-          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(),
+          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(), mockRegistry,
         );
         assertAllLinesFit(viewer.render(w), w);
       }
@@ -151,7 +155,7 @@ describe("ConversationViewer", () => {
       ];
       for (const w of widths) {
         const viewer = new ConversationViewer(
-          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(),
+          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(), mockRegistry,
         );
         assertAllLinesFit(viewer.render(w), w);
       }
@@ -167,7 +171,7 @@ describe("ConversationViewer", () => {
       ];
       for (const w of widths) {
         const viewer = new ConversationViewer(
-          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(),
+          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(), mockRegistry,
         );
         assertAllLinesFit(viewer.render(w), w);
       }
@@ -185,7 +189,7 @@ describe("ConversationViewer", () => {
       ];
       for (const w of widths) {
         const viewer = new ConversationViewer(
-          mockTui(30, w), mockSession(messages), mockRecord({ status: "running" }), activity as any, ansiTheme(), vi.fn(),
+          mockTui(30, w), mockSession(messages), mockRecord({ status: "running" }), activity as any, ansiTheme(), vi.fn(), mockRegistry,
         );
         assertAllLinesFit(viewer.render(w), w);
       }
@@ -203,7 +207,7 @@ describe("ConversationViewer", () => {
       ];
       for (const w of widths) {
         const viewer = new ConversationViewer(
-          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(),
+          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(), mockRegistry,
         );
         assertAllLinesFit(viewer.render(w), w);
       }
@@ -216,7 +220,7 @@ describe("ConversationViewer", () => {
       ];
       for (const w of [8, 10, 15, 20]) {
         const viewer = new ConversationViewer(
-          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(),
+          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(), mockRegistry,
         );
         assertAllLinesFit(viewer.render(w), w);
       }
@@ -229,7 +233,7 @@ describe("ConversationViewer", () => {
       ];
       for (const w of widths) {
         const viewer = new ConversationViewer(
-          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(),
+          mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(), mockRegistry,
         );
         assertAllLinesFit(viewer.render(w), w);
       }
@@ -262,7 +266,7 @@ describe("ConversationViewer", () => {
         { role: "toolResult", toolUseId: "t1", content: [{ type: "text", text: "output" }] },
       ];
       const viewer = new ConversationViewer(
-        mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(),
+        mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(), mockRegistry,
       );
       assertAllLinesFit(callBuildContentLines(viewer, w), w);
     });
@@ -273,7 +277,7 @@ describe("ConversationViewer", () => {
 
       const messages = [{ role: "user", content: "hello" }];
       const viewer = new ConversationViewer(
-        mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(),
+        mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(), mockRegistry,
       );
       assertAllLinesFit(callBuildContentLines(viewer, w), w);
     });
@@ -286,7 +290,7 @@ describe("ConversationViewer", () => {
         { role: "assistant", content: [{ type: "text", text: "response" }] },
       ];
       const viewer = new ConversationViewer(
-        mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(),
+        mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(), mockRegistry,
       );
       assertAllLinesFit(callBuildContentLines(viewer, w), w);
     });
@@ -302,7 +306,7 @@ describe("ConversationViewer", () => {
         },
       ];
       const viewer = new ConversationViewer(
-        mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(),
+        mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(), mockRegistry,
       );
       assertAllLinesFit(callBuildContentLines(viewer, w), w);
     });
@@ -315,7 +319,7 @@ describe("ConversationViewer", () => {
         { role: "toolResult", toolUseId: "t1", content: [{ type: "text", text: "output" }] },
       ];
       const viewer = new ConversationViewer(
-        mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(),
+        mockTui(30, w), mockSession(messages), mockRecord(), undefined, ansiTheme(), vi.fn(), mockRegistry,
       );
       assertAllLinesFit(callBuildContentLines(viewer, w), w);
     });

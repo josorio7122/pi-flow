@@ -13,16 +13,16 @@ vi.mock("@mariozechner/pi-coding-agent", () => ({
   SettingsManager: { create: vi.fn(() => ({ kind: "settings-manager" })) },
 }));
 
-vi.mock("./registry.js", () => ({
-  getConfig: vi.fn(() => ({
+const mockRegistry = {
+  getConfig: () => ({
     displayName: "Explore",
     description: "Explore",
     builtinToolNames: ["read"],
     extensions: false,
     skills: false,
     promptMode: "replace",
-  })),
-  getAgentConfig: vi.fn(() => ({
+  }),
+  getAgentConfig: () => ({
     name: "Explore",
     description: "Explore",
     builtinToolNames: ["read"],
@@ -33,11 +33,11 @@ vi.mock("./registry.js", () => ({
     inheritContext: false,
     runInBackground: false,
     isolated: false,
-  })),
-  getMemoryTools: vi.fn(() => []),
-  getReadOnlyMemoryTools: vi.fn(() => []),
-  getToolsForType: vi.fn(() => [{ name: "read" }]),
-}));
+  }),
+  getMemoryTools: () => [],
+  getReadOnlyMemoryTools: () => [],
+  getToolsForType: () => [{ name: "read" }],
+} as any;
 
 vi.mock("../infra/env.js", () => ({
   detectEnv: vi.fn(async () => ({ isGitRepo: false, branch: "", platform: "linux" })),
@@ -105,7 +105,7 @@ describe("agent-runner final output capture", () => {
     const { session } = createSession("LOCKED");
     createAgentSession.mockResolvedValue({ session });
 
-    const result = await runAgent({ ctx, type: "Explore", prompt: "Say LOCKED", options: { pi } });
+    const result = await runAgent({ ctx, type: "Explore", prompt: "Say LOCKED", options: { pi, registry: mockRegistry } });
 
     expect(result.responseText).toBe("LOCKED");
   });
@@ -114,7 +114,7 @@ describe("agent-runner final output capture", () => {
     const { session } = createSession("BOUND");
     createAgentSession.mockResolvedValue({ session });
 
-    await runAgent({ ctx, type: "Explore", prompt: "Say BOUND", options: { pi } });
+    await runAgent({ ctx, type: "Explore", prompt: "Say BOUND", options: { pi, registry: mockRegistry } });
 
     expect(session.bindExtensions).toHaveBeenCalledTimes(1);
     expect(session.bindExtensions).toHaveBeenCalledWith(

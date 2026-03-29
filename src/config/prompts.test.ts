@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { getAgentConfig, registerAgents } from "../agents/registry.js";
+import { createRegistry } from "../agents/registry.js";
+
+const registry = createRegistry();
+const registerAgents = registry.register.bind(registry);
+const getAgentConfig = registry.getAgentConfig.bind(registry);
+
 import type { AgentConfig, EnvInfo } from "../types.js";
 import { buildAgentPrompt } from "./prompts.js";
 

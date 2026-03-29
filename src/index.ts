@@ -18,7 +18,7 @@ import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { loadCustomAgents } from "./agents/custom.js";
 import { AgentManager } from "./agents/manager.js";
-import { BUILTIN_TOOL_NAMES, getAgentConfig, getAllTypes, getAvailableTypes, getDefaultAgentNames, getUserAgentNames, registerAgents, resolveType } from "./agents/registry.js";
+import { BUILTIN_TOOL_NAMES, createRegistry } from "./agents/registry.js";
 import { createRunnerSettings, getAgentConversation, normalizeMaxTurns, steerAgent } from "./agents/runner.js";
 import { resolveAgentInvocationConfig, resolveJoinMode } from "./config/invocation.js";
 import { resolveModel } from "./config/model-resolver.js";
@@ -44,6 +44,7 @@ import { AgentWidget } from "./ui/widget.js";
 
 export default function (pi: ExtensionAPI) {
   const runnerSettings = createRunnerSettings();
+  const registry = createRegistry();
 
   // ---- Agent manager ----
   pi.registerMessageRenderer<NotificationDetails>(
@@ -97,7 +98,7 @@ export default function (pi: ExtensionAPI) {
   /** Reload agents from .pi/agents/*.md and merge with defaults (called on init and each Agent invocation). */
   const reloadCustomAgents = () => {
     const userAgents = loadCustomAgents(process.cwd());
-    registerAgents(userAgents);
+    registry.register(userAgents);
   };
 
   // Initial load
@@ -261,6 +262,7 @@ export default function (pi: ExtensionAPI) {
     });
   });
   manager.setRunnerSettings(runnerSettings);
+  manager.setRegistry(registry);
 
   // Expose manager via Symbol.for() global registry for cross-package access.
   // Standard Node.js pattern for cross-package singletons (used by OpenTelemetry, etc.).
@@ -309,7 +311,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   // Live widget: show running agents above editor
-  const widget = new AgentWidget(manager, agentActivity);
+  const widget = new AgentWidget(manager, agentActivity, registry);
 
   // ---- Join mode configuration ----
   let defaultJoinMode: JoinMode = 'smart';
@@ -367,17 +369,17 @@ export default function (pi: ExtensionAPI) {
 
   /** Build the full type list text dynamically from the unified registry. */
   const buildTypeListText = () => {
-    const defaultNames = getDefaultAgentNames();
-    const userNames = getUserAgentNames();
+    const defaultNames = registry.getDefaultAgentNames();
+    const userNames = registry.getUserAgentNames();
 
     const defaultDescs = defaultNames.map((name) => {
-      const cfg = getAgentConfig(name);
+      const cfg = registry.getAgentConfig(name);
       const modelSuffix = cfg?.model ? ` (${getModelLabelFromConfig(cfg.model)})` : "";
       return `- ${name}: ${cfg?.description ?? name}${modelSuffix}`;
     });
 
     const customDescs = userNames.map((name) => {
-      const cfg = getAgentConfig(name);
+      const cfg = registry.getAgentConfig(name);
       return `- ${name}: ${cfg?.description ?? name}`;
     });
 
@@ -435,7 +437,7 @@ Guidelines:
         description: "A short (3-5 word) description of the task (shown in UI).",
       }),
       subagent_type: Type.String({
-        description: `The type of specialized agent to use. Available types: ${getAvailableTypes().join(", ")}. Custom agents from .pi/agents/*.md (project) or ~/.pi/agent/agents/*.md (global) are also available.`,
+        description: `The type of specialized agent to use. Available types: ${registry.getAvailableTypes().join(", ")}. Custom agents from .pi/agents/*.md (project) or ~/.pi/agent/agents/*.md (global) are also available.`,
       }),
       model: Type.Optional(
         Type.String({
@@ -484,7 +486,7 @@ Guidelines:
     // ---- Custom rendering: Claude Code style ----
 
     renderCall(args, theme) {
-      const argConfig = args.subagent_type ? getAgentConfig(args.subagent_type) : undefined;
+      const argConfig = args.subagent_type ? registry.getAgentConfig(args.subagent_type) : undefined;
       const displayName = args.subagent_type ? getDisplayName(args.subagent_type, argConfig?.displayName) : "Agent";
       const desc = args.description ?? "";
       return new Text("▸ " + theme.fg("toolTitle", theme.bold(displayName)) + (desc ? "  " + theme.fg("muted", desc) : ""), 0, 0);
@@ -582,12 +584,12 @@ Guidelines:
       reloadCustomAgents();
 
       const rawType = params.subagent_type as SubagentType;
-      const resolved = resolveType(rawType);
+      const resolved = registry.resolveType(rawType);
       const subagentType = resolved ?? "general-purpose";
       const fellBack = resolved === undefined;
 
       // Get agent config (if any)
-      const customConfig = getAgentConfig(subagentType);
+      const customConfig = registry.getAgentConfig(subagentType);
       const displayName = getDisplayName(subagentType, customConfig?.displayName);
 
       const resolvedConfig = resolveAgentInvocationConfig(customConfig, params);
@@ -857,7 +859,7 @@ Guidelines:
         await record.promise;
       }
 
-      const recConfig = getAgentConfig(record.type);
+      const recConfig = registry.getAgentConfig(record.type);
       const displayName = getDisplayName(record.type, recConfig?.displayName);
       const duration = formatDuration(record.startedAt, record.completedAt);
       const tokens = safeFormatTokens(record.session);
@@ -937,6 +939,6 @@ Guidelines:
   });
 
   // ---- /agents interactive menu ----
-  registerAgentsCommand({ pi, manager, agentActivity, reloadCustomAgents, getDefaultJoinMode, setDefaultJoinMode, runnerSettings });
+  registerAgentsCommand({ pi, manager, agentActivity, reloadCustomAgents, getDefaultJoinMode, setDefaultJoinMode, runnerSettings, registry });
 }
 

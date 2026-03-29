@@ -12,6 +12,7 @@ import type { Api, Model } from "@mariozechner/pi-ai";
 import type { AgentSession, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { cleanupWorktree, createWorktree, pruneWorktrees, } from "../infra/worktree.js";
 import type { AgentRecord, IsolationMode, SubagentType } from "../types.js";
+import type { Registry } from "./registry.js";
 import { type RunnerSettings, resumeAgent, runAgent, type ToolActivity } from "./runner.js";
 
 export type OnAgentComplete = (record: AgentRecord) => void;
@@ -63,6 +64,7 @@ export class AgentManager {
   private runningBackground = 0;
 
   private settings: RunnerSettings | undefined;
+  private registry: Registry | undefined;
 
   constructor(onComplete?: OnAgentComplete | undefined, maxConcurrent = DEFAULT_MAX_CONCURRENT, onStart?: OnAgentStart | undefined) {
     this.onComplete = onComplete;
@@ -74,6 +76,10 @@ export class AgentManager {
 
   setRunnerSettings(s: RunnerSettings) {
     this.settings = s;
+  }
+
+  setRegistry(r: Registry) {
+    this.registry = r;
   }
 
   /** Update the max concurrent background agents limit. */
@@ -143,6 +149,7 @@ export class AgentManager {
 
     const promise = runAgent({ ctx, type, prompt: effectivePrompt, options: {
       settings: this.settings,
+      registry: this.registry,
       pi,
       model: options.model,
       maxTurns: options.maxTurns,

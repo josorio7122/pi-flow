@@ -8,7 +8,7 @@
 import type { ExtensionUIContext, Theme } from "@mariozechner/pi-coding-agent";
 import { type TUI, truncateToWidth } from "@mariozechner/pi-tui";
 import type { AgentManager } from "../agents/manager.js";
-import { getConfig } from "../agents/registry.js";
+import type { Registry } from "../agents/registry.js";
 import type { SubagentType } from "../types.js";
 import {
   type AgentActivity,
@@ -33,8 +33,9 @@ export function renderFinishedLine(
   a: { id: string; type: SubagentType; status: string; description: string; toolUses: number; startedAt: number; completedAt?: number | undefined; error?: string | undefined },
   theme: Theme,
   activity?: AgentActivity,
+  config?: { displayName: string; promptMode: "replace" | "append" },
 ) {
-  const cfg = getConfig(a.type);
+  const cfg = config ?? { displayName: a.type, promptMode: "replace" as const };
   const name = getDisplayName(a.type, cfg.displayName);
   const modeLabel = getPromptModeLabel(cfg.promptMode);
   const duration = formatMs((a.completedAt ?? Date.now()) - a.startedAt);
@@ -87,6 +88,7 @@ export class AgentWidget {
   constructor(
     private manager: AgentManager,
     private agentActivity: Map<string, AgentActivity>,
+    private registry: Registry,
   ) {}
 
   /** Set the UI context (grabbed from first tool execution). */
@@ -137,7 +139,7 @@ export class AgentWidget {
 
   /** Render a finished agent line — delegates to pure function. */
   private renderFinishedLine(a: { id: string; type: SubagentType; status: string; description: string; toolUses: number; startedAt: number; completedAt?: number | undefined; error?: string | undefined }, theme: Theme) {
-    return renderFinishedLine(a, theme, this.agentActivity.get(a.id));
+    return renderFinishedLine(a, theme, this.agentActivity.get(a.id), this.registry.getConfig(a.type));
   }
 
   /**
@@ -175,7 +177,7 @@ export class AgentWidget {
 
     const runningLines: string[][] = []; // each entry is [header, activity]
     for (const a of running) {
-      const rcfg = getConfig(a.type);
+      const rcfg = this.registry.getConfig(a.type);
       const name = getDisplayName(a.type, rcfg.displayName);
       const modeLabel = getPromptModeLabel(rcfg.promptMode);
       const modeTag = modeLabel ? ` ${theme.fg("dim", `(${modeLabel})`)}` : "";

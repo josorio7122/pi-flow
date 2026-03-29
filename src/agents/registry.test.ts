@@ -1,19 +1,19 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { AgentConfig } from "../types.js";
-import {
-  BUILTIN_TOOL_NAMES,
-  getAgentConfig,
-  getAvailableTypes,
-  getConfig,
-  getDefaultAgentNames,
-  getMemoryTools,
-  getReadOnlyMemoryTools,
-  getToolsForType,
-  getUserAgentNames,
-  isValidType,
-  registerAgents,
-  resolveType,
-} from "./registry.js";
+import { BUILTIN_TOOL_NAMES, createRegistry } from "./registry.js";
+
+let registry = createRegistry();
+const registerAgents = registry.register.bind(registry);
+const getAgentConfig = registry.getAgentConfig.bind(registry);
+const getAvailableTypes = registry.getAvailableTypes.bind(registry);
+const getConfig = registry.getConfig.bind(registry);
+const getDefaultAgentNames = registry.getDefaultAgentNames.bind(registry);
+const getMemoryTools = registry.getMemoryTools.bind(registry);
+const getReadOnlyMemoryTools = registry.getReadOnlyMemoryTools.bind(registry);
+const getToolsForType = registry.getToolsForType.bind(registry);
+const getUserAgentNames = registry.getUserAgentNames.bind(registry);
+const isValidType = registry.isValidType.bind(registry);
+const resolveType = registry.resolveType.bind(registry);
 
 function makeAgentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {
