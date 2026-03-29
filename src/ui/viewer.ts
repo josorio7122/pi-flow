@@ -6,7 +6,7 @@
  */
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import type { AgentSession, Theme } from "@mariozechner/pi-coding-agent";
+import type { AgentSession, Theme, ThemeColor } from "@mariozechner/pi-coding-agent";
 import { type Component, matchesKey, type TUI, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
 import type { Registry } from "../agents/registry.js";
 import { extractText } from "../infra/context.js";
@@ -94,13 +94,12 @@ export class ConversationViewer implements Component {
     const name = getDisplayName(this.record.type, cfg.displayName);
     const modeLabel = getPromptModeLabel(cfg.promptMode);
     const modeTag = modeLabel ? ` ${th.fg("dim", `(${modeLabel})`)}` : "";
-    const statusIcon = this.record.status === "running"
-      ? th.fg("accent", "●")
-      : this.record.status === "completed"
-        ? th.fg("success", "✓")
-        : this.record.status === "error"
-          ? th.fg("error", "✗")
-          : th.fg("dim", "○");
+    const statusIcons: Record<string, [ThemeColor, string]> = {
+      running: ["accent", "●"], completed: ["success", "✓"], steered: ["warning", "✓"],
+      error: ["error", "✗"], aborted: ["error", "✗"], stopped: ["dim", "■"],
+    };
+    const [iconColor, iconChar] = statusIcons[this.record.status] ?? ["dim", "○"];
+    const statusIcon = th.fg(iconColor, iconChar);
     const duration = formatDuration(this.record.startedAt, this.record.completedAt);
 
     const headerParts: string[] = [duration];
@@ -195,59 +194,10 @@ export function buildConversationLines({ messages, activity, status, width, them
 
     let needsSeparator = false;
     for (const msg of messages) {
-      if (msg.role === "user") {
-        const text = typeof msg.content === "string"
-          ? msg.content
-          : extractText(msg.content);
-        if (!text.trim()) continue;
-        if (needsSeparator) lines.push(th.fg("dim", "───"));
-        lines.push(th.fg("accent", "[User]"));
-        for (const line of wrapTextWithAnsi(text.trim(), width)) {
-          lines.push(line);
-        }
-      } else if (msg.role === "assistant") {
-        const textParts: string[] = [];
-        const toolCalls: string[] = [];
-        for (const c of msg.content) {
-          if (c.type === "text" && c.text) textParts.push(c.text);
-          else if (c.type === "toolCall") {
-            toolCalls.push(c.name ?? "unknown");
-          }
-        }
-        if (needsSeparator) lines.push(th.fg("dim", "───"));
-        lines.push(th.bold("[Assistant]"));
-        if (textParts.length > 0) {
-          for (const line of wrapTextWithAnsi(textParts.join("\n").trim(), width)) {
-            lines.push(line);
-          }
-        }
-        for (const name of toolCalls) {
-          lines.push(truncateToWidth(th.fg("muted", `  [Tool: ${name}]`), width));
-        }
-      } else if (msg.role === "toolResult") {
-        const text = extractText(msg.content);
-        const truncated = text.length > 500 ? text.slice(0, 500) + "... (truncated)" : text;
-        if (!truncated.trim()) continue;
-        if (needsSeparator) lines.push(th.fg("dim", "───"));
-        lines.push(th.fg("dim", "[Result]"));
-        for (const line of wrapTextWithAnsi(truncated.trim(), width)) {
-          lines.push(th.fg("dim", line));
-        }
-      } else if ((msg as { role: string }).role === "bashExecution") {
-        const bash = msg as { command?: string; output?: string };
-        if (needsSeparator) lines.push(th.fg("dim", "───"));
-        lines.push(truncateToWidth(th.fg("muted", `  $ ${bash.command}`), width));
-        if (bash.output?.trim()) {
-          const out = bash.output.length > 500
-            ? bash.output.slice(0, 500) + "... (truncated)"
-            : bash.output;
-          for (const line of wrapTextWithAnsi(out.trim(), width)) {
-            lines.push(th.fg("dim", line));
-          }
-        }
-      } else {
-        continue;
-      }
+      const rendered = renderMessage(msg, th, width);
+      if (!rendered) continue;
+      if (needsSeparator) lines.push(th.fg("dim", "───"));
+      lines.push(...rendered);
       needsSeparator = true;
     }
 
@@ -259,4 +209,39 @@ export function buildConversationLines({ messages, activity, status, width, them
     }
 
     return lines.map(l => truncateToWidth(l, width));
+}
+
+/** Render a single message to lines, or undefined to skip. */
+function renderMessage(msg: AgentMessage, th: Theme, width: number) {
+  switch (msg.role) {
+    case "user": {
+      const text = typeof msg.content === "string" ? msg.content : extractText(msg.content);
+      if (!text.trim()) return undefined;
+      return [th.fg("accent", "[User]"), ...wrapTextWithAnsi(text.trim(), width)];
+    }
+    case "assistant": {
+      const textParts = msg.content.filter(c => c.type === "text" && c.text).map(c => (c as { text: string }).text);
+      const toolCalls = msg.content.filter(c => c.type === "toolCall").map(c => (c as { name: string }).name ?? "unknown");
+      const lines: string[] = [th.bold("[Assistant]")];
+      if (textParts.length > 0) lines.push(...wrapTextWithAnsi(textParts.join("\n").trim(), width));
+      for (const name of toolCalls) lines.push(truncateToWidth(th.fg("muted", `  [Tool: ${name}]`), width));
+      return lines;
+    }
+    case "toolResult": {
+      const text = extractText(msg.content);
+      const truncated = text.length > 500 ? text.slice(0, 500) + "... (truncated)" : text;
+      if (!truncated.trim()) return undefined;
+      return [th.fg("dim", "[Result]"), ...wrapTextWithAnsi(truncated.trim(), width).map(l => th.fg("dim", l))];
+    }
+    default: {
+      const raw = msg as { role: string; command?: string; output?: string };
+      if (raw.role !== "bashExecution") return undefined;
+      const lines = [truncateToWidth(th.fg("muted", `  $ ${raw.command}`), width)];
+      if (raw.output?.trim()) {
+        const out = raw.output.length > 500 ? raw.output.slice(0, 500) + "... (truncated)" : raw.output;
+        lines.push(...wrapTextWithAnsi(out.trim(), width).map(l => th.fg("dim", l)));
+      }
+      return lines;
+    }
+  }
 }

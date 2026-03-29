@@ -11,6 +11,19 @@ interface ModelEntry {
   provider: string;
 }
 
+/** Score a model against a query — higher is better match. */
+function scoreModel(m: ModelEntry, query: string) {
+  const id = m.id.toLowerCase();
+  const name = m.name.toLowerCase();
+  const full = `${m.provider}/${m.id}`.toLowerCase();
+
+  if (id === query || full === query) return 100;
+  if (id.includes(query) || full.includes(query)) return 60 + (query.length / id.length) * 30;
+  if (name.includes(query)) return 40 + (query.length / name.length) * 20;
+  if (query.split(/[\s\-/]+/).every(part => id.includes(part) || name.includes(part) || m.provider.toLowerCase().includes(part))) return 20;
+  return 0;
+}
+
 /**
  * Resolve a model string to a Model instance.
  * Tries exact match first ("provider/modelId"), then fuzzy match against all available models.
@@ -37,35 +50,12 @@ export function resolveModel(
 
   // 2. Fuzzy match against available models
   const query = input.toLowerCase();
+  const best = all
+    .map(m => ({ model: m, score: scoreModel(m, query) }))
+    .reduce((a, b) => (b.score > a.score ? b : a), { model: undefined as ModelEntry | undefined, score: 0 });
 
-  // Score each model: prefer exact id match > id contains > name contains > provider+id contains
-  let bestMatch: ModelEntry | undefined;
-  let bestScore = 0;
-
-  for (const m of all) {
-    const id = m.id.toLowerCase();
-    const name = m.name.toLowerCase();
-    const full = `${m.provider}/${m.id}`.toLowerCase();
-
-    let score = 0;
-    if (id === query || full === query) {
-      score = 100; // exact
-    } else if (id.includes(query) || full.includes(query)) {
-      score = 60 + (query.length / id.length) * 30; // substring, prefer tighter matches
-    } else if (name.includes(query)) {
-      score = 40 + (query.length / name.length) * 20;
-    } else if (query.split(/[\s\-/]+/).every(part => id.includes(part) || name.includes(part) || m.provider.toLowerCase().includes(part))) {
-      score = 20; // all parts present somewhere
-    }
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = m;
-    }
-  }
-
-  if (bestMatch && bestScore >= 20) {
-    const found = registry.find(bestMatch.provider, bestMatch.id);
+  if (best.model && best.score >= 20) {
+    const found = registry.find(best.model.provider, best.model.id);
     if (found) return found;
   }
 

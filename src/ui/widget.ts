@@ -5,7 +5,7 @@
  * Uses the callback form of setWidget for themed rendering.
  */
 
-import type { ExtensionUIContext, Theme } from "@mariozechner/pi-coding-agent";
+import type { ExtensionUIContext, Theme, ThemeColor } from "@mariozechner/pi-coding-agent";
 import { type TUI, truncateToWidth } from "@mariozechner/pi-tui";
 import type { AgentManager } from "../agents/manager.js";
 import type { Registry } from "../agents/registry.js";
@@ -28,6 +28,14 @@ import {
 /** Maximum number of rendered lines before overflow collapse kicks in. */
 const MAX_WIDGET_LINES = 12;
 
+const STATUS_DISPLAY: Record<string, { color: ThemeColor; char: string; label: string }> = {
+  completed: { color: "success", char: "✓", label: "" },
+  steered:   { color: "warning", char: "✓", label: " (turn limit)" },
+  stopped:   { color: "dim",     char: "■", label: " stopped" },
+  error:     { color: "error",   char: "✗", label: " error" },
+  aborted:   { color: "error",   char: "✗", label: " aborted" },
+};
+
 /** Pure — render a single finished agent line. */
 export function renderFinishedLine(
   a: { id: string; type: SubagentType; status: string; description: string; toolUses: number; startedAt: number; completedAt?: number | undefined; error?: string | undefined },
@@ -40,33 +48,20 @@ export function renderFinishedLine(
   const modeLabel = getPromptModeLabel(cfg.promptMode);
   const duration = formatMs((a.completedAt ?? Date.now()) - a.startedAt);
 
-  let icon: string;
-  let statusText: string;
-  if (a.status === "completed") {
-    icon = theme.fg("success", "✓");
-    statusText = "";
-  } else if (a.status === "steered") {
-    icon = theme.fg("warning", "✓");
-    statusText = theme.fg("warning", " (turn limit)");
-  } else if (a.status === "stopped") {
-    icon = theme.fg("dim", "■");
-    statusText = theme.fg("dim", " stopped");
-  } else if (a.status === "error") {
-    icon = theme.fg("error", "✗");
-    const errMsg = a.error ? `: ${a.error.slice(0, 60)}` : "";
-    statusText = theme.fg("error", ` error${errMsg}`);
-  } else {
-    icon = theme.fg("error", "✗");
-    statusText = theme.fg("warning", " aborted");
-  }
+  const display = STATUS_DISPLAY[a.status] ?? STATUS_DISPLAY.aborted!;
+  const icon = theme.fg(display.color, display.char);
+  const statusSuffix = a.status === "error" && a.error
+    ? theme.fg(display.color, `${display.label}: ${a.error.slice(0, 60)}`)
+    : display.label ? theme.fg(display.color, display.label) : "";
 
-  const parts: string[] = [];
-  if (activity) parts.push(formatTurns(activity.turnCount, activity.maxTurns));
-  if (a.toolUses > 0) parts.push(`${a.toolUses} tool use${a.toolUses === 1 ? "" : "s"}`);
-  parts.push(duration);
+  const parts = [
+    ...(activity ? [formatTurns(activity.turnCount, activity.maxTurns)] : []),
+    ...(a.toolUses > 0 ? [`${a.toolUses} tool use${a.toolUses === 1 ? "" : "s"}`] : []),
+    duration,
+  ];
 
   const modeTag = modeLabel ? ` ${theme.fg("dim", `(${modeLabel})`)}` : "";
-  return `${icon} ${theme.fg("dim", name)}${modeTag}  ${theme.fg("dim", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusText}`;
+  return `${icon} ${theme.fg("dim", name)}${modeTag}  ${theme.fg("dim", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusSuffix}`;
 }
 
 export class AgentWidget {

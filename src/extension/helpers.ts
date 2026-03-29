@@ -21,7 +21,7 @@ export function safeFormatTokens(session: { getSessionStats(): { tokens: { total
  * Create an AgentActivity state and spawn callbacks for tracking tool usage.
  * Used by both foreground and background paths to avoid duplication.
  */
-/** Pure — apply a tool activity event to the state, returns updated fields. */
+/** Mutates state in place — applies a tool activity event. */
 export function applyToolActivity(state: AgentActivity, activity: { type: "start" | "end"; toolName: string }) {
   if (activity.type === "start") {
     state.activeTools.set(activity.toolName + "_" + Date.now(), activity.toolName);
@@ -85,16 +85,15 @@ export function escapeXml(s: string) {
 }
 
 /** Format a structured task notification matching Claude Code's <task-notification> XML. */
+/** Safely extract total token count from a session. */
+function getTokenCount(session: { getSessionStats(): { tokens: { total: number } } } | undefined) {
+  try { return session?.getSessionStats().tokens?.total ?? 0; } catch { return 0; }
+}
+
 export function formatTaskNotification(record: AgentRecord, resultMaxLen: number) {
   const status = getStatusLabel(record.status, record.error);
   const durationMs = record.completedAt ? record.completedAt - record.startedAt : 0;
-  let totalTokens = 0;
-  try {
-    if (record.session) {
-      const stats = record.session.getSessionStats();
-      totalTokens = stats.tokens?.total ?? 0;
-    }
-  } catch { /* session stats unavailable */ }
+  const totalTokens = getTokenCount(record.session);
 
   const resultPreview = record.result
     ? record.result.length > resultMaxLen
@@ -138,10 +137,7 @@ export function buildDetails({ base, record, activity, overrides }: {
 
 /** Build notification details for the custom message renderer. */
 export function buildNotificationDetails({ record, resultMaxLen, activity }: { record: AgentRecord; resultMaxLen: number; activity?: AgentActivity | undefined }): NotificationDetails {
-  let totalTokens = 0;
-  try {
-    if (record.session) totalTokens = record.session.getSessionStats().tokens?.total ?? 0;
-  } catch {}
+  const totalTokens = getTokenCount(record.session);
 
   return {
     id: record.id,
