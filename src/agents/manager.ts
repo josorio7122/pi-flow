@@ -12,7 +12,7 @@ import type { Api, Model } from "@mariozechner/pi-ai";
 import type { AgentSession, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { cleanupWorktree, createWorktree, pruneWorktrees, } from "../infra/worktree.js";
 import type { AgentRecord, IsolationMode, SubagentType } from "../types.js";
-import { resumeAgent, runAgent, type RunnerSettings, type ToolActivity } from "./runner.js";
+import { type RunnerSettings, resumeAgent, runAgent, type ToolActivity } from "./runner.js";
 
 export type OnAgentComplete = (record: AgentRecord) => void;
 export type OnAgentStart = (record: AgentRecord) => void;
@@ -170,68 +170,51 @@ export class AgentManager {
       },
     }})
       .then(({ responseText, session, aborted, steered }) => {
-        // Don't overwrite status if externally stopped via abort()
         if (record.status !== "stopped") {
           record.status = aborted ? "aborted" : steered ? "steered" : "completed";
         }
         record.result = responseText;
         record.session = session;
-        record.completedAt ??= Date.now();
-
-        // Final flush of streaming output file
-        if (record.outputCleanup) {
-          try { record.outputCleanup(); } catch { /* ignore */ }
-          record.outputCleanup = undefined;
-        }
-
-        // Clean up worktree if used
-        if (record.worktree) {
-          const wtResult = cleanupWorktree({ cwd: ctx.cwd, worktree: record.worktree, agentDescription: options.description });
-          record.worktreeResult = wtResult;
-          if (wtResult.hasChanges && wtResult.branch) {
-            record.result = (record.result ?? "") +
-              `\n\n---\nChanges saved to branch \`${wtResult.branch}\`. Merge with: \`git merge ${wtResult.branch}\``;
-          }
-        }
-
-        if (options.isBackground) {
-          this.runningBackground--;
-          this.onComplete?.(record);
-          this.drainQueue();
-        }
+        this.finalizeAgent(record, ctx.cwd, options);
         return responseText;
       })
       .catch((err) => {
-        // Don't overwrite status if externally stopped via abort()
         if (record.status !== "stopped") {
           record.status = "error";
         }
         record.error = err instanceof Error ? err.message : String(err);
-        record.completedAt ??= Date.now();
-
-        // Final flush of streaming output file on error
-        if (record.outputCleanup) {
-          try { record.outputCleanup(); } catch { /* ignore */ }
-          record.outputCleanup = undefined;
-        }
-
-        // Best-effort worktree cleanup on error
-        if (record.worktree) {
-          try {
-            const wtResult = cleanupWorktree({ cwd: ctx.cwd, worktree: record.worktree, agentDescription: options.description });
-            record.worktreeResult = wtResult;
-          } catch { /* ignore cleanup errors */ }
-        }
-
-        if (options.isBackground) {
-          this.runningBackground--;
-          this.onComplete?.(record);
-          this.drainQueue();
-        }
+        this.finalizeAgent(record, ctx.cwd, options);
         return "";
       });
 
     record.promise = promise;
+  }
+
+  /** Shared cleanup for both success and error paths. */
+  private finalizeAgent(record: AgentRecord, cwd: string, options: SpawnOptions) {
+    record.completedAt ??= Date.now();
+
+    if (record.outputCleanup) {
+      try { record.outputCleanup(); } catch { /* ignore */ }
+      record.outputCleanup = undefined;
+    }
+
+    if (record.worktree) {
+      try {
+        const wtResult = cleanupWorktree({ cwd, worktree: record.worktree, agentDescription: options.description });
+        record.worktreeResult = wtResult;
+        if (wtResult.hasChanges && wtResult.branch) {
+          record.result = (record.result ?? "") +
+            `\n\n---\nChanges saved to branch \`${wtResult.branch}\`. Merge with: \`git merge ${wtResult.branch}\``;
+        }
+      } catch { /* ignore cleanup errors */ }
+    }
+
+    if (options.isBackground) {
+      this.runningBackground--;
+      this.onComplete?.(record);
+      this.drainQueue();
+    }
   }
 
   /** Start queued agents up to the concurrency limit. */
