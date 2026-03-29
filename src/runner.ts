@@ -228,7 +228,7 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
   const { session } = await createAgentSession({
     cwd: effectiveCwd,
     sessionManager: SessionManager.inMemory(effectiveCwd),
-    settingsManager: SettingsManager.inMemory(),
+    settingsManager: SettingsManager.create(),
     modelRegistry: ctx.modelRegistry,
     model,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- pi SDK Tool[] type is complex
