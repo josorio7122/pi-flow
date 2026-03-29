@@ -47,7 +47,7 @@ function resolveDefaultModel({
   return parentModel;
 }
 
-export interface SessionResult {
+interface SessionResult {
   session: AgentSession;
   agentConfig: AgentConfig | undefined;
   effectiveCwd: string;

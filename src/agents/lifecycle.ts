@@ -12,7 +12,7 @@ import type { AgentWidget } from "../ui/widget.js";
 import type { BatchSystem } from "./batch.js";
 import type { NotificationSystem } from "./notification.js";
 
-export function buildEventData(record: AgentRecord) {
+function buildEventData(record: AgentRecord) {
   const durationMs = record.completedAt ? record.completedAt - record.startedAt : Date.now() - record.startedAt;
   let tokens: { input: number; output: number; total: number } | undefined;
   try {
