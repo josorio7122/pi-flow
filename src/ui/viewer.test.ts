@@ -57,7 +57,7 @@ function mockRecord(overrides: Partial<AgentRecord> = {}): AgentRecord {
 
 function ansiTheme() {
   return {
-    fg: (_color: string, text: string) => `\x1b[38;5;240m${text}\x1b[0m`,
+    fg: (_: string, text: string) => `\x1b[38;5;240m${text}\x1b[0m`,
     bold: (text: string) => `\x1b[1m${text}\x1b[22m`,
   } as any;
 }
