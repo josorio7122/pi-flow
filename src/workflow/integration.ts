@@ -264,6 +264,7 @@ export function registerWorkflowExtension(
   registerFlowCommand({
     pi,
     getActiveWorkflowId: () => activeWorkflowId,
+    getWorkflows: () => workflows,
     setActiveWorkflow: (id, def) => {
       activeWorkflowId = id;
       activeDefinition = def;

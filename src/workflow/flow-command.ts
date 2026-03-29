@@ -10,12 +10,14 @@ import type { WorkflowDefinition, WorkflowEvent } from "./types.js";
 export function registerFlowCommand({
   pi,
   getActiveWorkflowId,
+  getWorkflows,
   setActiveWorkflow,
   emitEvent,
   doRefreshWidget,
 }: {
   pi: ExtensionAPI;
   getActiveWorkflowId: () => string | undefined;
+  getWorkflows: () => Map<string, WorkflowDefinition>;
   setActiveWorkflow: (id: string | undefined, def: WorkflowDefinition | undefined) => void;
   emitEvent: (cwd: string, event: WorkflowEvent) => void;
   doRefreshWidget: (ctx: ExtensionContext) => void;
@@ -25,7 +27,16 @@ export function registerFlowCommand({
     handler: async (_, ctx) => {
       const activeWorkflowId = getActiveWorkflowId();
       if (!activeWorkflowId) {
-        ctx.ui.notify("No active workflow.", "info");
+        const available = Array.from(getWorkflows().values());
+        if (available.length === 0) {
+          ctx.ui.notify("No active workflow. No workflow definitions found.", "info");
+        } else {
+          const listing = available.map((w) => `  ${w.name}: ${w.description}`).join("\n");
+          ctx.ui.notify(
+            `No active workflow.\n\nAvailable workflows:\n${listing}\n\nUse the Workflow tool to start one.`,
+            "info",
+          );
+        }
         return;
       }
       const state = readState({ cwd: ctx.cwd, workflowId: activeWorkflowId });
