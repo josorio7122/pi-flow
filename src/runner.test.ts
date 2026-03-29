@@ -481,7 +481,8 @@ describe('runAgent', () => {
     const opts = (mockCreateAgentSession as any).mock.calls[0][0];
     const loader = opts.resourceLoader;
     const prompt = loader.opts.systemPromptOverride();
-    expect(prompt).toBe('No memory agent');
+    expect(prompt).toContain('No memory agent');
+    expect(prompt).toContain('# Environment');
     expect(prompt).not.toContain('Agent Memory');
   });
 

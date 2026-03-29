@@ -24,10 +24,36 @@ import { injectVariables } from './agents.js';
 import { buildMemoryBlock, buildReadOnlyMemoryBlock } from './memory.js';
 import { emptyUsage } from './result-utils.js';
 import { createWorktree, cleanupWorktree, type WorktreeInfo } from './worktree.js';
+import { detectEnv, buildEnvBlock, SUB_AGENT_CONTEXT } from './env.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /** Additional turns allowed after the soft steer message before hard abort. */
+let graceTurns = 5;
+
+/** Default max turns. undefined = unlimited. */
+let defaultMaxTurns: number | undefined;
+
+export function getGraceTurns(): number {
+  return graceTurns;
+}
+export function setGraceTurns(n: number): void {
+  graceTurns = Math.max(1, n);
+}
+export function getDefaultMaxTurns(): number | undefined {
+  return defaultMaxTurns;
+}
+export function setDefaultMaxTurns(n: number | undefined): void {
+  defaultMaxTurns = normalizeMaxTurns(n);
+}
+
+/** Normalize max turns: 0/undefined → unlimited, otherwise minimum 1. */
+export function normalizeMaxTurns(n: number | undefined): number | undefined {
+  if (n == null || n === 0) return undefined;
+  return Math.max(1, n);
+}
+
+/** @deprecated Use getGraceTurns() instead. */
 export const GRACE_TURNS = 5;
 
 // ─── Tool resolution ──────────────────────────────────────────────────────────
@@ -115,16 +141,41 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
   // 0. Worktree isolation for writable agents
   let effectiveCwd = ctx.cwd;
   let worktreeInfo: WorktreeInfo | undefined;
+  let worktreeWarning = '';
   if (agent.isolation === 'worktree') {
     const agentId = `${agent.name}-${Date.now()}`;
     worktreeInfo = createWorktree(ctx.cwd, agentId, feature);
     if (worktreeInfo) {
       effectiveCwd = worktreeInfo.path;
+    } else {
+      worktreeWarning =
+        '\n\n[WARNING: Worktree isolation was requested but failed (not a git repo, or no commits yet). Running in the main working directory instead.]';
     }
   }
 
-  // 1. Build system prompt with variable injection + memory block
-  let systemPrompt = injectVariables(agent.systemPrompt, variableMap, agent.variables);
+  // 1. Build system prompt with variable injection + env block + memory block
+  const env = detectEnv(effectiveCwd);
+  const envBlock = buildEnvBlock(effectiveCwd, env);
+  let systemPrompt: string;
+
+  if (agent.promptMode === 'append') {
+    // Append mode: env + parent prompt + sub-agent context + agent instructions
+    const parentPrompt = ''; // TODO: add parent context forking in Phase 6
+    systemPrompt =
+      envBlock +
+      (parentPrompt
+        ? '\n\n<inherited_system_prompt>\n' + parentPrompt + '\n</inherited_system_prompt>'
+        : '') +
+      '\n\n' +
+      SUB_AGENT_CONTEXT +
+      '\n\n<agent_instructions>\n' +
+      injectVariables(agent.systemPrompt, variableMap, agent.variables) +
+      '\n</agent_instructions>';
+  } else {
+    // Replace mode (default): env + agent prompt
+    systemPrompt =
+      envBlock + '\n\n' + injectVariables(agent.systemPrompt, variableMap, agent.variables);
+  }
 
   // 1b. Inject per-agent memory block if configured
   if (agent.memory) {
@@ -176,7 +227,7 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
   let turnCount = 0;
   let softLimitReached = false;
   let aborted = false;
-  const maxSteps = agent.limits.max_steps > 0 ? agent.limits.max_steps : undefined;
+  const maxSteps = normalizeMaxTurns(agent.limits.max_steps) ?? defaultMaxTurns;
 
   // 8. Subscribe to session events
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AgentSessionEvent union type
@@ -193,7 +244,7 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
             session.steer(
               'You have reached your turn limit. Wrap up immediately — provide your final answer now.',
             );
-          } else if (softLimitReached && turnCount >= maxSteps + GRACE_TURNS) {
+          } else if (softLimitReached && turnCount >= maxSteps + graceTurns) {
             aborted = true;
             session.abort();
           }
@@ -233,7 +284,8 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
 
   // 10. Execute
   try {
-    await session.prompt(task);
+    const effectiveTask = worktreeWarning ? worktreeWarning + '\n\n' + task : task;
+    await session.prompt(effectiveTask);
 
     // 11. Collect results
     const stats = session.getSessionStats();
