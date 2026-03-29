@@ -6,13 +6,10 @@
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
 import { accumulateTokens, buildInterruptedContext, resolveContextHandoff } from "./executor-helpers.js";
-import { executeGatePhase } from "./phase-gate.js";
-import { executeParallelPhase } from "./phase-parallel.js";
-import { executeReviewLoop } from "./phase-review.js";
-import { executeSinglePhase } from "./phase-single.js";
+import { dispatchPhase } from "./phase-dispatch.js";
 import { checkTokenLimit, updatePhaseStatus } from "./pipeline.js";
 import { appendEvent, listHandoffs, writeState } from "./store.js";
-import type { AgentHandoff, PhaseDefinition, WorkflowDefinition, WorkflowEvent, WorkflowState } from "./types.js";
+import type { WorkflowDefinition, WorkflowEvent, WorkflowState } from "./types.js";
 
 export type PhaseOutcome =
   | { type: "complete" }
@@ -106,99 +103,6 @@ export async function executeCurrentPhase({
     writeState({ cwd: cwd, workflowId: workflowId, state: state });
     emitEvent({ type: "agent_error", role: phase.role ?? "unknown", agentId: "", error, ts: Date.now() });
     return { type: "error", error };
-  }
-}
-
-// ── Phase Dispatch ───────────────────────────────────────────────────
-
-async function dispatchPhase({
-  phase,
-  definition,
-  state,
-  previousHandoff,
-  continuationContext,
-  cwd,
-  workflowId,
-  pi,
-  ctx,
-  manager,
-  emitEvent,
-}: {
-  phase: PhaseDefinition;
-  definition: WorkflowDefinition;
-  state: WorkflowState;
-  previousHandoff?: AgentHandoff | undefined;
-  continuationContext?: string | undefined;
-  cwd: string;
-  workflowId: string;
-  pi: ExtensionAPI;
-  ctx: ExtensionContext;
-  manager: AgentManager;
-  emitEvent: (event: WorkflowEvent) => void;
-}) {
-  switch (phase.mode) {
-    case "gate":
-      return executeGatePhase({ phase, emitEvent });
-
-    case "single": {
-      const result = await executeSinglePhase({
-        phase,
-        definition,
-        state,
-        previousHandoff,
-        continuationContext,
-        cwd,
-        workflowId,
-        pi,
-        ctx,
-        manager,
-        emitEvent,
-      });
-      return { type: result.type };
-    }
-
-    case "review-loop": {
-      const targetHandoff = previousHandoff ?? {
-        agentId: "",
-        role: "unknown",
-        phase: "unknown",
-        summary: "",
-        findings: state.description,
-        filesAnalyzed: [],
-        filesModified: [],
-        toolsUsed: 0,
-        turnsUsed: 0,
-        duration: 0,
-        timestamp: Date.now(),
-      };
-      return executeReviewLoop({
-        phase,
-        definition,
-        state,
-        targetHandoff,
-        cwd,
-        workflowId,
-        pi,
-        ctx,
-        manager,
-        emitEvent,
-      });
-    }
-
-    case "parallel": {
-      return executeParallelPhase({
-        phase,
-        definition,
-        state,
-        previousHandoff,
-        cwd,
-        workflowId,
-        pi,
-        ctx,
-        manager,
-        emitEvent,
-      });
-    }
   }
 }
 
