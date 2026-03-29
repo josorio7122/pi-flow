@@ -9,9 +9,9 @@ export interface ModelEntry {
 }
 
 export interface ModelRegistry {
-  find(provider: string, modelId: string): any;
-  getAll(): any[];
-  getAvailable?(): any[];
+  find(provider: string, modelId: string): unknown;
+  getAll(): unknown[];
+  getAvailable?(): unknown[];
 }
 
 /**
@@ -22,7 +22,7 @@ export interface ModelRegistry {
 export function resolveModel(
   input: string,
   registry: ModelRegistry,
-): any | string {
+): unknown {
   // Available models (those with auth configured)
   const all = (registry.getAvailable?.() ?? registry.getAll()) as ModelEntry[];
   const availableSet = new Set(all.map(m => `${m.provider}/${m.id}`.toLowerCase()));

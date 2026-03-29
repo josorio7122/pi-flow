@@ -191,7 +191,8 @@ export class ConversationViewer implements Component {
         for (const c of msg.content) {
           if (c.type === "text" && c.text) textParts.push(c.text);
           else if (c.type === "toolCall") {
-            toolCalls.push((c as any).name ?? (c as any).toolName ?? "unknown");
+            const tc = c as { name?: string; toolName?: string };
+            toolCalls.push(tc.name ?? tc.toolName ?? "unknown");
           }
         }
         if (needsSeparator) lines.push(th.fg("dim", "───"));
@@ -213,8 +214,8 @@ export class ConversationViewer implements Component {
         for (const line of wrapTextWithAnsi(truncated.trim(), width)) {
           lines.push(th.fg("dim", line));
         }
-      } else if ((msg as any).role === "bashExecution") {
-        const bash = msg as any;
+      } else if ((msg as { role: string }).role === "bashExecution") {
+        const bash = msg as { command?: string; output?: string };
         if (needsSeparator) lines.push(th.fg("dim", "───"));
         lines.push(truncateToWidth(th.fg("muted", `  $ ${bash.command}`), width));
         if (bash.output?.trim()) {

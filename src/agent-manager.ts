@@ -7,7 +7,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type { Model } from "@mariozechner/pi-ai";
+import type { Api, Model } from "@mariozechner/pi-ai";
 import type { AgentSession, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { resumeAgent, runAgent, type ToolActivity } from "./agent-runner.js";
 import type { AgentRecord, IsolationMode, SubagentType, ThinkingLevel } from "./types.js";
@@ -31,7 +31,7 @@ interface SpawnArgs {
 
 interface SpawnOptions {
   description: string;
-  model?: Model<any> | undefined;
+  model?: Model<Api> | undefined;
   maxTurns?: number | undefined;
   isolated?: boolean | undefined;
   inheritContext?: boolean | undefined;

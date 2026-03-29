@@ -13,7 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { AgentSession, ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { AgentManager } from "./agent-manager.js";
@@ -44,8 +44,8 @@ import {
 // ---- Shared helpers ----
 
 /** Tool execute return value for a text response. */
-function textResult(msg: string, details?: AgentDetails) {
-  return { content: [{ type: "text" as const, text: msg }], details: details as any };
+function textResult(msg: string, details?: AgentDetails | undefined) {
+  return { content: [{ type: "text" as const, text: msg }], details } as { content: { type: "text"; text: string }[]; details: AgentDetails };
 }
 
 /** Safe token formatting — wraps session.getSessionStats() in try-catch. */
@@ -82,7 +82,7 @@ function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => void) {
       state.turnCount = turnCount;
       onStreamUpdate?.();
     },
-    onSessionCreated: (session: any) => {
+    onSessionCreated: (session: AgentSession) => {
       state.session = session;
     },
   };
@@ -150,7 +150,7 @@ function formatTaskNotification(record: AgentRecord, resultMaxLen: number): stri
 /** Build AgentDetails from a base + record-specific fields. */
 function buildDetails(
   base: { displayName: string; description: string; subagentType: string; modelName?: string | undefined; tags?: string[] | undefined },
-  record: { toolUses: number; startedAt: number; completedAt?: number | undefined; status: string; error?: string | undefined; id?: string | undefined; session?: any },
+  record: { toolUses: number; startedAt: number; completedAt?: number | undefined; status: string; error?: string | undefined; id?: string | undefined; session?: { getSessionStats(): { tokens: { total: number } } } | undefined },
   activity?: AgentActivity | undefined,
   overrides?: Partial<AgentDetails> | undefined,
 ): AgentDetails {
@@ -414,11 +414,11 @@ export default function (pi: ExtensionAPI) {
   // Expose manager via Symbol.for() global registry for cross-package access.
   // Standard Node.js pattern for cross-package singletons (used by OpenTelemetry, etc.).
   const MANAGER_KEY = Symbol.for("pi-flow:manager");
-  (globalThis as any)[MANAGER_KEY] = {
+  (globalThis as Record<symbol, unknown>)[MANAGER_KEY] = {
     waitForAll: () => manager.waitForAll(),
     hasRunning: () => manager.hasRunning(),
-    spawn: (piRef: any, ctx: any, type: string, prompt: string, options: any) =>
-      manager.spawn(piRef, ctx, type, prompt, options),
+    spawn: (piRef: unknown, ctx: unknown, type: string, prompt: string, options: unknown) =>
+      manager.spawn(piRef as ExtensionAPI, ctx as ExtensionContext, type, prompt, options as Parameters<typeof manager.spawn>[4]),
     getRecord: (id: string) => manager.getRecord(id),
   };
 
@@ -450,7 +450,7 @@ export default function (pi: ExtensionAPI) {
     unsubStopRpc();
     unsubPingRpc();
     currentCtx = undefined;
-    delete (globalThis as any)[MANAGER_KEY];
+    delete (globalThis as Record<symbol, unknown>)[MANAGER_KEY];
     manager.abortAll();
     for (const timer of pendingNudges.values()) clearTimeout(timer);
     pendingNudges.clear();
@@ -551,6 +551,7 @@ export default function (pi: ExtensionAPI) {
 
   // ---- Agent tool ----
 
+  // biome-ignore lint/suspicious/noExplicitAny: pi framework registerTool requires concrete schema type inference
   pi.registerTool<any, AgentDetails>({
     name: "Agent",
     label: "Agent",
@@ -748,7 +749,7 @@ Guidelines:
           if (resolvedConfig.modelFromParams) return textResult(resolved);
           // config-specified: silent fallback to parent
         } else {
-          model = resolved;
+          model = resolved as typeof model;
         }
       }
 
@@ -808,7 +809,7 @@ Guidelines:
         // rather than closing over a value that doesn't exist yet.
         let id: string;
         const origBgOnSession = bgCallbacks.onSessionCreated;
-        bgCallbacks.onSessionCreated = (session: any) => {
+        bgCallbacks.onSessionCreated = (session: AgentSession) => {
           origBgOnSession(session);
           const rec = manager.getRecord(id);
           if (rec?.outputFile) {
@@ -896,7 +897,7 @@ Guidelines:
         };
         onUpdate?.({
           content: [{ type: "text", text: `${fgState.toolUses} tool uses...` }],
-          details: details as any,
+          details,
         });
       };
 
@@ -904,7 +905,7 @@ Guidelines:
 
       // Wire session creation to register in widget
       const origOnSession = fgCallbacks.onSessionCreated;
-      fgCallbacks.onSessionCreated = (session: any) => {
+      fgCallbacks.onSessionCreated = (session: AgentSession) => {
         origOnSession(session);
         for (const a of manager.listAgents()) {
           if (a.session === session) {

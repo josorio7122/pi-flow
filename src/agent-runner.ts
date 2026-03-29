@@ -2,7 +2,9 @@
  * agent-runner.ts — Core execution engine: creates sessions, runs agents, collects results.
  */
 
-import type { Model } from "@mariozechner/pi-ai";
+import type { Api, Model } from "@mariozechner/pi-ai";
+
+
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import {
   type AgentSession,
@@ -51,10 +53,10 @@ export function setGraceTurns(n: number): void { graceTurns = Math.max(1, n); }
  * Priority: explicit option > config.model > parent model.
  */
 function resolveDefaultModel(
-  parentModel: Model<any> | undefined,
-  registry: { find(provider: string, modelId: string): Model<any> | undefined; getAvailable?(): Model<any>[] },
-  configModel?: string,
-): Model<any> | undefined {
+  parentModel: Model<Api> | undefined,
+  registry: { find(provider: string, modelId: string): Model<Api> | undefined; getAvailable?(): Model<Api>[] },
+  configModel?: string | undefined,
+): Model<Api> | undefined {
   if (configModel) {
     const slashIdx = configModel.indexOf("/");
     if (slashIdx !== -1) {
@@ -64,7 +66,7 @@ function resolveDefaultModel(
       // Build a set of available model keys for fast lookup
       const available = registry.getAvailable?.();
       const availableKeys = available
-        ? new Set(available.map((m: any) => `${m.provider}/${m.id}`))
+        ? new Set(available.map((m) => `${(m as { provider: string; id: string }).provider}/${(m as { provider: string; id: string }).id}`))
         : undefined;
       const isAvailable = (p: string, id: string) =>
         !availableKeys || availableKeys.has(`${p}/${id}`);
@@ -86,7 +88,7 @@ export interface ToolActivity {
 export interface RunOptions {
   /** ExtensionAPI instance — used for pi.exec() instead of execSync. */
   pi: ExtensionAPI;
-  model?: Model<any> | undefined;
+  model?: Model<Api> | undefined;
   maxTurns?: number | undefined;
   signal?: AbortSignal | undefined;
   isolated?: boolean | undefined;
@@ -424,7 +426,7 @@ export function getAgentConversation(session: AgentSession): string {
       const toolCalls: string[] = [];
       for (const c of msg.content) {
         if (c.type === "text" && c.text) textParts.push(c.text);
-        else if (c.type === "toolCall") toolCalls.push(`  Tool: ${(c as any).name ?? (c as any).toolName ?? "unknown"}`);
+        else if (c.type === "toolCall") { const tc = c as { name?: string; toolName?: string }; toolCalls.push(`  Tool: ${tc.name ?? tc.toolName ?? "unknown"}`); }
       }
       if (textParts.length > 0) parts.push(`[Assistant]: ${textParts.join("\n")}`);
       if (toolCalls.length > 0) parts.push(`[Tool Calls]:\n${toolCalls.join("\n")}`);

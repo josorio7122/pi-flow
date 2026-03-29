@@ -43,7 +43,7 @@ export type UICtx = {
   setStatus(key: string, text: string | undefined): void;
   setWidget(
     key: string,
-    content: undefined | ((tui: any, theme: Theme) => { render(): string[]; invalidate(): void }),
+    content: undefined | ((tui: unknown, theme: Theme) => { render(): string[]; invalidate(): void }),
     options?: { placement?: "aboveEditor" | "belowEditor" },
   ): void;
 };
@@ -171,7 +171,7 @@ export class AgentWidget {
   /** Whether the widget callback is currently registered with the TUI. */
   private widgetRegistered = false;
   /** Cached TUI reference from widget factory callback, used for requestRender(). */
-  private tui: any | undefined;
+  private tui: unknown | undefined;
   /** Last status bar text, used to avoid redundant setStatus calls. */
   private lastStatusText: string | undefined;
 
@@ -267,7 +267,7 @@ export class AgentWidget {
    * Render the widget content. Called from the registered widget's render() callback,
    * reading live state each time instead of capturing it in a closure.
    */
-  private renderWidget(tui: any, theme: Theme): string[] {
+  private renderWidget(tui: unknown, theme: Theme): string[] {
     const allAgents = this.manager.listAgents();
     const running = allAgents.filter(a => a.status === "running");
     const queued = allAgents.filter(a => a.status === "queued");
@@ -282,7 +282,7 @@ export class AgentWidget {
     // Nothing to show — return empty (widget will be unregistered by update())
     if (!hasActive && !hasFinished) return [];
 
-    const w = tui.terminal.columns;
+    const w = (tui as { terminal: { columns: number } }).terminal.columns;
     const truncate = (line: string) => truncateToWidth(line, w);
     const headingColor = hasActive ? "accent" : "dim";
     const headingIcon = hasActive ? "●" : "○";
@@ -468,7 +468,7 @@ export class AgentWidget {
       this.widgetRegistered = true;
     } else {
       // Widget already registered — just request a re-render of existing components.
-      this.tui?.requestRender();
+      (this.tui as { requestRender?: () => void } | undefined)?.requestRender?.();
     }
   }
 

@@ -25,7 +25,7 @@ export const PROTOCOL_VERSION = 2;
 
 /** Minimal AgentManager interface needed by the spawn/stop RPCs. */
 export interface SpawnCapable {
-  spawn(pi: unknown, ctx: unknown, type: string, prompt: string, options: any): string;
+  spawn(pi: unknown, ctx: unknown, type: string, prompt: string, options: unknown): string;
   abort(id: string): boolean;
 }
 
@@ -58,9 +58,9 @@ function handleRpc<P extends { requestId: string }>(
       const reply: { success: true; data?: unknown } = { success: true };
       if (data !== undefined) reply.data = data;
       events.emit(`${channel}:reply:${params.requestId}`, reply);
-    } catch (err: any) {
+    } catch (err: unknown) {
       events.emit(`${channel}:reply:${params.requestId}`, {
-        success: false, error: err?.message ?? String(err),
+        success: false, error: err instanceof Error ? err.message : String(err),
       });
     }
   });
@@ -77,7 +77,7 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
     return { version: PROTOCOL_VERSION };
   });
 
-  const unsubSpawn = handleRpc<{ requestId: string; type: string; prompt: string; options?: any }>(
+  const unsubSpawn = handleRpc<{ requestId: string; type: string; prompt: string; options?: unknown }>(
     events, "subagents:rpc:spawn", ({ type, prompt, options }) => {
       const ctx = getCtx();
       if (!ctx) throw new Error("No active session");
