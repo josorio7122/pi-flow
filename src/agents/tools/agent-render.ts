@@ -33,8 +33,9 @@ export function renderAgentCall({
     ? getDisplayName(args.subagent_type as string, argConfig?.displayName)
     : "Agent";
   const desc = (args.description as string) ?? "";
+  const bgTag = args.run_in_background ? " " + theme.fg("dim", "bg") : "";
   return new Text(
-    "▸ " + theme.fg("toolTitle", theme.bold(displayName)) + (desc ? "  " + theme.fg("muted", desc) : ""),
+    "▸ " + theme.fg("toolTitle", theme.bold(displayName)) + bgTag + (desc ? "  " + theme.fg("muted", desc) : ""),
     0,
     0,
   );

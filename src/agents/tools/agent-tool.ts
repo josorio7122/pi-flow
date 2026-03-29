@@ -265,6 +265,14 @@ Usage:
       }, 80);
       streamUpdate();
 
+      // Abort foreground agent when pi cancels the tool call (e.g. user presses Escape)
+      const abortHandler = signal
+        ? () => {
+            if (fgId) manager.abort(fgId);
+          }
+        : undefined;
+      if (signal && abortHandler) signal.addEventListener("abort", abortHandler, { once: true });
+
       const record = await manager.spawnAndWait({
         pi,
         ctx,
@@ -282,6 +290,7 @@ Usage:
         },
       });
       clearInterval(spinnerInterval);
+      if (signal && abortHandler) signal.removeEventListener("abort", abortHandler);
 
       if (fgId) {
         agentActivity.delete(fgId);
