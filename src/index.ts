@@ -15,6 +15,7 @@ import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { loadCustomAgents } from "./agents/custom.js";
 import { createAgentManager } from "./agents/manager.js";
+import { createNotificationSystem, registerMessageRenderer } from "./agents/notification.js";
 import { createRegistry } from "./agents/registry.js";
 import { createRunnerSettings, getAgentConversation, normalizeMaxTurns, steerAgent } from "./agents/runner.js";
 import { resolveAgentInvocationConfig, resolveJoinMode } from "./config/invocation.js";
@@ -39,7 +40,6 @@ import {
   describeActivity,
   formatDuration,
   formatMs,
-  formatTokens,
   formatTurns,
   getDisplayName,
   getPromptModeLabel,
@@ -52,49 +52,8 @@ export default function (pi: ExtensionAPI) {
   const runnerSettings = createRunnerSettings();
   const registry = createRegistry();
 
-  // ---- Agent manager ----
-  pi.registerMessageRenderer<NotificationDetails>("subagent-notification", (message, { expanded }, theme) => {
-    const d = message.details;
-    if (!d) return undefined;
-
-    function renderOne(d: NotificationDetails) {
-      const isError = d.status === "error" || d.status === "stopped" || d.status === "aborted";
-      const icon = isError ? theme.fg("error", "✗") : theme.fg("success", "✓");
-      const statusText = isError ? d.status : d.status === "steered" ? "completed (steered)" : "completed";
-
-      // Line 1: icon + agent description + status
-      let line = `${icon} ${theme.bold(d.description)} ${theme.fg("dim", statusText)}`;
-
-      // Line 2: stats
-      const parts: string[] = [];
-      if (d.turnCount > 0) parts.push(formatTurns(d.turnCount, d.maxTurns));
-      if (d.toolUses > 0) parts.push(`${d.toolUses} tool use${d.toolUses === 1 ? "" : "s"}`);
-      if (d.totalTokens > 0) parts.push(formatTokens(d.totalTokens));
-      if (d.durationMs > 0) parts.push(formatMs(d.durationMs));
-      if (parts.length) {
-        line += "\n  " + parts.map((p) => theme.fg("dim", p)).join(" " + theme.fg("dim", "·") + " ");
-      }
-
-      // Line 3: result preview (collapsed) or full (expanded)
-      if (expanded) {
-        const lines = d.resultPreview.split("\n").slice(0, 30);
-        for (const l of lines) line += "\n" + theme.fg("dim", `  ${l}`);
-      } else {
-        const preview = d.resultPreview.split("\n")[0]?.slice(0, 80) ?? "";
-        line += "\n  " + theme.fg("dim", `⎿  ${preview}`);
-      }
-
-      // Line 4: output file link (if present)
-      if (d.outputFile) {
-        line += "\n  " + theme.fg("muted", `transcript: ${d.outputFile}`);
-      }
-
-      return line;
-    }
-
-    const all = [d, ...(d.others ?? [])];
-    return new Text(all.map(renderOne).join("\n"), 0, 0);
-  });
+  // ---- Message renderer + notifications ----
+  registerMessageRenderer(pi);
 
   /** Reload agents from .pi/agents/*.md and merge with defaults (called on init and each Agent invocation). */
   const reloadCustomAgents = () => {
@@ -105,58 +64,11 @@ export default function (pi: ExtensionAPI) {
   // Initial load
   reloadCustomAgents();
 
-  // ---- Agent activity tracking + widget ----
+  // ---- Agent activity tracking ----
   const agentActivity = new Map<string, AgentActivity>();
-
-  // ---- Cancellable pending notifications ----
-  // Holds notifications briefly so get_subagent_result can cancel them
-  // before they reach pi.sendMessage (fire-and-forget).
-  const pendingNudges = new Map<string, ReturnType<typeof setTimeout>>();
-  const NUDGE_HOLD_MS = 200;
-
-  function scheduleNudge(key: string, send: () => void, delay = NUDGE_HOLD_MS) {
-    cancelNudge(key);
-    pendingNudges.set(
-      key,
-      setTimeout(() => {
-        pendingNudges.delete(key);
-        send();
-      }, delay),
-    );
-  }
-
-  function cancelNudge(key: string) {
-    const timer = pendingNudges.get(key);
-    if (timer != null) {
-      clearTimeout(timer);
-      pendingNudges.delete(key);
-    }
-  }
-
-  // ---- Individual nudge helper (async join mode) ----
-  function emitIndividualNudge(record: AgentRecord) {
-    if (record.resultConsumed) return; // re-check at send time
-
-    const notification = formatTaskNotification(record, 500);
-    const footer = record.outputFile ? `\nFull transcript available at: ${record.outputFile}` : "";
-
-    pi.sendMessage<NotificationDetails>(
-      {
-        customType: "subagent-notification",
-        content: notification + footer,
-        display: true,
-        details: buildNotificationDetails({ record, resultMaxLen: 500, activity: agentActivity.get(record.id) }),
-      },
-      { deliverAs: "followUp", triggerTurn: true },
-    );
-  }
-
-  function sendIndividualNudge(record: AgentRecord) {
-    agentActivity.delete(record.id);
-    widget.markFinished(record.id);
-    scheduleNudge(record.id, () => emitIndividualNudge(record));
-    widget.update();
-  }
+  // Notifications created after widget (line ~261), but referenced by manager callbacks.
+  // Use a late-bound wrapper so the closure captures the variable, not the initial value.
+  let notifications: ReturnType<typeof createNotificationSystem>;
 
   // ---- Group join manager ----
   const groupJoin = createGroupJoinManager((records, partial) => {
@@ -166,7 +78,7 @@ export default function (pi: ExtensionAPI) {
     }
 
     const groupKey = `group:${records.map((r) => r.id).join(",")}`;
-    scheduleNudge(groupKey, () => {
+    notifications.scheduleNudge(groupKey, () => {
       // Re-check at send time
       const unconsumed = records.filter((r) => !r.resultConsumed);
       if (unconsumed.length === 0) {
@@ -275,7 +187,7 @@ export default function (pi: ExtensionAPI) {
 
       const result = groupJoin.onAgentComplete(record);
       if (result === "pass") {
-        sendIndividualNudge(record);
+        notifications.sendIndividualNudge(record);
       }
       // 'held' → do nothing, group will fire later
       // 'delivered' → group callback already fired
@@ -342,13 +254,13 @@ export default function (pi: ExtensionAPI) {
     currentCtx = undefined;
     delete (globalThis as Record<symbol, unknown>)[MANAGER_KEY];
     manager.abortAll();
-    for (const timer of pendingNudges.values()) clearTimeout(timer);
-    pendingNudges.clear();
+    notifications.disposeAll();
     manager.dispose();
   });
 
   // Live widget: show running agents above editor
   const widget = new AgentWidget(manager, agentActivity, registry);
+  notifications = createNotificationSystem({ pi, widget, agentActivity });
 
   // ---- Join mode configuration ----
   let defaultJoinMode: JoinMode = "smart";
@@ -396,7 +308,7 @@ export default function (pi: ExtensionAPI) {
       for (const { id } of batchAgents) {
         const record = manager.getRecord(id);
         if (record?.completedAt != null && !record.resultConsumed) {
-          sendIndividualNudge(record);
+          notifications.sendIndividualNudge(record);
         }
       }
     }
@@ -921,7 +833,7 @@ Guidelines:
       // Setting the flag here prevents a redundant follow-up notification.
       if (params.wait && record.status === "running" && record.promise) {
         record.resultConsumed = true;
-        cancelNudge(params.agent_id);
+        notifications.cancelNudge(params.agent_id);
         await record.promise;
       }
 
@@ -947,7 +859,7 @@ Guidelines:
       // Mark result as consumed — suppresses the completion notification
       if (record.status !== "running" && record.status !== "queued") {
         record.resultConsumed = true;
-        cancelNudge(params.agent_id);
+        notifications.cancelNudge(params.agent_id);
       }
 
       // Verbose: include full conversation
