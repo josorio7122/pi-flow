@@ -4,7 +4,7 @@
 
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
 import type { AgentRecord, NotificationDetails } from "../types.js";
-import { type AgentActivity, type AgentDetails, formatTokens } from "../ui/widget.js";
+import { type AgentActivity, type AgentDetails, formatTokens } from "../ui/formatters.js";
 
 /** Tool execute return value for a text response. */
 export function textResult(msg: string, details?: AgentDetails | undefined) {

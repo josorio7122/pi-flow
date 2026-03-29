@@ -1,5 +1,6 @@
+import type { EventBus } from "@mariozechner/pi-coding-agent";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { type EventBus, PROTOCOL_VERSION, type RpcDeps, registerRpcHandlers, type SpawnCapable } from "./rpc.js";
+import { PROTOCOL_VERSION, type RpcDeps, registerRpcHandlers, type SpawnCapable } from "./rpc.js";
 
 /** Simple in-process event bus for testing. */
 function createEventBus(): EventBus {

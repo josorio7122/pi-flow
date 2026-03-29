@@ -1,3 +1,4 @@
+import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 /**
  * manager.ts — Tracks agents, background execution, resume support.
  *
@@ -10,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import type { Api, Model } from "@mariozechner/pi-ai";
 import type { AgentSession, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { cleanupWorktree, createWorktree, pruneWorktrees, } from "../infra/worktree.js";
-import type { AgentRecord, IsolationMode, SubagentType, ThinkingLevel } from "../types.js";
+import type { AgentRecord, IsolationMode, SubagentType } from "../types.js";
 import { resumeAgent, runAgent, type ToolActivity } from "./runner.js";
 
 export type OnAgentComplete = (record: AgentRecord) => void;

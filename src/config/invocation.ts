@@ -1,4 +1,5 @@
-import type { AgentConfig, IsolationMode, JoinMode, ThinkingLevel } from "../types.js";
+import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
+import type { AgentConfig, IsolationMode, JoinMode } from "../types.js";
 
 interface AgentInvocationParams {
   model?: string | undefined;

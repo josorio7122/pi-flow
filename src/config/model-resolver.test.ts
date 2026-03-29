@@ -1,5 +1,6 @@
+import type { ModelRegistry } from "@mariozechner/pi-coding-agent";
 import { describe, expect, it } from "vitest";
-import { type ModelRegistry, resolveModel } from "./model-resolver.js";
+import { resolveModel } from "./model-resolver.js";
 
 // Mock model entries matching typical pi model registry shape
 const MODELS = [

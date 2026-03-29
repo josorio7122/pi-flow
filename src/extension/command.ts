@@ -5,14 +5,13 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext, ModelRegistry } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
 import { BUILTIN_TOOL_NAMES, getAgentConfig, getAllTypes, resolveType } from "../agents/registry.js";
 import { getDefaultMaxTurns, getGraceTurns, setDefaultMaxTurns, setGraceTurns } from "../agents/runner.js";
-import type { ModelRegistry } from "../config/model-resolver.js";
 import { resolveModel } from "../config/model-resolver.js";
 import type { AgentConfig, AgentRecord, JoinMode } from "../types.js";
-import { type AgentActivity, formatDuration, getDisplayName } from "../ui/widget.js";
+import { type AgentActivity, formatDuration, getDisplayName } from "../ui/formatters.js";
 
 export interface AgentsCommandDeps {
   pi: ExtensionAPI;

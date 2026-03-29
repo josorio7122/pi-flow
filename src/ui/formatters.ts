@@ -2,9 +2,7 @@
  * formatters.ts — Formatting helpers and shared types for agent UI.
  */
 
-import type { ExtensionUIContext } from "@mariozechner/pi-coding-agent";
-import { Theme } from "@mariozechner/pi-coding-agent";
-import type { TUI } from "@mariozechner/pi-tui";
+import type { Theme } from "@mariozechner/pi-coding-agent";
 import { getConfig } from "../agents/registry.js";
 import type { SubagentType } from "../types.js";
 
@@ -25,9 +23,7 @@ const TOOL_DISPLAY: Record<string, string> = {
   ls: "listing",
 };
 
-export type { Theme };
-export type UICtx = ExtensionUIContext;
-export type { TUI };
+
 
 /** Per-agent live activity state. */
 export interface AgentActivity {

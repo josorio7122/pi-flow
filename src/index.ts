@@ -13,7 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { AgentSession, ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { AgentSession, ExtensionAPI, ExtensionCommandContext, ExtensionContext, ModelRegistry } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { loadCustomAgents } from "./agents/custom.js";
@@ -21,7 +21,7 @@ import { AgentManager } from "./agents/manager.js";
 import { BUILTIN_TOOL_NAMES, getAgentConfig, getAllTypes, getAvailableTypes, getDefaultAgentNames, getUserAgentNames, registerAgents, resolveType } from "./agents/registry.js";
 import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, normalizeMaxTurns, setDefaultMaxTurns, setGraceTurns, steerAgent } from "./agents/runner.js";
 import { resolveAgentInvocationConfig, resolveJoinMode } from "./config/invocation.js";
-import { type ModelRegistry, resolveModel } from "./config/model-resolver.js";
+import { resolveModel } from "./config/model-resolver.js";
 import { registerAgentsCommand } from "./extension/command.js";
 import { GroupJoinManager } from "./extension/group-join.js";
 import { buildDetails, buildNotificationDetails, createActivityTracker, formatTaskNotification, getStatusNote, safeFormatTokens, textResult } from "./extension/helpers.js";
@@ -31,7 +31,6 @@ import { type AgentConfig, type AgentRecord, type JoinMode, type NotificationDet
 import {
   type AgentActivity,
   type AgentDetails,
-  AgentWidget,
   describeActivity,
   formatDuration,
   formatMs,
@@ -40,8 +39,8 @@ import {
   getDisplayName,
   getPromptModeLabel,
   SPINNER,
-
-} from "./ui/widget.js";
+} from "./ui/formatters.js";
+import { AgentWidget } from "./ui/widget.js";
 
 export default function (pi: ExtensionAPI) {
   // ---- Register custom notification renderer ----

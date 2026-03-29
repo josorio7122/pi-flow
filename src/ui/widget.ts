@@ -5,7 +5,8 @@
  * Uses the callback form of setWidget for themed rendering.
  */
 
-import { truncateToWidth } from "@mariozechner/pi-tui";
+import type { ExtensionUIContext, Theme } from "@mariozechner/pi-coding-agent";
+import { type TUI, truncateToWidth } from "@mariozechner/pi-tui";
 import type { AgentManager } from "../agents/manager.js";
 import type { SubagentType } from "../types.js";
 import {
@@ -19,19 +20,15 @@ import {
   getDisplayName,
   getPromptModeLabel,
   SPINNER,
-  type Theme,
-  type TUI,
-  type UICtx,
 } from "./formatters.js";
 
-export { describeActivity, ERROR_STATUSES, formatDuration, formatMs, formatTokens, formatTurns, getDisplayName, getPromptModeLabel, SPINNER } from "./formatters.js";
-export type { AgentActivity, AgentDetails, Theme, UICtx };
+
 
 /** Maximum number of rendered lines before overflow collapse kicks in. */
 const MAX_WIDGET_LINES = 12;
 
 export class AgentWidget {
-  private uiCtx: UICtx | undefined;
+  private uiCtx: ExtensionUIContext | undefined;
   private widgetFrame = 0;
   private widgetInterval: ReturnType<typeof setInterval> | undefined;
   /** Tracks how many turns each finished agent has survived. Key: agent ID, Value: turns since finished. */
@@ -52,9 +49,9 @@ export class AgentWidget {
   ) {}
 
   /** Set the UI context (grabbed from first tool execution). */
-  setUICtx(ctx: UICtx) {
+  setUICtx(ctx: ExtensionUIContext) {
     if (ctx !== this.uiCtx) {
-      // UICtx changed — the widget registered on the old context is gone.
+      // ExtensionUIContext changed — the widget registered on the old context is gone.
       // Force re-registration on next update().
       this.uiCtx = ctx;
       this.widgetRegistered = false;
