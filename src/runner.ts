@@ -81,6 +81,8 @@ export interface RunAgentCallbacks {
   onTextDelta?: (delta: string, fullText: string) => void;
   onTurnEnd?: (turnCount: number) => void;
   onUsageUpdate?: (usage: UsageStats) => void;
+  /** Called when the agent session is created (before first prompt). */
+  onSessionCreated?: (session: unknown) => void;
 }
 
 export interface RunAgentOptions {
@@ -166,6 +168,9 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
 
   // 6. Enforce exact tool set
   session.setActiveToolsByName(agent.tools);
+
+  // 6b. Notify caller that session is ready (for pending steer flush, etc.)
+  callbacks?.onSessionCreated?.(session);
 
   // 7. Turn tracking state
   let turnCount = 0;

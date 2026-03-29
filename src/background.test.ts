@@ -271,6 +271,96 @@ describe('BackgroundManager', () => {
     const record = manager.getRecord(id);
     expect(record!.pendingSteers).toContain('wrap up now');
   });
+
+  // ── Phase 1: Gap #24 — pending steers flushed via onSessionCreated ──────
+
+  it('flushes pending steers when steerFn is set', () => {
+    const executor = vi.fn(() => new Promise<SingleAgentResult>(() => {}));
+    const id = manager.spawn({
+      agent: makeAgent(),
+      task: 't',
+      description: 'd',
+      executor,
+    });
+
+    // Queue steers before session ready
+    manager.steer(id, 'message 1');
+    manager.steer(id, 'message 2');
+
+    // Simulate session ready — set steerFn
+    const steerFn = vi.fn(() => Promise.resolve());
+    const record = manager.getRecord(id)!;
+    record.steerFn = steerFn;
+
+    // Flush pending steers
+    manager.flushPendingSteers(id);
+    expect(steerFn).toHaveBeenCalledTimes(2);
+    expect(steerFn).toHaveBeenCalledWith('message 1');
+    expect(steerFn).toHaveBeenCalledWith('message 2');
+    expect(record.pendingSteers).toBeUndefined();
+  });
+
+  it('flushPendingSteers is a no-op when no pending steers', () => {
+    const executor = vi.fn(() => new Promise<SingleAgentResult>(() => {}));
+    const id = manager.spawn({
+      agent: makeAgent(),
+      task: 't',
+      description: 'd',
+      executor,
+    });
+
+    const steerFn = vi.fn(() => Promise.resolve());
+    manager.getRecord(id)!.steerFn = steerFn;
+    manager.flushPendingSteers(id);
+    expect(steerFn).not.toHaveBeenCalled();
+  });
+
+  // ── Phase 1: Gap #26 — waitForAll with loop-drain ──────────────────────
+
+  it('waitForAll drains queued agents through completion', async () => {
+    let resolve1!: (r: SingleAgentResult) => void;
+    let resolve2!: (r: SingleAgentResult) => void;
+    let resolve3!: (r: SingleAgentResult) => void;
+
+    const executor1 = vi.fn(
+      () =>
+        new Promise<SingleAgentResult>((r) => {
+          resolve1 = r;
+        }),
+    );
+    const executor2 = vi.fn(
+      () =>
+        new Promise<SingleAgentResult>((r) => {
+          resolve2 = r;
+        }),
+    );
+    const executor3 = vi.fn(
+      () =>
+        new Promise<SingleAgentResult>((r) => {
+          resolve3 = r;
+        }),
+    );
+
+    // maxConcurrent=2, so a3 will be queued
+    manager.spawn({ agent: makeAgent('a1'), task: 't1', description: 'd1', executor: executor1 });
+    manager.spawn({ agent: makeAgent('a2'), task: 't2', description: 'd2', executor: executor2 });
+    manager.spawn({ agent: makeAgent('a3'), task: 't3', description: 'd3', executor: executor3 });
+
+    // Start waiting (won't resolve until all 3 are done)
+    const waitPromise = manager.waitForAll();
+
+    // Complete a1 — should trigger a3 to start via drain
+    resolve1(makeResult('a1'));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(executor3).toHaveBeenCalledTimes(1);
+
+    // Complete a2 and a3
+    resolve2(makeResult('a2'));
+    resolve3(makeResult('a3'));
+
+    await expect(waitPromise).resolves.toBeUndefined();
+    expect(manager.listAgents().every((r) => r.status === 'completed')).toBe(true);
+  });
 });
 
 // ─── GroupJoinManager ─────────────────────────────────────────────────────────

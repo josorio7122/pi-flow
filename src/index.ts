@@ -42,7 +42,7 @@ import {
 import { hashToolCall, detectLoop } from './guardrails.js';
 import { shouldBlockToolCall } from './tool-blocking.js';
 import type { FlowDispatchDetails, FlowState, SessionState } from './types.js';
-import { BackgroundManager } from './background.js';
+import { BackgroundManager, GroupJoinManager } from './background.js';
 import { getFinalOutput } from './result-utils.js';
 import { pruneWorktrees } from './worktree.js';
 
@@ -58,6 +58,7 @@ let sessionId: string | null = null;
 let sessionDir: string | null = null;
 let sessionFeature: string | null = null;
 let backgroundManager: BackgroundManager | null = null;
+let groupJoinManager: GroupJoinManager | null = null;
 
 // ─── Session initialization ──────────────────────────────────────────────────
 
@@ -208,6 +209,7 @@ export default function piFlow(pi: ExtensionAPI) {
             }
           : undefined,
         backgroundManager ?? undefined,
+        groupJoinManager ?? undefined,
       );
 
       // Update footer status
@@ -273,24 +275,77 @@ export default function piFlow(pi: ExtensionAPI) {
 
   // ─── 2. Background agent tools ──────────────────────────────────────────────
 
+  // Initialize group join manager for batching parallel notifications
+  function sendCompletionNotification(
+    agentName: string,
+    id: string,
+    task: string,
+    status: string,
+    error?: string,
+    messages?: Record<string, unknown>[],
+  ) {
+    const preview = messages ? getFinalOutput(messages).slice(0, 500) : '';
+    pi.sendMessage(
+      {
+        customType: 'flow-agent-complete',
+        content:
+          `Background agent completed: ${agentName}\n` +
+          `Task: ${task}\n` +
+          `Status: ${status}\n` +
+          (error ? `Error: ${error}\n` : '') +
+          (preview ? `\nResult preview:\n${preview}\n` : '') +
+          `\nUse get_agent_result({ agent_id: "${id}" }) for full results.`,
+        display: true,
+      },
+      { deliverAs: 'followUp', triggerTurn: true },
+    );
+  }
+
+  groupJoinManager = new GroupJoinManager((results, partial) => {
+    const label = partial
+      ? `${results.length} agent(s) finished (partial — others still running)`
+      : `${results.length} agent(s) finished`;
+    const summaries = results
+      .map((r) => `- ${r.agent}: ${r.exitCode === 0 ? 'completed' : 'error'}`)
+      .join('\n');
+    pi.sendMessage(
+      {
+        customType: 'flow-agent-group-complete',
+        content: `Background agent group: ${label}\n\n${summaries}\n\nUse get_agent_result for full results.`,
+        display: true,
+      },
+      { deliverAs: 'followUp', triggerTurn: true },
+    );
+  }, 30_000);
+
   // Initialize background manager with completion notifications
+  const gjm = groupJoinManager;
   backgroundManager = new BackgroundManager({
     onComplete: (record) => {
-      const preview = record.result ? getFinalOutput(record.result.messages).slice(0, 500) : '';
-      pi.sendMessage(
-        {
-          customType: 'flow-agent-complete',
-          content:
-            `Background agent completed: ${record.agent.name}\n` +
-            `Task: ${record.task}\n` +
-            `Status: ${record.status}\n` +
-            (record.error ? `Error: ${record.error}\n` : '') +
-            (preview ? `\nResult preview:\n${preview}\n` : '') +
-            `\nUse get_agent_result({ agent_id: "${record.id}" }) for full results.`,
-          display: true,
-        },
-        { deliverAs: 'followUp', triggerTurn: true },
-      );
+      // Route through group join or send individual notification
+      if (record.result) {
+        const joinResult = gjm.onAgentComplete(record.id, record.result);
+        if (joinResult === 'pass') {
+          sendCompletionNotification(
+            record.agent.name,
+            record.id,
+            record.task,
+            record.status,
+            record.error,
+            record.result.messages,
+          );
+        }
+        // 'held' → group will fire later; 'delivered' → group callback already fired
+      } else {
+        // Error case — no result, send individual notification
+        sendCompletionNotification(
+          record.agent.name,
+          record.id,
+          record.task,
+          record.status,
+          record.error,
+        );
+      }
     },
   });
 
@@ -489,6 +544,7 @@ export default function piFlow(pi: ExtensionAPI) {
 
   // session_shutdown — abort all background agents
   pi.on('session_shutdown' as 'session_start', async () => {
+    groupJoinManager?.dispose();
     backgroundManager?.dispose();
   });
 

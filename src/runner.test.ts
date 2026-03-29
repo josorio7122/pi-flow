@@ -636,4 +636,18 @@ describe('runAgent', () => {
     expect(result.startedAt).toBeGreaterThanOrEqual(before);
     expect(result.startedAt).toBeLessThanOrEqual(after);
   });
+
+  it('calls onSessionCreated callback with the session', async () => {
+    const onSessionCreated = vi.fn();
+    await runAgent({
+      ctx: makeCtx(),
+      agent: makeAgent(),
+      task: 'Test session callback',
+      variableMap: {},
+      callbacks: { onSessionCreated },
+    });
+
+    expect(onSessionCreated).toHaveBeenCalledTimes(1);
+    expect(onSessionCreated).toHaveBeenCalledWith(mockSession);
+  });
 });

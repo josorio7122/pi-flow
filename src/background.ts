@@ -148,11 +148,20 @@ export class BackgroundManager {
     return false;
   }
 
+  /**
+   * Wait for all running and queued agents to complete.
+   * Loops because drainQueue starts new agents as running ones finish.
+   */
   async waitForAll(): Promise<void> {
-    const promises = [...this.agents.values()]
-      .filter((r) => r.promise)
-      .map((r) => r.promise!.catch(() => {}));
-    await Promise.all(promises);
+    while (true) {
+      this.drainQueue();
+      const pending = [...this.agents.values()]
+        .filter((r) => r.status === 'running' || r.status === 'queued')
+        .map((r) => r.promise)
+        .filter(Boolean);
+      if (pending.length === 0) break;
+      await Promise.allSettled(pending);
+    }
   }
 
   // ── Control ───────────────────────────────────────────────────────────────
@@ -193,6 +202,19 @@ export class BackgroundManager {
       if (!record.pendingSteers) record.pendingSteers = [];
       record.pendingSteers.push(message);
     }
+  }
+
+  /**
+   * Flush any pending steers for an agent.
+   * Called when the session becomes available (onSessionCreated).
+   */
+  flushPendingSteers(id: string): void {
+    const record = this.agents.get(id);
+    if (!record?.steerFn || !record.pendingSteers?.length) return;
+    for (const msg of record.pendingSteers) {
+      record.steerFn(msg).catch(() => {});
+    }
+    record.pendingSteers = undefined;
   }
 
   // ── Cleanup ───────────────────────────────────────────────────────────────
