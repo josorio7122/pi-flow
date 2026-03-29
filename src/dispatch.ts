@@ -117,6 +117,7 @@ async function executeSingle(
     task,
     variableMap,
     signal,
+    feature,
   });
 
   // Session-scoped dispatch log
@@ -176,6 +177,7 @@ async function executeParallel(
       task,
       variableMap,
       signal,
+      feature,
     });
     results[index] = result;
 
@@ -246,6 +248,7 @@ async function executeChain(
       task,
       variableMap,
       signal,
+      feature,
     });
     allResults[i] = result;
     completedResults.push(result);

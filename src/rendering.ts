@@ -437,6 +437,12 @@ export function renderAgentCard(
     if (usageStr) text += `\n  ${colorize('dim', usageStr)}`;
   }
 
+  // Worktree branch info
+  if (result.worktreeBranch) {
+    text += `\n  ${colorize('success', '⎇')} ${colorize('accent', result.worktreeBranch)}`;
+    text += `\n  ${colorize('dim', `merge: git merge ${result.worktreeBranch}`)}`;
+  }
+
   return text;
 }
 

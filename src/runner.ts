@@ -23,6 +23,7 @@ import type { FlowAgentConfig, SingleAgentResult, UsageStats } from './types.js'
 import { injectVariables } from './agents.js';
 import { buildMemoryBlock, buildReadOnlyMemoryBlock } from './memory.js';
 import { emptyUsage } from './result-utils.js';
+import { createWorktree, cleanupWorktree, type WorktreeInfo } from './worktree.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -89,6 +90,8 @@ export interface RunAgentOptions {
   variableMap: Record<string, string>;
   signal?: AbortSignal;
   callbacks?: RunAgentCallbacks;
+  /** Feature name — used for worktree branch naming */
+  feature?: string;
 }
 
 // ─── runAgent ─────────────────────────────────────────────────────────────────
@@ -104,8 +107,19 @@ export interface RunAgentOptions {
  * - Collects usage stats from session.getSessionStats()
  */
 export async function runAgent(options: RunAgentOptions): Promise<SingleAgentResult> {
-  const { ctx, agent, task, variableMap, signal, callbacks } = options;
+  const { ctx, agent, task, variableMap, signal, callbacks, feature } = options;
   const startedAt = Date.now();
+
+  // 0. Worktree isolation for writable agents
+  let effectiveCwd = ctx.cwd;
+  let worktreeInfo: WorktreeInfo | undefined;
+  if (agent.isolation === 'worktree') {
+    const agentId = `${agent.name}-${Date.now()}`;
+    worktreeInfo = createWorktree(ctx.cwd, agentId, feature);
+    if (worktreeInfo) {
+      effectiveCwd = worktreeInfo.path;
+    }
+  }
 
   // 1. Build system prompt with variable injection + memory block
   let systemPrompt = injectVariables(agent.systemPrompt, variableMap, agent.variables);
@@ -120,7 +134,7 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
 
   // 2. Create resource loader (no extensions, no skills — we inject via prompt)
   const loader = new DefaultResourceLoader({
-    cwd: ctx.cwd,
+    cwd: effectiveCwd,
     noExtensions: true,
     noSkills: true,
     noPromptTemplates: true,
@@ -138,8 +152,8 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
 
   // 5. Create session
   const { session } = await createAgentSession({
-    cwd: ctx.cwd,
-    sessionManager: SessionManager.inMemory(ctx.cwd),
+    cwd: effectiveCwd,
+    sessionManager: SessionManager.inMemory(effectiveCwd),
     settingsManager: SettingsManager.inMemory(),
     modelRegistry: ctx.modelRegistry,
     model,
@@ -220,6 +234,15 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
     const stats = session.getSessionStats();
     const stopReason = aborted ? 'aborted' : softLimitReached ? 'steered' : undefined;
 
+    // 11b. Worktree cleanup
+    let worktreeBranch: string | undefined;
+    if (worktreeInfo) {
+      const wtResult = cleanupWorktree(ctx.cwd, worktreeInfo, task);
+      if (wtResult.hasChanges && wtResult.branch) {
+        worktreeBranch = wtResult.branch;
+      }
+    }
+
     return {
       agent: agent.name,
       agentSource: agent.source,
@@ -240,9 +263,17 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
       model: session.model ? `${session.model.provider}/${session.model.id}` : undefined,
       stopReason,
       startedAt,
+      worktreeBranch,
     };
   } catch (err) {
-    // Error during execution
+    // Error during execution — clean up worktree
+    if (worktreeInfo) {
+      try {
+        cleanupWorktree(ctx.cwd, worktreeInfo, task);
+      } catch {
+        /* worktree cleanup failure is non-fatal */
+      }
+    }
     const message = err instanceof Error ? err.message : String(err);
     return {
       agent: agent.name,

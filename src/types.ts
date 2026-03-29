@@ -16,6 +16,8 @@ export interface FlowAgentConfig {
   filePath: string;
   /** Persistent memory scope — agents with memory get a MEMORY.md directory */
   memory?: 'project' | 'global';
+  /** Isolation mode — "worktree" runs the agent in a temporary git worktree */
+  isolation?: 'worktree';
 }
 
 // ─── Skill config parsed from .md frontmatter ────────────────────────────────
@@ -91,6 +93,8 @@ export interface SingleAgentResult {
   errorMessage?: string;
   step?: number;
   startedAt?: number;
+  /** Branch name if agent ran in a worktree and made changes */
+  worktreeBranch?: string;
 }
 
 export interface UsageStats {
