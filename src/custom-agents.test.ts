@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { BUILTIN_TOOL_NAMES } from "../src/agent-types.js";
-import { loadCustomAgents } from "../src/custom-agents.js";
+import { BUILTIN_TOOL_NAMES } from "./agent-types.js";
+import { loadCustomAgents } from "./custom-agents.js";
 
 describe("loadCustomAgents", () => {
   let tmpDir: string;

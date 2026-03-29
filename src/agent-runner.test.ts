@@ -13,7 +13,7 @@ vi.mock("@mariozechner/pi-coding-agent", () => ({
   SettingsManager: { create: vi.fn(() => ({ kind: "settings-manager" })) },
 }));
 
-vi.mock("../src/agent-types.js", () => ({
+vi.mock("./agent-types.js", () => ({
   getConfig: vi.fn(() => ({
     displayName: "Explore",
     description: "Explore",
@@ -39,24 +39,24 @@ vi.mock("../src/agent-types.js", () => ({
   getToolsForType: vi.fn(() => [{ name: "read" }]),
 }));
 
-vi.mock("../src/env.js", () => ({
+vi.mock("./env.js", () => ({
   detectEnv: vi.fn(async () => ({ isGitRepo: false, branch: "", platform: "linux" })),
 }));
 
-vi.mock("../src/prompts.js", () => ({
+vi.mock("./prompts.js", () => ({
   buildAgentPrompt: vi.fn(() => "system prompt"),
 }));
 
-vi.mock("../src/memory.js", () => ({
+vi.mock("./memory.js", () => ({
   buildMemoryBlock: vi.fn(() => ""),
   buildReadOnlyMemoryBlock: vi.fn(() => ""),
 }));
 
-vi.mock("../src/skill-loader.js", () => ({
+vi.mock("./skill-loader.js", () => ({
   preloadSkills: vi.fn(() => []),
 }));
 
-import { resumeAgent, runAgent } from "../src/agent-runner.js";
+import { resumeAgent, runAgent } from "./agent-runner.js";
 
 function createSession(finalText: string) {
   const listeners: Array<(event: any) => void> = [];
@@ -116,8 +116,8 @@ describe("agent-runner final output capture", () => {
       expect.objectContaining({ onError: expect.any(Function) }),
     );
 
-    const bindOrder = session.bindExtensions.mock.invocationCallOrder[0];
-    const promptOrder = session.prompt.mock.invocationCallOrder[0];
+    const bindOrder = session.bindExtensions.mock.invocationCallOrder[0]!;
+    const promptOrder = session.prompt.mock.invocationCallOrder[0]!;
     expect(bindOrder).toBeLessThan(promptOrder);
   });
 

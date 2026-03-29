@@ -12,8 +12,8 @@ import {
   isValidType,
   registerAgents,
   resolveType,
-} from "../src/agent-types.js";
-import type { AgentConfig } from "../src/types.js";
+} from "./agent-types.js";
+import type { AgentConfig } from "./types.js";
 
 function makeAgentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {

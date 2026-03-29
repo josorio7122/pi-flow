@@ -11,7 +11,7 @@ export interface ModelEntry {
 export interface ModelRegistry {
   find(provider: string, modelId: string): unknown;
   getAll(): unknown[];
-  getAvailable?(): unknown[];
+  getAvailable?: (() => unknown[]) | undefined;
 }
 
 /**
