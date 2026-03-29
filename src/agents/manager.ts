@@ -1,4 +1,3 @@
-import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 /**
  * manager.ts — Tracks agents, background execution, resume support.
  *
@@ -8,46 +7,17 @@ import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
  */
 
 import { randomUUID } from "node:crypto";
-import type { Api, Model } from "@mariozechner/pi-ai";
-import type { AgentSession, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { cleanupWorktree, createWorktree, pruneWorktrees } from "../infra/worktree.js";
-import type { AgentRecord, IsolationMode, SubagentType } from "../types.js";
+import type { AgentRecord } from "../types.js";
+import {
+  DEFAULT_MAX_CONCURRENT,
+  type OnAgentComplete,
+  type OnAgentStart,
+  type SpawnArgs,
+  type SpawnOptions,
+} from "./manager-types.js";
 import type { Registry } from "./registry.js";
 import { type RunnerSettings, resumeAgent, runAgent, type ToolActivity } from "./runner.js";
-
-type OnAgentComplete = (record: AgentRecord) => void;
-type OnAgentStart = (record: AgentRecord) => void;
-
-/** Default max concurrent background agents. */
-const DEFAULT_MAX_CONCURRENT = 4;
-
-interface SpawnArgs {
-  pi: ExtensionAPI;
-  ctx: ExtensionContext;
-  type: SubagentType;
-  prompt: string;
-  options: SpawnOptions;
-}
-
-interface SpawnOptions {
-  description: string;
-  model?: Model<Api> | undefined;
-  maxTurns?: number | undefined;
-  isolated?: boolean | undefined;
-  inheritContext?: boolean | undefined;
-  thinkingLevel?: ThinkingLevel | undefined;
-  isBackground?: boolean | undefined;
-  /** Isolation mode — "worktree" creates a temp git worktree for the agent. */
-  isolation?: IsolationMode | undefined;
-  /** Called on tool start/end with activity info (for streaming progress to UI). */
-  onToolActivity?: ((activity: ToolActivity) => void) | undefined;
-  /** Called on streaming text deltas from the assistant response. */
-  onTextDelta?: ((delta: string, fullText: string) => void) | undefined;
-  /** Called when the agent session is created (for accessing session stats). */
-  onSessionCreated?: ((session: AgentSession) => void) | undefined;
-  /** Called at the end of each agentic turn with the cumulative count. */
-  onTurnEnd?: ((turnCount: number) => void) | undefined;
-}
 
 export function createAgentManager({
   onComplete,
@@ -249,13 +219,7 @@ export function createAgentManager({
     type,
     prompt,
     options,
-  }: {
-    pi: ExtensionAPI;
-    ctx: ExtensionContext;
-    type: SubagentType;
-    prompt: string;
-    options: Omit<SpawnOptions, "isBackground">;
-  }) {
+  }: Omit<SpawnArgs, "options"> & { options: Omit<SpawnOptions, "isBackground"> }) {
     const id = spawn({ pi, ctx, type, prompt, options: { ...options, isBackground: false } });
     const record = agents.get(id)!;
     await record.promise;

@@ -36,11 +36,35 @@ interface AgentToolDeps {
   runnerSettings: RunnerSettings;
   batch: BatchSystem;
   reloadCustomAgents: () => void;
-  typeListText: string;
+}
+
+function getModelLabelFromConfig(model: string) {
+  const name = model.includes("/") ? model.split("/").pop()! : model;
+  return name.replace(/-\d{8}$/, "");
+}
+
+function buildTypeListText(registry: Registry) {
+  const defaultDescs = registry.getDefaultAgentNames().map((name) => {
+    const cfg = registry.getAgentConfig(name);
+    const modelSuffix = cfg?.model ? ` (${getModelLabelFromConfig(cfg.model)})` : "";
+    return `- ${name}: ${cfg?.description ?? name}${modelSuffix}`;
+  });
+  const customDescs = registry.getUserAgentNames().map((name) => {
+    const cfg = registry.getAgentConfig(name);
+    return `- ${name}: ${cfg?.description ?? name}`;
+  });
+  return [
+    "Default agents:",
+    ...defaultDescs,
+    ...(customDescs.length > 0 ? ["", "Custom agents:", ...customDescs] : []),
+    "",
+    "Custom agents can be defined in .pi/agents/<name>.md (project) or ~/.pi/agent/agents/<name>.md (global).",
+  ].join("\n");
 }
 
 export function registerAgentTool(deps: AgentToolDeps) {
   const { pi, manager, registry, widget, agentActivity, runnerSettings, batch } = deps;
+  const typeListText = buildTypeListText(registry);
 
   pi.registerTool({
     name: "Agent",
@@ -48,7 +72,7 @@ export function registerAgentTool(deps: AgentToolDeps) {
     description: `Launch a new agent to handle complex, multi-step tasks autonomously.
 
 Available agent types:
-${deps.typeListText}
+${typeListText}
 
 Guidelines:
 - For parallel work, use run_in_background: true. Foreground calls run sequentially.

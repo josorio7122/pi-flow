@@ -143,53 +143,8 @@ export default function (pi: ExtensionAPI) {
     widget.onTurnStart();
   });
 
-  /** Build the full type list text dynamically from the unified registry. */
-  const buildTypeListText = () => {
-    const defaultNames = registry.getDefaultAgentNames();
-    const userNames = registry.getUserAgentNames();
-
-    const defaultDescs = defaultNames.map((name) => {
-      const cfg = registry.getAgentConfig(name);
-      const modelSuffix = cfg?.model ? ` (${getModelLabelFromConfig(cfg.model)})` : "";
-      return `- ${name}: ${cfg?.description ?? name}${modelSuffix}`;
-    });
-
-    const customDescs = userNames.map((name) => {
-      const cfg = registry.getAgentConfig(name);
-      return `- ${name}: ${cfg?.description ?? name}`;
-    });
-
-    return [
-      "Default agents:",
-      ...defaultDescs,
-      ...(customDescs.length > 0 ? ["", "Custom agents:", ...customDescs] : []),
-      "",
-      "Custom agents can be defined in .pi/agents/<name>.md (project) or ~/.pi/agent/agents/<name>.md (global) — they are picked up automatically. Project-level agents override global ones. Creating a .md file with the same name as a default agent overrides it.",
-    ].join("\n");
-  };
-
-  /** Derive a short model label from a model string. */
-  function getModelLabelFromConfig(model: string) {
-    // Strip provider prefix (e.g. "anthropic/claude-sonnet-4-6" → "claude-sonnet-4-6")
-    const name = model.includes("/") ? model.split("/").pop()! : model;
-    // Strip trailing date suffix (e.g. "claude-haiku-4-5-20251001" → "claude-haiku-4-5")
-    return name.replace(/-\d{8}$/, "");
-  }
-
-  const typeListText = buildTypeListText();
-
   // ---- Tools ----
-  registerAgentTool({
-    pi,
-    manager,
-    registry,
-    widget,
-    agentActivity,
-    runnerSettings,
-    batch,
-    reloadCustomAgents,
-    typeListText,
-  });
+  registerAgentTool({ pi, manager, registry, widget, agentActivity, runnerSettings, batch, reloadCustomAgents });
   registerResultTool({ pi, manager, registry, notifications });
   registerSteerTool({ pi, manager });
 

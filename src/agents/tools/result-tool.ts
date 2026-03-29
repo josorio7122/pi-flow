@@ -2,14 +2,14 @@
  * get_subagent_result tool — check status and retrieve background agent results.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { AgentSession, ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { safeFormatTokens, textResult } from "../../extension/helpers.js";
+import { extractText } from "../../infra/context.js";
 import { formatDuration, getDisplayName } from "../../ui/formatters.js";
 import type { AgentManager } from "../manager.js";
 import type { NotificationSystem } from "../notification.js";
 import type { Registry } from "../registry.js";
-import { getAgentConversation } from "../runner.js";
 
 export function registerResultTool({
   pi,
@@ -69,7 +69,7 @@ export function registerResultTool({
       }
 
       if (params.verbose && record.session) {
-        const conversation = getAgentConversation(record.session);
+        const conversation = formatConversation(record.session);
         if (conversation) {
           output += `\n\n--- Agent Conversation ---\n${conversation}`;
         }
@@ -78,4 +78,29 @@ export function registerResultTool({
       return textResult(output);
     },
   });
+}
+
+function formatConversation(session: AgentSession) {
+  return session.messages
+    .map((msg) => {
+      if (msg.role === "user") {
+        const text = typeof msg.content === "string" ? msg.content : extractText(msg.content);
+        return `[User]\n${text}`;
+      }
+      if (msg.role === "assistant") {
+        const text = msg.content
+          .filter((c) => c.type === "text")
+          .map((c) => (c as { text: string }).text)
+          .join("\n");
+        const tools = msg.content.filter((c) => c.type === "toolCall").map((c) => (c as { name: string }).name);
+        return `[Assistant]\n${text}${tools.length ? `\n[Tools: ${tools.join(", ")}]` : ""}`;
+      }
+      if (msg.role === "toolResult") {
+        const text = extractText(msg.content);
+        return `[Tool Result]\n${text.slice(0, 200)}${text.length > 200 ? "..." : ""}`;
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .join("\n\n");
 }

@@ -1,52 +1,17 @@
 /**
- * runner.ts — Agent execution: run, resume, steer, collect results.
- * Session creation delegated to session.ts.
+ * runner.ts — Agent execution: run, resume, steer.
+ * Types/settings in runner-types.ts, session creation in session.ts.
  */
 
-import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
-import type { Api, Model } from "@mariozechner/pi-ai";
-import type { AgentSession, AgentSessionEvent, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { AgentSession, AgentSessionEvent, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { buildParentContext, extractText } from "../infra/context.js";
 import type { SubagentType } from "../types.js";
-import type { Registry } from "./registry.js";
+import type { RunOptions, ToolActivity } from "./runner-types.js";
+import { normalizeMaxTurns } from "./runner-types.js";
 import { buildAgentSession } from "./session.js";
 
-export interface ToolActivity {
-  type: "start" | "end";
-  toolName: string;
-}
-
-export interface RunnerSettings {
-  defaultMaxTurns: number | undefined;
-  graceTurns: number;
-}
-
-export function normalizeMaxTurns(n: number | undefined) {
-  if (n == null || n === 0) return undefined;
-  return Math.max(1, Math.round(n));
-}
-
-export function createRunnerSettings(): RunnerSettings {
-  return { defaultMaxTurns: undefined, graceTurns: 5 };
-}
-
-export interface RunOptions {
-  pi: ExtensionAPI;
-  description?: string | undefined;
-  model?: Model<Api> | undefined;
-  maxTurns?: number | undefined;
-  signal?: AbortSignal | undefined;
-  isolated?: boolean | undefined;
-  inheritContext?: boolean | undefined;
-  thinkingLevel?: ThinkingLevel | undefined;
-  cwd?: string | undefined;
-  onToolActivity?: ((activity: ToolActivity) => void) | undefined;
-  onTextDelta?: ((delta: string, fullText: string) => void) | undefined;
-  onSessionCreated?: ((session: AgentSession) => void) | undefined;
-  onTurnEnd?: ((turnCount: number) => void) | undefined;
-  settings?: RunnerSettings | undefined;
-  registry?: Registry | undefined;
-}
+export type { RunnerSettings, RunOptions, ToolActivity } from "./runner-types.js";
+export { createRunnerSettings, normalizeMaxTurns } from "./runner-types.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -156,7 +121,7 @@ export async function runAgent({
   return { responseText, session, aborted, steered: softLimitReached };
 }
 
-// ── Resume + Steer + Conversation ────────────────────────────────────
+// ── Resume + Steer ───────────────────────────────────────────────────
 
 export async function resumeAgent({
   session,
@@ -193,29 +158,4 @@ export async function resumeAgent({
 
 export async function steerAgent(session: AgentSession, message: string) {
   session.steer(message);
-}
-
-export function getAgentConversation(session: AgentSession) {
-  return session.messages
-    .map((msg) => {
-      if (msg.role === "user") {
-        const text = typeof msg.content === "string" ? msg.content : extractText(msg.content);
-        return `[User]\n${text}`;
-      }
-      if (msg.role === "assistant") {
-        const text = msg.content
-          .filter((c) => c.type === "text")
-          .map((c) => (c as { text: string }).text)
-          .join("\n");
-        const tools = msg.content.filter((c) => c.type === "toolCall").map((c) => (c as { name: string }).name);
-        return `[Assistant]\n${text}${tools.length ? `\n[Tools: ${tools.join(", ")}]` : ""}`;
-      }
-      if (msg.role === "toolResult") {
-        const text = extractText(msg.content);
-        return `[Tool Result]\n${text.slice(0, 200)}${text.length > 200 ? "..." : ""}`;
-      }
-      return null;
-    })
-    .filter(Boolean)
-    .join("\n\n");
 }
