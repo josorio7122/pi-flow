@@ -13,6 +13,7 @@
 import type { AgentSession, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
+import { createBatchSystem } from "./agents/batch.js";
 import { loadCustomAgents } from "./agents/custom.js";
 import { createAgentManager } from "./agents/manager.js";
 import { createNotificationSystem, registerMessageRenderer } from "./agents/notification.js";
@@ -33,7 +34,7 @@ import {
 } from "./extension/helpers.js";
 import { registerRpcHandlers } from "./extension/rpc.js";
 import { createOutputFilePath, streamToOutputFile, writeInitialEntry } from "./infra/output-file.js";
-import { type AgentRecord, type JoinMode, type NotificationDetails, type SubagentType } from "./types.js";
+import { type AgentRecord, type NotificationDetails, type SubagentType } from "./types.js";
 import {
   type AgentActivity,
   type AgentDetails,
@@ -179,8 +180,8 @@ export default function (pi: ExtensionAPI) {
       }
 
       // If this agent is pending batch finalization (debounce window still open),
-      // don't send an individual nudge — finalizeBatch will pick it up retroactively.
-      if (currentBatchAgents.some((a) => a.id === record.id)) {
+      // don't send an individual nudge — batch will pick it up retroactively.
+      if (batch.isInBatch(record.id)) {
         widget.update();
         return;
       }
@@ -262,57 +263,8 @@ export default function (pi: ExtensionAPI) {
   const widget = new AgentWidget(manager, agentActivity, registry);
   notifications = createNotificationSystem({ pi, widget, agentActivity });
 
-  // ---- Join mode configuration ----
-  let defaultJoinMode: JoinMode = "smart";
-  function getDefaultJoinMode() {
-    return defaultJoinMode;
-  }
-  function setDefaultJoinMode(mode: JoinMode) {
-    defaultJoinMode = mode;
-  }
-
-  // ---- Batch tracking for smart join mode ----
-  // Collects background agent IDs spawned in the current turn for smart grouping.
-  // Uses a debounced timer: each new agent resets the 100ms window so that all
-  // parallel tool calls (which may be dispatched across multiple microtasks by the
-  // framework) are captured in the same batch.
-  let currentBatchAgents: { id: string; joinMode: JoinMode }[] = [];
-  let batchFinalizeTimer: ReturnType<typeof setTimeout> | undefined;
-  let batchCounter = 0;
-
-  /** Finalize the current batch: if 2+ smart-mode agents, register as a group. */
-  function finalizeBatch() {
-    batchFinalizeTimer = undefined;
-    const batchAgents = [...currentBatchAgents];
-    currentBatchAgents = [];
-
-    const smartAgents = batchAgents.filter((a) => a.joinMode === "smart" || a.joinMode === "group");
-    if (smartAgents.length >= 2) {
-      const groupId = `batch-${++batchCounter}`;
-      const ids = smartAgents.map((a) => a.id);
-      groupJoin.registerGroup(groupId, ids);
-      // Retroactively process agents that already completed during the debounce window.
-      // Their onComplete fired but was deferred (agent was in currentBatchAgents),
-      // so we feed them into the group now.
-      for (const id of ids) {
-        const record = manager.getRecord(id);
-        if (!record) continue;
-        record.groupId = groupId;
-        if (record.completedAt != null && !record.resultConsumed) {
-          groupJoin.onAgentComplete(record);
-        }
-      }
-    } else {
-      // No group formed — send individual nudges for any agents that completed
-      // during the debounce window and had their notification deferred.
-      for (const { id } of batchAgents) {
-        const record = manager.getRecord(id);
-        if (record?.completedAt != null && !record.resultConsumed) {
-          notifications.sendIndividualNudge(record);
-        }
-      }
-    }
-  }
+  // ---- Batch tracking ----
+  const batch = createBatchSystem({ groupJoin, manager, notifications });
 
   // Grab UI context from first tool execution + clear lingering widget on new turn
   pi.on("tool_execution_start", async (_event, ctx) => {
@@ -654,7 +606,7 @@ Guidelines:
 
         // Set output file + join mode synchronously after spawn, before the
         // event loop yields — onSessionCreated is async so this is safe.
-        const joinMode = resolveJoinMode(defaultJoinMode, true);
+        const joinMode = resolveJoinMode(batch.getDefaultJoinMode(), true);
         const record = manager.getRecord(id);
         if (record && joinMode) {
           record.joinMode = joinMode;
@@ -671,11 +623,7 @@ Guidelines:
           // Foreground/no join mode or explicit async — not part of any batch
         } else {
           // smart or group — add to current batch
-          currentBatchAgents.push({ id, joinMode });
-          // Debounce: reset timer on each new agent so parallel tool calls
-          // dispatched across multiple event loop ticks are captured together
-          if (batchFinalizeTimer) clearTimeout(batchFinalizeTimer);
-          batchFinalizeTimer = setTimeout(finalizeBatch, 100);
+          batch.addToBatch(id, joinMode);
         }
 
         agentActivity.set(id, bgState);
@@ -928,8 +876,8 @@ Guidelines:
     manager,
     agentActivity,
     reloadCustomAgents,
-    getDefaultJoinMode,
-    setDefaultJoinMode,
+    getDefaultJoinMode: batch.getDefaultJoinMode,
+    setDefaultJoinMode: batch.setDefaultJoinMode,
     runnerSettings,
     registry,
   });
