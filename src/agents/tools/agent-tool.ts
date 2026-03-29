@@ -68,10 +68,10 @@ export function registerAgentTool(deps: AgentToolDeps) {
     name: "Agent",
     label: "Agent",
     promptSnippet:
-      "Agent — Spawn a specialized agent (scout, builder, reviewer, planner, test-writer) for a single focused task",
+      "Agent — Delegate a single task to a specialized agent (scout, builder, reviewer, planner, test-writer)",
     promptGuidelines: [
-      "Agent is for single-phase tasks only: just a scout, just a review, just a build. If the task involves exploration followed by changes (scout then fix/clean/build), use the Workflow tool instead — never spawn a scout via Agent and then do the changes yourself.",
-      "Use run_in_background: true to run multiple agents in parallel for independent subtasks. Foreground calls block until the agent completes.",
+      "Delegate to Agent instead of doing work yourself: use scout for codebase exploration, builder for multi-file edits, reviewer for code review, test-writer for test creation.",
+      "If the task has two phases (explore then change), use Workflow instead of Agent. Agent is for one phase only.",
     ],
     description: `Launch a specialized agent to handle a focused task autonomously.
 
@@ -80,6 +80,7 @@ ${typeListText}
 
 Usage:
 - Provide clear, detailed prompts so the agent can work autonomously.
+- Use run_in_background: true for parallel work. Foreground calls block until the agent completes.
 - Use steer_subagent to send mid-run messages to a running background agent.
 - Use model for a different model, thinking for extended thinking, inherit_context for parent history.
 - Use isolation: "worktree" for safe parallel file modifications.`,
