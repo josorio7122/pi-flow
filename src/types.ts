@@ -88,6 +88,18 @@ export interface DispatchParams {
   ctx?: unknown;
   /** Run agents in background — returns IDs immediately */
   background?: boolean;
+  /** Model override (exact "provider/modelId" or fuzzy "haiku", "sonnet") */
+  model?: string;
+  /** Thinking level override */
+  thinking?: string;
+  /** Max turns override */
+  max_turns?: number;
+  /** Isolated mode override (no extension tools) */
+  isolated?: boolean;
+  /** Isolation mode override */
+  isolation?: 'worktree';
+  /** Fork parent conversation context into agent */
+  inherit_context?: boolean;
 }
 
 export interface DispatchResult {

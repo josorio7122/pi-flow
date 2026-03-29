@@ -157,6 +157,39 @@ export default function piFlow(pi: ExtensionAPI) {
             'You will be notified on completion. Use get_agent_result to retrieve results.',
         }),
       ),
+      model: Type.Optional(
+        Type.String({
+          description:
+            'Model override. Accepts "provider/modelId" or fuzzy name (e.g. "haiku", "sonnet").',
+        }),
+      ),
+      thinking: Type.Optional(
+        Type.String({
+          description: 'Thinking level override: off, minimal, low, medium, high, xhigh.',
+        }),
+      ),
+      max_turns: Type.Optional(
+        Type.Number({
+          description: 'Maximum agentic turns before stopping. Omit for agent default.',
+          minimum: 1,
+        }),
+      ),
+      isolated: Type.Optional(
+        Type.Boolean({
+          description: 'If true, agent gets no extension tools — only built-in tools.',
+        }),
+      ),
+      isolation: Type.Optional(
+        Type.Literal('worktree', {
+          description:
+            'Set to "worktree" to run in a temporary git worktree (isolated copy of repo).',
+        }),
+      ),
+      inherit_context: Type.Optional(
+        Type.Boolean({
+          description: 'If true, fork parent conversation context into the agent.',
+        }),
+      ),
     }),
 
     async execute(
@@ -168,6 +201,12 @@ export default function piFlow(pi: ExtensionAPI) {
         chain?: Array<{ agent: string; task: string }>;
         feature?: string;
         background?: boolean;
+        model?: string;
+        thinking?: string;
+        max_turns?: number;
+        isolated?: boolean;
+        isolation?: 'worktree';
+        inherit_context?: boolean;
       },
       signal: AbortSignal | undefined,
       onUpdate: AgentToolUpdateCallback<FlowDispatchDetails> | undefined,
@@ -196,7 +235,18 @@ export default function piFlow(pi: ExtensionAPI) {
       const feature = params.feature ?? sessionFeature ?? undefined;
 
       const result = await executeDispatch(
-        { ...params, feature, sessionDir: sessionDir ?? undefined, background: params.background },
+        {
+          ...params,
+          feature,
+          sessionDir: sessionDir ?? undefined,
+          background: params.background,
+          model: params.model,
+          thinking: params.thinking,
+          max_turns: params.max_turns,
+          isolated: params.isolated,
+          isolation: params.isolation,
+          inherit_context: params.inherit_context,
+        },
         ctx.cwd,
         rootDir,
         ctx,
