@@ -6,8 +6,42 @@ import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-age
 import type { AgentManager } from "../agents/manager.js";
 import { buildPhasePrompt } from "./prompt-builder.js";
 import { writeHandoff } from "./store.js";
-import { completeTask, getReadyTasks, getTasks } from "./task-store.js";
+import { blockTask, completeTask, createTask, getReadyTasks, getTasks } from "./task-store.js";
 import type { AgentHandoff, PhaseDefinition, WorkflowDefinition, WorkflowEvent, WorkflowState } from "./types.js";
+
+// ── Task Extraction ──────────────────────────────────────────────────
+
+/** Strip markdown formatting: **bold**, `code`, [link](url) */
+function stripMarkdown(text: string) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/`(.+?)`/g, "$1")
+    .replace(/\[(.+?)\]\(.+?\)/g, "$1")
+    .trim();
+}
+
+/** Extract top-level bullet items from a handoff's findings as task inputs. */
+export function extractTasksFromHandoff(handoff: AgentHandoff) {
+  const lines = handoff.findings.split("\n");
+  const tasks: { id: string; title: string }[] = [];
+  let counter = 0;
+
+  for (const line of lines) {
+    // Skip indented bullets (sub-items)
+    if (/^\s{2,}[-*]/.test(line)) continue;
+    // Match top-level bullets: "- item" or "* item"
+    const match = line.match(/^[-*]\s+(.+)/);
+    if (!match?.[1]) continue;
+    const title = stripMarkdown(match[1]);
+    if (!title) continue;
+    counter++;
+    tasks.push({ id: `task-${counter}`, title });
+  }
+
+  return tasks;
+}
+
+// ── Phase Execution ──────────────────────────────────────────────────
 
 export async function executeParallelPhase({
   phase,
@@ -35,6 +69,15 @@ export async function executeParallelPhase({
   const role = phase.role ?? "builder";
 
   emitEvent({ type: "phase_start", phase: phase.name, ts: Date.now() });
+
+  // Seed tasks from previous handoff if no tasks exist yet
+  const existingTasks = getTasks(cwd, workflowId);
+  if (existingTasks.length === 0 && previousHandoff) {
+    const taskInputs = extractTasksFromHandoff(previousHandoff);
+    for (const input of taskInputs) {
+      createTask(cwd, workflowId, { id: input.id, title: input.title, dependsOn: [] });
+    }
+  }
 
   let completedCount = 0;
   const allTasks = getTasks(cwd, workflowId);
@@ -73,8 +116,13 @@ export async function executeParallelPhase({
       };
 
       writeHandoff(cwd, workflowId, handoff);
-      completeTask({ cwd, workflowId, taskId: task.id, summary: record.result ?? "Done" });
-      completedCount++;
+
+      if (record.status === "error") {
+        blockTask({ cwd, workflowId, taskId: task.id, reason: record.error ?? "Agent error" });
+      } else {
+        completeTask({ cwd, workflowId, taskId: task.id, summary: record.result ?? "Done" });
+        completedCount++;
+      }
 
       emitEvent({
         type: "agent_complete",
