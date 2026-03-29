@@ -13,6 +13,7 @@ import { discoverAgents, buildVariableMap } from './agents.js';
 import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
 import { runAgent } from './runner.js';
 import { mapWithConcurrencyLimit, getFinalOutput, emptyResult } from './result-utils.js';
+import { BackgroundManager } from './background.js';
 import {
   readStateFile,
   writeDispatchLog,
@@ -423,6 +424,7 @@ export async function executeDispatch(
   ctx: ExtensionContext | undefined,
   signal?: AbortSignal,
   onUpdate?: OnUpdateCallback,
+  backgroundManager?: BackgroundManager,
 ): Promise<DispatchResult> {
   try {
     // Validate exactly one mode
@@ -469,6 +471,90 @@ export async function executeDispatch(
     const variableDir = featureDir ?? path.join(cwd, '.flow', 'sessions', 'ad-hoc');
     const variableMap = buildVariableMap(cwd, variableDir);
     const featureLabel = feature ?? 'ad-hoc';
+
+    // ── Background dispatch ─────────────────────────────────────────────────
+    if (params.background && backgroundManager) {
+      if (hasChain) {
+        return errorResult(
+          'Chain dispatch is not supported in background mode. Chains are sequential with {previous} substitution.',
+          params,
+        );
+      }
+
+      if (hasSingle) {
+        const agent = findAgent(agents, params.agent!);
+        if (!agent) {
+          return errorResult(
+            `Agent '${params.agent}' not found. Available: ${agents.map((a) => a.name).join(', ')}`,
+            params,
+          );
+        }
+        const task = params.task!;
+        const id = backgroundManager.spawn({
+          agent,
+          task,
+          description: `${agent.name}: ${task.slice(0, 100)}`,
+          feature,
+          executor: (sig) =>
+            runAgent({
+              ctx: ctx as ExtensionContext,
+              agent,
+              task,
+              variableMap,
+              signal: sig,
+              feature,
+            }),
+        });
+        return {
+          content: [
+            {
+              type: 'text',
+              text:
+                `Agent started in background.\nAgent ID: ${id}\nType: ${agent.name}\n` +
+                `You will be notified on completion. Use get_agent_result({ agent_id: "${id}" }) to check status.`,
+            },
+          ],
+          details: makeDetails('single', featureLabel)([]),
+        };
+      }
+
+      if (hasParallel) {
+        const resolved = resolveAgentTasks(params.parallel!, agents);
+        if ('error' in resolved) return errorResult(resolved.error, params);
+
+        const ids: string[] = [];
+        for (const { agent, task } of resolved.resolved) {
+          const id = backgroundManager.spawn({
+            agent,
+            task,
+            description: `${agent.name}: ${task.slice(0, 100)}`,
+            feature,
+            executor: (sig) =>
+              runAgent({
+                ctx: ctx as ExtensionContext,
+                agent,
+                task,
+                variableMap,
+                signal: sig,
+                feature,
+              }),
+          });
+          ids.push(id);
+        }
+        return {
+          content: [
+            {
+              type: 'text',
+              text:
+                `${ids.length} agents started in background.\n` +
+                ids.map((id, i) => `  ${resolved.resolved[i].agent.name}: ${id}`).join('\n') +
+                '\n\nYou will be notified on completion.',
+            },
+          ],
+          details: makeDetails('parallel', featureLabel)([]),
+        };
+      }
+    }
 
     if (hasParallel) {
       const resolved = resolveAgentTasks(params.parallel!, agents);

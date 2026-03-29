@@ -70,6 +70,8 @@ export interface DispatchParams {
   sessionDir?: string;
   /** Extension context — required for in-process agent execution */
   ctx?: unknown;
+  /** Run agents in background — returns IDs immediately */
+  background?: boolean;
 }
 
 export interface DispatchResult {

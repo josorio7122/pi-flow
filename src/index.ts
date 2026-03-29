@@ -42,6 +42,9 @@ import {
 import { hashToolCall, detectLoop } from './guardrails.js';
 import { shouldBlockToolCall } from './tool-blocking.js';
 import type { FlowDispatchDetails, FlowState, SessionState } from './types.js';
+import { BackgroundManager } from './background.js';
+import { getFinalOutput } from './result-utils.js';
+import { pruneWorktrees } from './worktree.js';
 
 // ─── Module-level state ───────────────────────────────────────────────────────
 
@@ -54,6 +57,7 @@ const LOOP_THRESHOLD = 3;
 let sessionId: string | null = null;
 let sessionDir: string | null = null;
 let sessionFeature: string | null = null;
+let backgroundManager: BackgroundManager | null = null;
 
 // ─── Session initialization ──────────────────────────────────────────────────
 
@@ -144,6 +148,13 @@ export default function piFlow(pi: ExtensionAPI) {
           maxLength: 64,
         }),
       ),
+      background: Type.Optional(
+        Type.Boolean({
+          description:
+            'Run agents in background. Returns agent IDs immediately. ' +
+            'You will be notified on completion. Use get_agent_result to retrieve results.',
+        }),
+      ),
     }),
 
     async execute(
@@ -154,6 +165,7 @@ export default function piFlow(pi: ExtensionAPI) {
         parallel?: Array<{ agent: string; task: string }>;
         chain?: Array<{ agent: string; task: string }>;
         feature?: string;
+        background?: boolean;
       },
       signal: AbortSignal | undefined,
       onUpdate: AgentToolUpdateCallback<FlowDispatchDetails> | undefined,
@@ -182,7 +194,7 @@ export default function piFlow(pi: ExtensionAPI) {
       const feature = params.feature ?? sessionFeature ?? undefined;
 
       const result = await executeDispatch(
-        { ...params, feature, sessionDir: sessionDir ?? undefined },
+        { ...params, feature, sessionDir: sessionDir ?? undefined, background: params.background },
         ctx.cwd,
         rootDir,
         ctx,
@@ -195,6 +207,7 @@ export default function piFlow(pi: ExtensionAPI) {
               onUpdate({ content: partial.content, details: partial.details });
             }
           : undefined,
+        backgroundManager ?? undefined,
       );
 
       // Update footer status
@@ -258,7 +271,169 @@ export default function piFlow(pi: ExtensionAPI) {
     },
   });
 
-  // ─── 2. Commands ────────────────────────────────────────────────────────────
+  // ─── 2. Background agent tools ──────────────────────────────────────────────
+
+  // Initialize background manager with completion notifications
+  backgroundManager = new BackgroundManager({
+    onComplete: (record) => {
+      const preview = record.result ? getFinalOutput(record.result.messages).slice(0, 500) : '';
+      pi.sendMessage(
+        {
+          customType: 'flow-agent-complete',
+          content:
+            `Background agent completed: ${record.agent.name}\n` +
+            `Task: ${record.task}\n` +
+            `Status: ${record.status}\n` +
+            (record.error ? `Error: ${record.error}\n` : '') +
+            (preview ? `\nResult preview:\n${preview}\n` : '') +
+            `\nUse get_agent_result({ agent_id: "${record.id}" }) for full results.`,
+          display: true,
+        },
+        { deliverAs: 'followUp', triggerTurn: true },
+      );
+    },
+  });
+
+  pi.registerTool({
+    name: 'get_agent_result',
+    label: 'Get Agent Result',
+    description:
+      'Check status and retrieve results from a background agent. ' +
+      'Use the agent ID returned by dispatch_flow with background: true.',
+    parameters: Type.Object({
+      agent_id: Type.String({ description: 'The agent ID to check.' }),
+      wait: Type.Optional(
+        Type.Boolean({
+          description: 'If true, wait for the agent to complete. Default: false.',
+        }),
+      ),
+    }),
+    async execute(
+      _: string,
+      params: { agent_id: string; wait?: boolean },
+      _signal: AbortSignal | undefined,
+      _onUpdate: unknown,
+      _ctx: ExtensionContext,
+    ) {
+      if (!backgroundManager) {
+        return {
+          content: [{ type: 'text' as const, text: 'Error: Background manager not initialized.' }],
+          isError: true,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AgentToolResult requires details
+          details: undefined as any,
+        };
+      }
+
+      const record = backgroundManager.getRecord(params.agent_id);
+      if (!record) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Agent not found: "${params.agent_id}". It may have been cleaned up.`,
+            },
+          ],
+          isError: true,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AgentToolResult requires details
+          details: undefined as any,
+        };
+      }
+
+      if (
+        params.wait &&
+        record.promise &&
+        (record.status === 'running' || record.status === 'queued')
+      ) {
+        await record.promise.catch(() => {});
+      }
+
+      const output =
+        `Agent: ${record.id}\n` +
+        `Type: ${record.agent.name} | Status: ${record.status}\n` +
+        `Description: ${record.description}\n\n` +
+        (record.status === 'running' || record.status === 'queued'
+          ? 'Agent is still running. Use wait: true or check back later.'
+          : record.status === 'error'
+            ? `Error: ${record.error}`
+            : record.result
+              ? getFinalOutput(record.result.messages) || 'No output.'
+              : 'No output.');
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AgentToolResult requires details
+      return { content: [{ type: 'text' as const, text: output }], details: undefined as any };
+    },
+  });
+
+  pi.registerTool({
+    name: 'steer_agent',
+    label: 'Steer Agent',
+    description:
+      'Send a steering message to a running background agent. ' +
+      'The message will be injected into the agent conversation after its current tool execution.',
+    parameters: Type.Object({
+      agent_id: Type.String({ description: 'The agent ID to steer (must be running).' }),
+      message: Type.String({ description: 'The steering message to send.' }),
+    }),
+    async execute(
+      _: string,
+      params: { agent_id: string; message: string },
+      _signal: AbortSignal | undefined,
+      _onUpdate: unknown,
+      _ctx: ExtensionContext,
+    ) {
+      if (!backgroundManager) {
+        return {
+          content: [{ type: 'text' as const, text: 'Error: Background manager not initialized.' }],
+          isError: true,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AgentToolResult requires details
+          details: undefined as any,
+        };
+      }
+
+      const record = backgroundManager.getRecord(params.agent_id);
+      if (!record) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Agent not found: "${params.agent_id}".`,
+            },
+          ],
+          isError: true,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AgentToolResult requires details
+          details: undefined as any,
+        };
+      }
+
+      if (record.status !== 'running') {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Agent "${params.agent_id}" is not running (status: ${record.status}).`,
+            },
+          ],
+          isError: true,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AgentToolResult requires details
+          details: undefined as any,
+        };
+      }
+
+      backgroundManager.steer(params.agent_id, params.message);
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Steering message sent to agent ${record.id}. It will be processed after the current tool execution.`,
+          },
+        ],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AgentToolResult requires details
+        details: undefined as any,
+      };
+    },
+  });
+
+  // ─── 3. Commands ────────────────────────────────────────────────────────────
 
   pi.registerCommand('flow', {
     description: 'Show pi-flow session status',
@@ -304,12 +479,17 @@ export default function piFlow(pi: ExtensionAPI) {
     loopHistory.length = 0;
   });
 
-  // session_start — no feature recovery (new session = blank slate)
+  // session_start — prune orphaned worktrees, clear completed background agents
   pi.on('session_start', async (_: SessionStartEvent, ctx: ExtensionContext) => {
-    // Session starts blank — no feature bound, no recovery from filesystem.
-    // The user must explicitly provide a feature on first dispatch.
+    pruneWorktrees(ctx.cwd);
+    backgroundManager?.clearCompleted();
     if (!ctx.hasUI) return;
     updateFooterStatus(ctx.ui);
+  });
+
+  // session_shutdown — abort all background agents
+  pi.on('session_shutdown' as 'session_start', async () => {
+    backgroundManager?.dispose();
   });
 
   // tool_call — enforce coordinator write restrictions + loop detection
