@@ -27,7 +27,7 @@ export async function showAllAgentsList(deps: CommandDeps, ctx: ExtensionCommand
   const entries = allNames.map((name) => {
     const cfg = registry.getAgentConfig(name);
     const disabled = cfg?.enabled === false;
-    const model = getModelLabel(name, deps, ctx.modelRegistry);
+    const model = getModelLabel({ type: name, deps, modelRegistry: ctx.modelRegistry });
     const indicator = sourceIndicator(cfg);
     const prefix = `${indicator}${name} · ${model}`;
     const desc = disabled ? "(disabled)" : (cfg?.description ?? name);
@@ -57,7 +57,7 @@ export async function showAllAgentsList(deps: CommandDeps, ctx: ExtensionCommand
       ?.replace(/^[•◦✕\s]+/, "")
       .trim() ?? "";
   if (agentName && registry.getAgentConfig(agentName)) {
-    await showAgentDetail(deps, ctx, agentName);
+    await showAgentDetail({ deps, ctx, name: agentName });
     await showAllAgentsList(deps, ctx);
   }
 }
@@ -84,11 +84,19 @@ export async function showRunningAgents(deps: CommandDeps, ctx: ExtensionCommand
   const record = agents[idx];
   if (!record) return;
 
-  await viewAgentConversation(deps, ctx, record);
+  await viewAgentConversation({ deps, ctx, record });
   await showRunningAgents(deps, ctx);
 }
 
-async function viewAgentConversation(deps: CommandDeps, ctx: ExtensionCommandContext, record: AgentRecord) {
+async function viewAgentConversation({
+  deps,
+  ctx,
+  record,
+}: {
+  deps: CommandDeps;
+  ctx: ExtensionCommandContext;
+  record: AgentRecord;
+}) {
   if (!record.session) {
     ctx.ui.notify(`Agent is ${record.status === "queued" ? "queued" : "expired"} — no session available.`, "info");
     return;
@@ -101,7 +109,15 @@ async function viewAgentConversation(deps: CommandDeps, ctx: ExtensionCommandCon
   );
 }
 
-export async function showAgentDetail(deps: CommandDeps, ctx: ExtensionCommandContext, name: string) {
+export async function showAgentDetail({
+  deps,
+  ctx,
+  name,
+}: {
+  deps: CommandDeps;
+  ctx: ExtensionCommandContext;
+  name: string;
+}) {
   const { registry, reloadCustomAgents } = deps;
   const cfg = registry.getAgentConfig(name);
   if (!cfg) {
@@ -156,10 +172,10 @@ export async function showAgentDetail(deps: CommandDeps, ctx: ExtensionCommandCo
       ctx.ui.notify(`Restored default ${name}`, "info");
     }
   } else if (choice.startsWith("Eject")) {
-    await ejectAgent(deps, ctx, name, cfg);
+    await ejectAgent({ deps, ctx, name, cfg });
   } else if (choice === "Disable") {
-    await disableAgent(deps, ctx, name);
+    await disableAgent({ deps, ctx, name });
   } else if (choice === "Enable") {
-    await enableAgent(deps, ctx, name);
+    await enableAgent({ deps, ctx, name });
   }
 }

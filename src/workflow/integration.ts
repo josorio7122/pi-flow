@@ -36,7 +36,7 @@ export function registerWorkflowExtension(
   let activeDefinition: WorkflowDefinition | undefined;
 
   function emitEvent(cwd: string, event: WorkflowEvent) {
-    if (activeWorkflowId) appendEvent(cwd, activeWorkflowId, event);
+    if (activeWorkflowId) appendEvent({ cwd: cwd, workflowId: activeWorkflowId, event: event });
   }
 
   function doRefreshWidget(ctx: ExtensionContext) {
@@ -69,11 +69,19 @@ export function registerWorkflowExtension(
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       if (params.action === "status") return buildWorkflowStatusText({ ctx, activeWorkflowId });
       if (params.action === "continue") return continueWorkflow(ctx);
-      return startWorkflow(params.workflow_type, params.description ?? "", ctx);
+      return startWorkflow({ typeName: params.workflow_type, desc: params.description ?? "", ctx });
     },
   });
 
-  function startWorkflow(typeName: string | undefined, desc: string, ctx: ExtensionContext) {
+  function startWorkflow({
+    typeName,
+    desc,
+    ctx,
+  }: {
+    typeName: string | undefined;
+    desc: string;
+    ctx: ExtensionContext;
+  }) {
     if (!typeName) return textResult("Error: workflow_type is required for action 'start'.", true);
     const definition = workflows.get(typeName);
     if (!definition)
@@ -84,7 +92,7 @@ export function registerWorkflowExtension(
     const workflowId = `flow-${randomUUID().slice(0, 8)}`;
     initWorkflowDir(ctx.cwd, workflowId);
     const state = createWorkflowState({ definition, description: desc, workflowId });
-    writeState(ctx.cwd, workflowId, state);
+    writeState({ cwd: ctx.cwd, workflowId: workflowId, state: state });
 
     activeWorkflowId = workflowId;
     activeDefinition = definition;
@@ -110,7 +118,7 @@ export function registerWorkflowExtension(
     if (!activeWorkflowId || !activeDefinition || !deps?.manager) {
       return textResult("No active workflow or manager not available.", true);
     }
-    const state = readState(ctx.cwd, activeWorkflowId);
+    const state = readState({ cwd: ctx.cwd, workflowId: activeWorkflowId });
     if (!state) return textResult("Workflow state not found.", true);
 
     const outcome = await executeCurrentPhase({
@@ -150,7 +158,7 @@ export function registerWorkflowExtension(
     if (!activeWorkflowId || !activeDefinition) {
       return textResult("No active workflow to continue.", true);
     }
-    const state = readState(ctx.cwd, activeWorkflowId);
+    const state = readState({ cwd: ctx.cwd, workflowId: activeWorkflowId });
     if (!state) return textResult("Workflow state not found.", true);
 
     // Advance past gate
@@ -169,14 +177,14 @@ export function registerWorkflowExtension(
       if (!nextPhase) {
         state.exitReason = "clean";
         state.completedAt = Date.now();
-        writeState(ctx.cwd, activeWorkflowId, state);
+        writeState({ cwd: ctx.cwd, workflowId: activeWorkflowId, state: state });
         activeWorkflowId = undefined;
         activeDefinition = undefined;
         doRefreshWidget(ctx);
         return textResult("Workflow completed (no more phases after gate).");
       }
       state.currentPhase = nextPhase.name;
-      writeState(ctx.cwd, activeWorkflowId, state);
+      writeState({ cwd: ctx.cwd, workflowId: activeWorkflowId, state: state });
     }
 
     if (!deps?.manager) {
@@ -207,7 +215,7 @@ export function registerWorkflowExtension(
     workflows = loadWorkflowDefinitions(ctx.cwd, builtinWorkflowsDir);
     const bookmark = findLatestBookmark(ctx.sessionManager.getEntries());
     if (!bookmark) return;
-    const state = readState(ctx.cwd, bookmark.workflowId);
+    const state = readState({ cwd: ctx.cwd, workflowId: bookmark.workflowId });
     if (!state || state.completedAt) return;
     activeWorkflowId = bookmark.workflowId;
     activeDefinition = workflows.get(state.definitionName);

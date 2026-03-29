@@ -83,17 +83,17 @@ function isAgentHandoff(val: unknown): val is AgentHandoff {
 
 // ── State ────────────────────────────────────────────────────────────
 
-export function readState(cwd: string, workflowId: string) {
+export function readState({ cwd, workflowId }: { cwd: string; workflowId: string }) {
   return readJson<WorkflowState>(statePath(cwd, workflowId), isWorkflowState);
 }
 
-export function writeState(cwd: string, workflowId: string, state: WorkflowState) {
+export function writeState({ cwd, workflowId, state }: { cwd: string; workflowId: string; state: WorkflowState }) {
   writeJson(statePath(cwd, workflowId), state);
 }
 
 // ── Handoffs ─────────────────────────────────────────────────────────
 
-export function writeHandoff(cwd: string, workflowId: string, handoff: AgentHandoff) {
+export function writeHandoff({ cwd, workflowId, handoff }: { cwd: string; workflowId: string; handoff: AgentHandoff }) {
   const dir = handoffsDir(cwd, workflowId);
   const existing = listHandoffFiles(dir);
   const num = existing.length + 1;
@@ -102,7 +102,7 @@ export function writeHandoff(cwd: string, workflowId: string, handoff: AgentHand
   return filename;
 }
 
-export function listHandoffs(cwd: string, workflowId: string) {
+export function listHandoffs({ cwd, workflowId }: { cwd: string; workflowId: string }) {
   const dir = handoffsDir(cwd, workflowId);
   const files = listHandoffFiles(dir);
   const handoffs: AgentHandoff[] = [];
@@ -127,7 +127,7 @@ function listHandoffFiles(dir: string) {
 
 // ── Events (JSONL) ───────────────────────────────────────────────────
 
-export function appendEvent(cwd: string, workflowId: string, event: WorkflowEvent) {
+export function appendEvent({ cwd, workflowId, event }: { cwd: string; workflowId: string; event: WorkflowEvent }) {
   const fp = eventsPath(cwd, workflowId);
   ensureDir(path.dirname(fp));
   fs.appendFileSync(fp, JSON.stringify(event) + "\n");

@@ -28,13 +28,13 @@ export function registerFlowCommand({
         ctx.ui.notify("No active workflow.", "info");
         return;
       }
-      const state = readState(ctx.cwd, activeWorkflowId);
+      const state = readState({ cwd: ctx.cwd, workflowId: activeWorkflowId });
       if (!state) {
         ctx.ui.notify("Workflow state not found.", "error");
         return;
       }
       const events = readEvents(ctx.cwd, activeWorkflowId);
-      const handoffs = listHandoffs(ctx.cwd, activeWorkflowId);
+      const handoffs = listHandoffs({ cwd: ctx.cwd, workflowId: activeWorkflowId });
       const elapsed = formatDuration(Date.now() - state.startedAt);
       const lines = [
         `Workflow: ${state.type} — ${state.description}`,
@@ -55,7 +55,7 @@ export function registerFlowCommand({
         if (confirmed) {
           state.exitReason = "user_abort";
           state.completedAt = Date.now();
-          writeState(ctx.cwd, activeWorkflowId, state);
+          writeState({ cwd: ctx.cwd, workflowId: activeWorkflowId, state: state });
           emitEvent(ctx.cwd, {
             type: "workflow_complete",
             exitReason: "user_abort",

@@ -55,7 +55,7 @@ export function loadWorkflowsFromDir(dir: string, source: WorkflowDefinition["so
       continue;
     }
 
-    const def = parseWorkflowFile(content, basename(file, ".md"), source);
+    const def = parseWorkflowFile({ content, fallbackName: basename(file, ".md"), source });
     if (def) {
       workflows.set(def.name, def);
     }
@@ -64,7 +64,15 @@ export function loadWorkflowsFromDir(dir: string, source: WorkflowDefinition["so
   return workflows;
 }
 
-function parseWorkflowFile(content: string, fallbackName: string, source: WorkflowDefinition["source"]) {
+function parseWorkflowFile({
+  content,
+  fallbackName,
+  source,
+}: {
+  content: string;
+  fallbackName: string;
+  source: WorkflowDefinition["source"];
+}) {
   const { frontmatter: fm, body } = parseFrontmatter<Record<string, unknown>>(content);
 
   const name = typeof fm.name === "string" ? fm.name : fallbackName;

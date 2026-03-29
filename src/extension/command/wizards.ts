@@ -14,11 +14,19 @@ export async function showCreateWizard(deps: CommandDeps, ctx: ExtensionCommandC
   const targetDir = location.startsWith("Project") ? projectAgentsDir() : personalAgentsDir();
   const method = await ctx.ui.select("Creation method", ["Generate with Claude (recommended)", "Manual configuration"]);
   if (!method) return;
-  if (method.startsWith("Generate")) await showGenerateWizard(deps, ctx, targetDir);
-  else await showManualWizard(deps, ctx, targetDir);
+  if (method.startsWith("Generate")) await showGenerateWizard({ deps, ctx, targetDir });
+  else await showManualWizard({ deps, ctx, targetDir });
 }
 
-async function showGenerateWizard(deps: CommandDeps, ctx: ExtensionCommandContext, targetDir: string) {
+async function showGenerateWizard({
+  deps,
+  ctx,
+  targetDir,
+}: {
+  deps: CommandDeps;
+  ctx: ExtensionCommandContext;
+  targetDir: string;
+}) {
   const description = await ctx.ui.input("Describe what this agent should do");
   if (!description) return;
   const name = await ctx.ui.input("Agent name (filename, no spaces)");
@@ -81,7 +89,15 @@ Write the file using the write tool. Only write the file, nothing else.`;
   );
 }
 
-async function showManualWizard(deps: CommandDeps, ctx: ExtensionCommandContext, targetDir: string) {
+async function showManualWizard({
+  deps,
+  ctx,
+  targetDir,
+}: {
+  deps: CommandDeps;
+  ctx: ExtensionCommandContext;
+  targetDir: string;
+}) {
   const name = await ctx.ui.input("Agent name (filename, no spaces)");
   if (!name) return;
   const description = await ctx.ui.input("Description (one line)");

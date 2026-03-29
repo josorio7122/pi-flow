@@ -8,7 +8,17 @@ import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
 import type { AgentConfig } from "../../types.js";
 import { type CommandDeps, findAgentFile, personalAgentsDir, projectAgentsDir } from "./types.js";
 
-export async function ejectAgent(deps: CommandDeps, ctx: ExtensionCommandContext, name: string, cfg: AgentConfig) {
+export async function ejectAgent({
+  deps,
+  ctx,
+  name,
+  cfg,
+}: {
+  deps: CommandDeps;
+  ctx: ExtensionCommandContext;
+  name: string;
+  cfg: AgentConfig;
+}) {
   const location = await ctx.ui.select("Choose location", ["Project (.pi/agents/)", "Personal (~/.pi/agent/agents/)"]);
   if (!location) return;
 
@@ -47,7 +57,15 @@ export async function ejectAgent(deps: CommandDeps, ctx: ExtensionCommandContext
   ctx.ui.notify(`Ejected ${name} to ${targetPath}`, "info");
 }
 
-export async function disableAgent(deps: CommandDeps, ctx: ExtensionCommandContext, name: string) {
+export async function disableAgent({
+  deps,
+  ctx,
+  name,
+}: {
+  deps: CommandDeps;
+  ctx: ExtensionCommandContext;
+  name: string;
+}) {
   const file = findAgentFile(name);
   if (file) {
     const content = readFileSync(file.path, "utf-8");
@@ -74,7 +92,15 @@ export async function disableAgent(deps: CommandDeps, ctx: ExtensionCommandConte
   ctx.ui.notify(`Disabled ${name} (${targetPath})`, "info");
 }
 
-export async function enableAgent(deps: CommandDeps, ctx: ExtensionCommandContext, name: string) {
+export async function enableAgent({
+  deps,
+  ctx,
+  name,
+}: {
+  deps: CommandDeps;
+  ctx: ExtensionCommandContext;
+  name: string;
+}) {
   const file = findAgentFile(name);
   if (!file) return;
   const content = readFileSync(file.path, "utf-8");

@@ -105,7 +105,7 @@ describe("buildInterruptedContext", () => {
 describe("trackAgentStart", () => {
   it("adds an entry to activeAgents", () => {
     const state = makeState("running");
-    trackAgentStart(state, "agent-1", "builder", "build");
+    trackAgentStart({ state, agentId: "agent-1", role: "builder", phase: "build" });
     expect(state.activeAgents).toHaveLength(1);
     expect(state.activeAgents[0]?.agentId).toBe("agent-1");
     expect(state.activeAgents[0]?.role).toBe("builder");
@@ -115,7 +115,7 @@ describe("trackAgentStart", () => {
 describe("trackAgentComplete", () => {
   it("moves agent from active to completed", () => {
     const state = makeState("running");
-    trackAgentStart(state, "agent-1", "builder", "build");
+    trackAgentStart({ state, agentId: "agent-1", role: "builder", phase: "build" });
     expect(state.activeAgents).toHaveLength(1);
 
     trackAgentComplete({
@@ -134,7 +134,7 @@ describe("trackAgentComplete", () => {
 
   it("records error info for failed agents", () => {
     const state = makeState("running");
-    trackAgentStart(state, "agent-1", "builder", "build");
+    trackAgentStart({ state, agentId: "agent-1", role: "builder", phase: "build" });
     trackAgentComplete({
       state,
       agentId: "agent-1",

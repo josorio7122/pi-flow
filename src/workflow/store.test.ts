@@ -37,7 +37,7 @@ describe("initWorkflowDir", () => {
 describe("state operations", () => {
   it("returns null when state does not exist", () => {
     initWorkflowDir(tmpDir, WF_ID);
-    expect(readState(tmpDir, WF_ID)).toBeNull();
+    expect(readState({ cwd: tmpDir, workflowId: WF_ID })).toBeNull();
   });
 
   it("writes and reads state", () => {
@@ -57,8 +57,8 @@ describe("state operations", () => {
       countedAgentIds: [],
       startedAt: Date.now(),
     };
-    writeState(tmpDir, WF_ID, state);
-    const loaded = readState(tmpDir, WF_ID);
+    writeState({ cwd: tmpDir, workflowId: WF_ID, state: state });
+    const loaded = readState({ cwd: tmpDir, workflowId: WF_ID });
     expect(loaded).toEqual(state);
   });
 
@@ -66,7 +66,7 @@ describe("state operations", () => {
     initWorkflowDir(tmpDir, WF_ID);
     const statePath = path.join(getFlowDir(tmpDir, WF_ID), "state.json");
     fs.writeFileSync(statePath, JSON.stringify({ notAState: true }));
-    expect(readState(tmpDir, WF_ID)).toBeNull();
+    expect(readState({ cwd: tmpDir, workflowId: WF_ID })).toBeNull();
   });
 });
 
@@ -87,8 +87,12 @@ describe("handoff operations", () => {
 
   it("writes a handoff and auto-increments numbers", () => {
     initWorkflowDir(tmpDir, WF_ID);
-    const file1 = writeHandoff(tmpDir, WF_ID, handoff);
-    const file2 = writeHandoff(tmpDir, WF_ID, { ...handoff, role: "builder", phase: "build" });
+    const file1 = writeHandoff({ cwd: tmpDir, workflowId: WF_ID, handoff: handoff });
+    const file2 = writeHandoff({
+      cwd: tmpDir,
+      workflowId: WF_ID,
+      handoff: { ...handoff, role: "builder", phase: "build" },
+    });
     expect(file1).toBe("001-scout.json");
     expect(file2).toBe("002-builder.json");
   });
@@ -97,14 +101,18 @@ describe("handoff operations", () => {
     initWorkflowDir(tmpDir, WF_ID);
     const dir = path.join(getFlowDir(tmpDir, WF_ID), "handoffs");
     fs.writeFileSync(path.join(dir, "001-bad.json"), JSON.stringify({ notAHandoff: true }));
-    expect(listHandoffs(tmpDir, WF_ID)).toHaveLength(0);
+    expect(listHandoffs({ cwd: tmpDir, workflowId: WF_ID })).toHaveLength(0);
   });
 
   it("lists handoffs in order", () => {
     initWorkflowDir(tmpDir, WF_ID);
-    writeHandoff(tmpDir, WF_ID, handoff);
-    writeHandoff(tmpDir, WF_ID, { ...handoff, role: "builder", phase: "build", summary: "Built it" });
-    const all = listHandoffs(tmpDir, WF_ID);
+    writeHandoff({ cwd: tmpDir, workflowId: WF_ID, handoff: handoff });
+    writeHandoff({
+      cwd: tmpDir,
+      workflowId: WF_ID,
+      handoff: { ...handoff, role: "builder", phase: "build", summary: "Built it" },
+    });
+    const all = listHandoffs({ cwd: tmpDir, workflowId: WF_ID });
     expect(all).toHaveLength(2);
     expect(all[0]?.role).toBe("scout");
     expect(all[1]?.role).toBe("builder");
@@ -116,8 +124,8 @@ describe("event operations", () => {
     initWorkflowDir(tmpDir, WF_ID);
     const e1: WorkflowEvent = { type: "workflow_start", workflowType: "fix", description: "test", ts: 1000 };
     const e2: WorkflowEvent = { type: "phase_start", phase: "scout", ts: 1001 };
-    appendEvent(tmpDir, WF_ID, e1);
-    appendEvent(tmpDir, WF_ID, e2);
+    appendEvent({ cwd: tmpDir, workflowId: WF_ID, event: e1 });
+    appendEvent({ cwd: tmpDir, workflowId: WF_ID, event: e2 });
     const events = readEvents(tmpDir, WF_ID);
     expect(events).toHaveLength(2);
     expect(events[0]?.type).toBe("workflow_start");
@@ -132,13 +140,13 @@ describe("event operations", () => {
   it("skips malformed JSONL lines", () => {
     initWorkflowDir(tmpDir, WF_ID);
     const e1: WorkflowEvent = { type: "phase_start", phase: "scout", ts: 1001 };
-    appendEvent(tmpDir, WF_ID, e1);
+    appendEvent({ cwd: tmpDir, workflowId: WF_ID, event: e1 });
     // Append a corrupt line directly
     const eventsFile = path.join(getFlowDir(tmpDir, WF_ID), "events.jsonl");
     fs.appendFileSync(eventsFile, "not valid json\n");
     fs.appendFileSync(eventsFile, '{"no_type_field": true}\n');
     const e2: WorkflowEvent = { type: "phase_complete", phase: "scout", duration: 100, tokens: 50, ts: 1002 };
-    appendEvent(tmpDir, WF_ID, e2);
+    appendEvent({ cwd: tmpDir, workflowId: WF_ID, event: e2 });
     const events = readEvents(tmpDir, WF_ID);
     expect(events).toHaveLength(2);
     expect(events[0]?.type).toBe("phase_start");

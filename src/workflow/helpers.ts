@@ -39,7 +39,7 @@ export function refreshWidget({
     ctx.ui.setStatus(WIDGET_KEY, undefined);
     return;
   }
-  const state = readState(ctx.cwd, activeWorkflowId);
+  const state = readState({ cwd: ctx.cwd, workflowId: activeWorkflowId });
   if (!state) {
     ctx.ui.setWidget(WIDGET_KEY, undefined);
     ctx.ui.setStatus(WIDGET_KEY, undefined);
@@ -60,7 +60,7 @@ export function buildWorkflowStatusText({
   if (!activeWorkflowId) {
     return textResult("No active workflow.");
   }
-  const state = readState(ctx.cwd, activeWorkflowId);
+  const state = readState({ cwd: ctx.cwd, workflowId: activeWorkflowId });
   if (!state) return textResult("Workflow state not found.", true);
 
   const phases = Object.values(state.phases)

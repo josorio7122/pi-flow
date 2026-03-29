@@ -20,17 +20,21 @@ function tasksDir(cwd: string, workflowId: string) {
   return path.join(getFlowDir(cwd, workflowId), "tasks");
 }
 
-function taskPath(cwd: string, workflowId: string, taskId: string) {
+function taskPath({ cwd, workflowId, taskId }: { cwd: string; workflowId: string; taskId: string }) {
   return path.join(tasksDir(cwd, workflowId), `${taskId}.json`);
 }
 
 // ── CRUD ─────────────────────────────────────────────────────────────
 
-export function createTask(
-  cwd: string,
-  workflowId: string,
-  input: { id: string; title: string; dependsOn: readonly string[] },
-) {
+export function createTask({
+  cwd,
+  workflowId,
+  input,
+}: {
+  cwd: string;
+  workflowId: string;
+  input: { id: string; title: string; dependsOn: readonly string[] };
+}) {
   const now = new Date().toISOString();
   const task: Task = {
     id: input.id,
@@ -41,15 +45,15 @@ export function createTask(
     updatedAt: now,
     attemptCount: 0,
   };
-  writeJson(taskPath(cwd, workflowId, input.id), task);
+  writeJson(taskPath({ cwd, workflowId, taskId: input.id }), task);
   return task;
 }
 
-export function getTask(cwd: string, workflowId: string, taskId: string) {
-  return readJson<Task>(taskPath(cwd, workflowId, taskId), isTask);
+export function getTask({ cwd, workflowId, taskId }: { cwd: string; workflowId: string; taskId: string }) {
+  return readJson<Task>(taskPath({ cwd, workflowId, taskId }), isTask);
 }
 
-export function getTasks(cwd: string, workflowId: string) {
+export function getTasks({ cwd, workflowId }: { cwd: string; workflowId: string }) {
   const dir = tasksDir(cwd, workflowId);
   if (!fs.existsSync(dir)) return [];
   try {
@@ -66,8 +70,8 @@ export function getTasks(cwd: string, workflowId: string) {
 }
 
 /** Find tasks whose dependencies are all done. */
-export function getReadyTasks(cwd: string, workflowId: string) {
-  const tasks = getTasks(cwd, workflowId);
+export function getReadyTasks({ cwd, workflowId }: { cwd: string; workflowId: string }) {
+  const tasks = getTasks({ cwd, workflowId });
   const doneIds = new Set(tasks.filter((t) => t.status === "done").map((t) => t.id));
   return tasks.filter((task) => task.status === "todo" && task.dependsOn.every((dep) => doneIds.has(dep)));
 }
@@ -85,10 +89,10 @@ function updateTask({
   taskId: string;
   updates: Partial<Task>;
 }) {
-  const task = getTask(cwd, workflowId, taskId);
+  const task = getTask({ cwd, workflowId, taskId });
   if (!task) return null;
   const updated = { ...task, ...updates, updatedAt: new Date().toISOString() };
-  writeJson(taskPath(cwd, workflowId, taskId), updated);
+  writeJson(taskPath({ cwd, workflowId, taskId }), updated);
   return updated;
 }
 

@@ -54,8 +54,8 @@ export async function executeReviewLoop({
     state.reviewCycle = cycle + 1;
 
     // Spawn reviewer — track as active
-    trackAgentStart(state, `review-${cycle}`, reviewerRole, phase.name);
-    writeState(cwd, workflowId, state);
+    trackAgentStart({ state, agentId: `review-${cycle}`, role: reviewerRole, phase: phase.name });
+    writeState({ cwd: cwd, workflowId: workflowId, state: state });
 
     const reviewPrompt = buildReviewPrompt({
       phase,
@@ -96,7 +96,7 @@ export async function executeReviewLoop({
       timestamp: Date.now(),
     };
 
-    const reviewHandoffFile = writeHandoff(cwd, workflowId, reviewHandoff);
+    const reviewHandoffFile = writeHandoff({ cwd: cwd, workflowId: workflowId, handoff: reviewHandoff });
     trackAgentComplete({
       state,
       agentId: reviewRecord.id,
@@ -109,7 +109,7 @@ export async function executeReviewLoop({
     });
     // Remove placeholder
     state.activeAgents = state.activeAgents.filter((a) => a.agentId !== `review-${cycle}`);
-    writeState(cwd, workflowId, state);
+    writeState({ cwd: cwd, workflowId: workflowId, state: state });
 
     emitEvent({
       type: "review_verdict",
@@ -136,8 +136,8 @@ export async function executeReviewLoop({
     }
 
     // Spawn fixer — track as active
-    trackAgentStart(state, `fix-${cycle}`, fixRole, phase.name);
-    writeState(cwd, workflowId, state);
+    trackAgentStart({ state, agentId: `fix-${cycle}`, role: fixRole, phase: phase.name });
+    writeState({ cwd: cwd, workflowId: workflowId, state: state });
 
     const fixPrompt = buildFixPrompt({ definition, state, reviewHandoff });
     const fixRecord = await manager.spawnAndWait({
@@ -163,7 +163,7 @@ export async function executeReviewLoop({
       timestamp: Date.now(),
     };
 
-    const fixHandoffFile = writeHandoff(cwd, workflowId, currentHandoff);
+    const fixHandoffFile = writeHandoff({ cwd: cwd, workflowId: workflowId, handoff: currentHandoff });
     trackAgentComplete({
       state,
       agentId: fixRecord.id,
@@ -175,7 +175,7 @@ export async function executeReviewLoop({
     });
     // Remove placeholder
     state.activeAgents = state.activeAgents.filter((a) => a.agentId !== `fix-${cycle}`);
-    writeState(cwd, workflowId, state);
+    writeState({ cwd: cwd, workflowId: workflowId, state: state });
 
     emitEvent({
       type: "agent_complete",

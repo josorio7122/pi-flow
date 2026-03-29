@@ -72,27 +72,27 @@ export async function executeParallelPhase({
   emitEvent({ type: "phase_start", phase: phase.name, ts: Date.now() });
 
   // Seed tasks from previous handoff if no tasks exist yet
-  const existingTasks = getTasks(cwd, workflowId);
+  const existingTasks = getTasks({ cwd, workflowId });
   if (existingTasks.length === 0 && previousHandoff) {
     const taskInputs = extractTasksFromHandoff(previousHandoff);
     for (const input of taskInputs) {
-      createTask(cwd, workflowId, { id: input.id, title: input.title, dependsOn: [] });
+      createTask({ cwd, workflowId, input: { id: input.id, title: input.title, dependsOn: [] } });
     }
   }
 
   let completedCount = 0;
-  const allTasks = getTasks(cwd, workflowId);
+  const allTasks = getTasks({ cwd, workflowId });
   const totalTasks = allTasks.length;
 
   // Process tasks in waves until none are ready
-  let readyTasks = getReadyTasks(cwd, workflowId);
+  let readyTasks = getReadyTasks({ cwd, workflowId });
   while (readyTasks.length > 0) {
     const promises = readyTasks.map(async (task) => {
       const taskPrompt = `## Task: ${task.title}\n\n${buildPhasePrompt({ phase, definition, state, previousHandoff })}`;
 
       emitEvent({ type: "agent_start", role, agentId: "", phase: phase.name, ts: Date.now() });
-      trackAgentStart(state, `task-${task.id}`, role, phase.name);
-      writeState(cwd, workflowId, state);
+      trackAgentStart({ state, agentId: `task-${task.id}`, role: role, phase: phase.name });
+      writeState({ cwd: cwd, workflowId: workflowId, state: state });
 
       const record = await manager.spawnAndWait({
         pi,
@@ -118,7 +118,7 @@ export async function executeParallelPhase({
         timestamp: Date.now(),
       };
 
-      const handoffFile = writeHandoff(cwd, workflowId, handoff);
+      const handoffFile = writeHandoff({ cwd: cwd, workflowId: workflowId, handoff: handoff });
       const exitStatus = record.status === "error" ? ("error" as const) : ("completed" as const);
 
       trackAgentComplete({
@@ -132,7 +132,7 @@ export async function executeParallelPhase({
         error: record.error,
       });
       state.activeAgents = state.activeAgents.filter((a) => a.agentId !== `task-${task.id}`);
-      writeState(cwd, workflowId, state);
+      writeState({ cwd: cwd, workflowId: workflowId, state: state });
 
       if (record.status === "error") {
         blockTask({ cwd, workflowId, taskId: task.id, reason: record.error ?? "Agent error" });
@@ -153,7 +153,7 @@ export async function executeParallelPhase({
     });
 
     await Promise.all(promises);
-    readyTasks = getReadyTasks(cwd, workflowId);
+    readyTasks = getReadyTasks({ cwd, workflowId });
   }
 
   emitEvent({ type: "phase_complete", phase: phase.name, duration: 0, tokens: 0, ts: Date.now() });

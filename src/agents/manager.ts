@@ -153,7 +153,7 @@ export function createAgentManager({
         }
         record.result = responseText;
         record.session = session;
-        finalizeAgent(record, ctx.cwd, options);
+        finalizeAgent({ record, cwd: ctx.cwd, options });
         return responseText;
       })
       .catch((err) => {
@@ -161,14 +161,14 @@ export function createAgentManager({
           record.status = "error";
         }
         record.error = err instanceof Error ? err.message : String(err);
-        finalizeAgent(record, ctx.cwd, options);
+        finalizeAgent({ record, cwd: ctx.cwd, options });
         return "";
       });
 
     record.promise = promise;
   }
 
-  function finalizeAgent(record: AgentRecord, cwd: string, options: SpawnOptions) {
+  function finalizeAgent({ record, cwd, options }: { record: AgentRecord; cwd: string; options: SpawnOptions }) {
     record.completedAt ??= Date.now();
 
     if (record.outputCleanup) {

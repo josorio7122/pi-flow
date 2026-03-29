@@ -44,9 +44,17 @@ function findLatestHandoffForPhase(handoffs: readonly AgentHandoff[], phaseName:
   return undefined;
 }
 
-export function resolveContextHandoff(cwd: string, workflowId: string, phase: PhaseDefinition) {
+export function resolveContextHandoff({
+  cwd,
+  workflowId,
+  phase,
+}: {
+  cwd: string;
+  workflowId: string;
+  phase: PhaseDefinition;
+}) {
   if (!phase.contextFrom) return undefined;
-  const handoffs = listHandoffs(cwd, workflowId);
+  const handoffs = listHandoffs({ cwd, workflowId });
   for (let i = handoffs.length - 1; i >= 0; i--) {
     const h = handoffs[i];
     if (h && h.phase === phase.contextFrom) return h;
@@ -56,8 +64,20 @@ export function resolveContextHandoff(cwd: string, workflowId: string, phase: Ph
 
 // ── Active Agent Tracking ────────────────────────────────────────────
 
-export function trackAgentStart(state: WorkflowState, agentId: string, role: string, phase: string) {
-  state.activeAgents.push({ agentId, role, phase, startedAt: Date.now() });
+export function trackAgentStart({
+  state,
+  agentId,
+  role,
+  phase,
+  now = Date.now(),
+}: {
+  state: WorkflowState;
+  agentId: string;
+  role: string;
+  phase: string;
+  now?: number;
+}) {
+  state.activeAgents.push({ agentId, role, phase, startedAt: now });
 }
 
 export function trackAgentComplete({
@@ -85,7 +105,15 @@ export function trackAgentComplete({
 
 // ── Token Accumulation ───────────────────────────────────────────────
 
-export function accumulateTokens(state: WorkflowState, phaseName: string, manager: AgentManager) {
+export function accumulateTokens({
+  state,
+  phaseName,
+  manager,
+}: {
+  state: WorkflowState;
+  phaseName: string;
+  manager: AgentManager;
+}) {
   for (const agent of manager.listAgents()) {
     if (!agent.completedAt || !agent.session) continue;
     if (state.countedAgentIds.includes(agent.id)) continue;

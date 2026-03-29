@@ -44,7 +44,15 @@ export function getModelLabelFromConfig(modelStr: string) {
   return id.length > 20 ? id.slice(0, 17) + "…" : id;
 }
 
-export function getModelLabel(type: string, deps: CommandDeps, modelRegistry?: ModelRegistry) {
+export function getModelLabel({
+  type,
+  deps,
+  modelRegistry,
+}: {
+  type: string;
+  deps: CommandDeps;
+  modelRegistry?: ModelRegistry | undefined;
+}) {
   const cfg = deps.registry.getAgentConfig(type);
   if (!cfg?.model) return "inherit";
   if (modelRegistry) {

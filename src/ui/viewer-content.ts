@@ -34,7 +34,7 @@ export function buildConversationLines({
 
   let needsSeparator = false;
   for (const msg of messages) {
-    const rendered = renderMessage(msg, th, width);
+    const rendered = renderMessage({ msg, th, width });
     if (!rendered) continue;
     if (needsSeparator) lines.push(th.fg("dim", "───"));
     lines.push(...rendered);
@@ -50,7 +50,7 @@ export function buildConversationLines({
   return lines.map((l) => truncateToWidth(l, width));
 }
 
-function renderMessage(msg: AgentMessage, th: Theme, width: number) {
+function renderMessage({ msg, th, width }: { msg: AgentMessage; th: Theme; width: number }) {
   switch (msg.role) {
     case "user": {
       const text = typeof msg.content === "string" ? msg.content : extractText(msg.content);
