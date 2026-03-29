@@ -6,16 +6,33 @@ Agents handle complex tasks in the background while you keep working. Workflows 
 
 ## Install
 
+### From git (recommended)
+
 ```bash
-pi --extension pi-flow
+pi install git:github.com/josorio7122/pi-flow
 ```
 
-Or add to your pi config:
+Or add to your `~/.pi/agent/settings.json` (global) or `.pi/settings.json` (project):
 
 ```json
 {
-  "extensions": ["pi-flow"]
+  "packages": ["git:github.com/josorio7122/pi-flow"]
 }
+```
+
+### Quick test (temporary, current session only)
+
+```bash
+pi -e git:github.com/josorio7122/pi-flow
+```
+
+### Local development
+
+```bash
+git clone git@github.com:josorio7122/pi-flow.git
+cd pi-flow
+npm install
+pi -e ./src/index.ts
 ```
 
 ## Quick Start
