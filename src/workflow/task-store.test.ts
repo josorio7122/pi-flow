@@ -30,6 +30,13 @@ describe("createTask / getTask", () => {
   it("returns null for missing task", () => {
     expect(getTask(tmpDir, WF_ID, "nonexistent")).toBeNull();
   });
+
+  it("returns null for structurally invalid task JSON", () => {
+    const dir = path.join(tmpDir, ".pi", "flow", WF_ID, "tasks");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "bad-task.json"), JSON.stringify({ notATask: true }));
+    expect(getTask(tmpDir, WF_ID, "bad-task")).toBeNull();
+  });
 });
 
 describe("getTasks", () => {

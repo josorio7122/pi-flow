@@ -71,10 +71,20 @@ export function initWorkflowDir(cwd: string, workflowId: string) {
   ensureDir(handoffsDir(cwd, workflowId));
 }
 
+// ── Guards ────────────────────────────────────────────────────────────
+
+function isWorkflowState(val: unknown): val is WorkflowState {
+  return typeof val === "object" && val !== null && "id" in val && "currentPhase" in val && "phases" in val;
+}
+
+function isAgentHandoff(val: unknown): val is AgentHandoff {
+  return typeof val === "object" && val !== null && "agentId" in val && "role" in val && "phase" in val;
+}
+
 // ── State ────────────────────────────────────────────────────────────
 
 export function readState(cwd: string, workflowId: string) {
-  return readJson<WorkflowState>(statePath(cwd, workflowId));
+  return readJson<WorkflowState>(statePath(cwd, workflowId), isWorkflowState);
 }
 
 export function writeState(cwd: string, workflowId: string, state: WorkflowState) {
@@ -97,7 +107,7 @@ export function listHandoffs(cwd: string, workflowId: string) {
   const files = listHandoffFiles(dir);
   const handoffs: AgentHandoff[] = [];
   for (const file of files) {
-    const h = readJson<AgentHandoff>(path.join(dir, file));
+    const h = readJson<AgentHandoff>(path.join(dir, file), isAgentHandoff);
     if (h) handoffs.push(h);
   }
   return handoffs;

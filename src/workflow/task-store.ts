@@ -10,6 +10,10 @@ import * as path from "node:path";
 import { getFlowDir, readJson, writeJson } from "./store.js";
 import type { Task } from "./types.js";
 
+function isTask(val: unknown): val is Task {
+  return typeof val === "object" && val !== null && "id" in val && "status" in val && "title" in val;
+}
+
 // ── Path Helpers ─────────────────────────────────────────────────────
 
 function tasksDir(cwd: string, workflowId: string) {
@@ -42,7 +46,7 @@ export function createTask(
 }
 
 export function getTask(cwd: string, workflowId: string, taskId: string) {
-  return readJson<Task>(taskPath(cwd, workflowId, taskId));
+  return readJson<Task>(taskPath(cwd, workflowId, taskId), isTask);
 }
 
 export function getTasks(cwd: string, workflowId: string) {
@@ -52,7 +56,7 @@ export function getTasks(cwd: string, workflowId: string) {
     const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
     const tasks: Task[] = [];
     for (const file of files) {
-      const task = readJson<Task>(path.join(dir, file));
+      const task = readJson<Task>(path.join(dir, file), isTask);
       if (task) tasks.push(task);
     }
     return tasks;

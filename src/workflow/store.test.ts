@@ -42,10 +42,31 @@ describe("state operations", () => {
 
   it("writes and reads state", () => {
     initWorkflowDir(tmpDir, WF_ID);
-    const state = { id: WF_ID, type: "fix", description: "test" } as unknown as WorkflowState;
+    const state: WorkflowState = {
+      id: WF_ID,
+      type: "fix",
+      description: "test",
+      definitionName: "fix",
+      currentPhase: "scout",
+      phases: { scout: { phase: "scout", status: "pending", attempt: 0 } },
+      reviewCycle: 0,
+      maxReviewCycles: 3,
+      tokens: { total: 0, byPhase: {}, limit: 100000, limitReached: false },
+      activeAgents: [],
+      completedAgents: [],
+      countedAgentIds: [],
+      startedAt: Date.now(),
+    };
     writeState(tmpDir, WF_ID, state);
     const loaded = readState(tmpDir, WF_ID);
     expect(loaded).toEqual(state);
+  });
+
+  it("returns null for structurally invalid state JSON", () => {
+    initWorkflowDir(tmpDir, WF_ID);
+    const statePath = path.join(getFlowDir(tmpDir, WF_ID), "state.json");
+    fs.writeFileSync(statePath, JSON.stringify({ notAState: true }));
+    expect(readState(tmpDir, WF_ID)).toBeNull();
   });
 });
 
@@ -70,6 +91,13 @@ describe("handoff operations", () => {
     const file2 = writeHandoff(tmpDir, WF_ID, { ...handoff, role: "builder", phase: "build" });
     expect(file1).toBe("001-scout.json");
     expect(file2).toBe("002-builder.json");
+  });
+
+  it("returns empty list when handoff JSON is structurally invalid", () => {
+    initWorkflowDir(tmpDir, WF_ID);
+    const dir = path.join(getFlowDir(tmpDir, WF_ID), "handoffs");
+    fs.writeFileSync(path.join(dir, "001-bad.json"), JSON.stringify({ notAHandoff: true }));
+    expect(listHandoffs(tmpDir, WF_ID)).toHaveLength(0);
   });
 
   it("lists handoffs in order", () => {
