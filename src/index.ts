@@ -98,7 +98,7 @@ export default function (pi: ExtensionAPI) {
   let currentCtx: ExtensionContext | undefined;
 
   // Capture ctx from session_start for RPC spawn handler
-  pi.on("session_start", async (_event, ctx) => {
+  pi.on("session_start", async (_, ctx) => {
     currentCtx = ctx;
     manager.clearCompleted(); // preserve existing behavior
   });
@@ -142,7 +142,7 @@ export default function (pi: ExtensionAPI) {
   const batch = createBatchSystem({ groupJoin, manager, notifications });
 
   // Grab UI context from first tool execution + clear lingering widget on new turn
-  pi.on("tool_execution_start", async (_event, ctx) => {
+  pi.on("tool_execution_start", async (_, ctx) => {
     widget.setUICtx(ctx.ui);
     widget.onTurnStart();
   });

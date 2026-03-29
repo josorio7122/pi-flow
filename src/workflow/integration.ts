@@ -211,7 +211,7 @@ export function registerWorkflowExtension(
 
   // ── Hooks ──────────────────────────────────────────────────────
 
-  pi.on("session_start", async (_event, ctx) => {
+  pi.on("session_start", async (_, ctx) => {
     workflows = loadWorkflowDefinitions(ctx.cwd, builtinWorkflowsDir);
     const bookmark = findLatestBookmark(ctx.sessionManager.getEntries());
     if (!bookmark) return;
@@ -226,7 +226,7 @@ export function registerWorkflowExtension(
     doRefreshWidget(ctx);
   });
 
-  pi.on("turn_end", async (_event, ctx) => {
+  pi.on("turn_end", async (_, ctx) => {
     if (activeWorkflowId) doRefreshWidget(ctx);
   });
 

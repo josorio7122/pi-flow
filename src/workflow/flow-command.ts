@@ -22,7 +22,7 @@ export function registerFlowCommand({
 }) {
   pi.registerCommand("flow", {
     description: "View workflow progress and manage active workflows",
-    handler: async (_args, ctx) => {
+    handler: async (_, ctx) => {
       const activeWorkflowId = getActiveWorkflowId();
       if (!activeWorkflowId) {
         ctx.ui.notify("No active workflow.", "info");

@@ -19,7 +19,7 @@ export function registerSteerTool({ pi, manager }: { pi: ExtensionAPI; manager: 
       agent_id: Type.String({ description: "The agent ID to steer (must be currently running)." }),
       message: Type.String({ description: "The steering message to send." }),
     }),
-    execute: async (_toolCallId, params) => {
+    execute: async (_, params) => {
       const record = manager.getRecord(params.agent_id);
       if (!record) {
         return textResult(`Agent not found: "${params.agent_id}". It may have been cleaned up.`);

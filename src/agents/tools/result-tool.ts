@@ -32,7 +32,7 @@ export function registerResultTool({
       wait: Type.Optional(Type.Boolean({ description: "If true, wait for the agent to complete. Default: false." })),
       verbose: Type.Optional(Type.Boolean({ description: "If true, include full conversation. Default: false." })),
     }),
-    execute: async (_toolCallId, params) => {
+    execute: async (_, params) => {
       const record = manager.getRecord(params.agent_id);
       if (!record) {
         return textResult(`Agent not found: "${params.agent_id}". It may have been cleaned up.`);

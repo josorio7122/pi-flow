@@ -36,7 +36,7 @@ async function showAgentsMenu(deps: CommandDeps, ctx: ExtensionCommandContext) {
 export function registerAgentsCommand(deps: CommandDeps) {
   deps.pi.registerCommand("agents", {
     description: "Manage agents",
-    handler: async (_args, ctx) => {
+    handler: async (_, ctx) => {
       await showAgentsMenu(deps, ctx);
     },
   });
