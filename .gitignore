@@ -29,4 +29,7 @@ Thumbs.db
 .temp/
 .pi/
 .claude
-.vscode
+.vscodepi-manage-todo-list/
+pi-messenger/
+pi-planner/
+pi-coordination/
