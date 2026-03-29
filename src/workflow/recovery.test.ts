@@ -50,9 +50,8 @@ describe("buildContinuationPrompt", () => {
       phase: "build",
       summary: "partially done",
       findings: "modified types.ts",
-      filesAnalyzed: [],
-      filesModified: ["src/types.ts"],
       toolsUsed: 5,
+      turnsUsed: 3,
       duration: 30_000,
       timestamp: Date.now(),
     };
@@ -62,7 +61,6 @@ describe("buildContinuationPrompt", () => {
       exitReason: "crashed",
       previousHandoff: handoff,
     });
-    expect(prompt).toContain("src/types.ts");
     expect(prompt).toContain("partially done");
   });
 

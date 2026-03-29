@@ -43,8 +43,7 @@ function formatHandoffContext(handoff: AgentHandoff) {
   const parts = [`## Context from ${handoff.role} (${handoff.phase} phase)`];
   if (handoff.summary) parts.push(`### Summary\n${handoff.summary}`);
   if (handoff.findings) parts.push(`### Findings\n${handoff.findings}`);
-  if (handoff.filesAnalyzed.length > 0) parts.push(`### Files Analyzed\n${handoff.filesAnalyzed.join("\n")}`);
-  if (handoff.filesModified.length > 0) parts.push(`### Files Modified\n${handoff.filesModified.join("\n")}`);
+
   if (handoff.issues && handoff.issues.length > 0) {
     parts.push(
       `### Issues Found\n${handoff.issues.map((i) => `- [${i.severity}] ${i.file}${i.line ? `:${i.line}` : ""}: ${i.description}`).join("\n")}`,

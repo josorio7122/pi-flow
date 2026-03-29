@@ -81,9 +81,8 @@ export async function executeReviewLoop({
       phase: phase.name,
       summary: review.summary,
       findings: reviewRecord.result ?? "",
-      filesAnalyzed: [],
-      filesModified: [],
       toolsUsed: reviewRecord.toolUses,
+      turnsUsed: reviewRecord.turnCount,
       verdict: review.verdict,
       issues: review.issues.map((desc) => ({
         file: "",
@@ -154,9 +153,8 @@ export async function executeReviewLoop({
       phase: phase.name,
       summary: `Fix attempt ${cycle + 1}`,
       findings: fixRecord.result ?? "",
-      filesAnalyzed: [],
-      filesModified: [],
       toolsUsed: fixRecord.toolUses,
+      turnsUsed: fixRecord.turnCount,
       duration: fixDuration,
       timestamp: Date.now(),
     };

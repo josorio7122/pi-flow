@@ -33,9 +33,8 @@ const HANDOFF: AgentHandoff = {
   phase: "scout",
   summary: "Found 3 files with issues",
   findings: "src/foo.ts has a null check missing",
-  filesAnalyzed: ["src/foo.ts", "src/bar.ts"],
-  filesModified: [],
   toolsUsed: 5,
+  turnsUsed: 3,
   duration: 10000,
   timestamp: Date.now(),
 };

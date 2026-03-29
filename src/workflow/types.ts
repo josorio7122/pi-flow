@@ -95,9 +95,8 @@ export interface AgentHandoff {
   phase: string;
   summary: string;
   findings: string;
-  filesAnalyzed: readonly string[];
-  filesModified: readonly string[];
   toolsUsed: number;
+  turnsUsed: number;
   verdict?: ReviewVerdict | undefined;
   issues?: readonly ReviewIssue[] | undefined;
   duration: number;

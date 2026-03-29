@@ -270,7 +270,7 @@ Each workflow run creates a directory at `.pi/flow/<workflow-id>/`:
 **Handoffs** are how agents pass context between phases. Each handoff contains:
 - `summary` — First line of agent output
 - `findings` — Full agent output
-- `filesAnalyzed` / `filesModified` — File tracking
+- `toolsUsed` / `turnsUsed` — Agent effort metrics
 - `verdict` / `issues` — Review-specific fields
 
 ### Review Verdicts

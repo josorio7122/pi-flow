@@ -26,6 +26,7 @@ const resolvedRun = () =>
     session: mockSession(),
     aborted: false,
     steered: false,
+    turnCount: 3,
   });
 
 describe("AgentManager — Bug 1 race condition (resultConsumed vs onComplete)", () => {
@@ -222,6 +223,7 @@ describe("AgentManager — Bug 3 clearCompleted", () => {
       session: sess as any,
       aborted: false,
       steered: false,
+      turnCount: 5,
     });
 
     const id = manager.spawn({

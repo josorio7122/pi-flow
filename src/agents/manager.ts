@@ -72,6 +72,7 @@ export function createAgentManager({
       description: options.description,
       status: options.isBackground ? "queued" : "running",
       toolUses: 0,
+      turnCount: 0,
       startedAt: Date.now(),
       abortController,
     };
@@ -147,12 +148,13 @@ export function createAgentManager({
         },
       },
     })
-      .then(({ responseText, session, aborted, steered }) => {
+      .then(({ responseText, session, aborted, steered, turnCount }) => {
         if (record.status !== "stopped") {
           record.status = aborted ? "aborted" : steered ? "steered" : "completed";
         }
         record.result = responseText;
         record.session = session;
+        record.turnCount = turnCount;
         finalizeAgent({ record, cwd: ctx.cwd, options });
         return responseText;
       })

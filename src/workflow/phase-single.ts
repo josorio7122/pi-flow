@@ -79,9 +79,8 @@ export async function executeSinglePhase({
     phase: phase.name,
     summary: extractFirstLine(record.result ?? ""),
     findings: record.result ?? record.error ?? "No output.",
-    filesAnalyzed: [],
-    filesModified: [],
     toolsUsed: record.toolUses,
+    turnsUsed: record.turnCount,
     duration,
     timestamp: Date.now(),
   };

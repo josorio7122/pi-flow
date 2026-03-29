@@ -76,9 +76,8 @@ describe("handoff operations", () => {
     phase: "scout",
     summary: "Found 3 issues",
     findings: "details...",
-    filesAnalyzed: ["a.ts"],
-    filesModified: [],
     toolsUsed: 5,
+    turnsUsed: 3,
     duration: 10_000,
     timestamp: Date.now(),
   };

@@ -9,9 +9,8 @@ function makeHandoff(findings: string): AgentHandoff {
     phase: "plan",
     summary: "Plan complete",
     findings,
-    filesAnalyzed: [],
-    filesModified: [],
     toolsUsed: 3,
+    turnsUsed: 3,
     duration: 5000,
     timestamp: Date.now(),
   };

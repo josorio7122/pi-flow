@@ -25,9 +25,8 @@ const HANDOFF: AgentHandoff = {
   phase: "build",
   summary: "partial work",
   findings: "Modified auth.ts",
-  filesAnalyzed: [],
-  filesModified: ["src/auth.ts"],
   toolsUsed: 5,
+  turnsUsed: 3,
   duration: 10000,
   timestamp: Date.now(),
 };
@@ -73,7 +72,6 @@ describe("buildInterruptedContext", () => {
       role: "builder",
       handoffs: [HANDOFF],
     });
-    expect(result).toContain("src/auth.ts");
     expect(result).toContain("partial work");
   });
 

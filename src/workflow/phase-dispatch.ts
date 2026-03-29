@@ -63,9 +63,8 @@ export async function dispatchPhase({
         phase: "unknown",
         summary: "",
         findings: state.description,
-        filesAnalyzed: [],
-        filesModified: [],
         toolsUsed: 0,
+        turnsUsed: 0,
         duration: 0,
         timestamp: Date.now(),
       };

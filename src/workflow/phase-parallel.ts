@@ -110,9 +110,8 @@ export async function executeParallelPhase({
         phase: phase.name,
         summary: task.title,
         findings: record.result ?? record.error ?? "No output.",
-        filesAnalyzed: [],
-        filesModified: [],
         toolsUsed: record.toolUses,
+        turnsUsed: record.turnCount,
         duration,
         timestamp: Date.now(),
       };

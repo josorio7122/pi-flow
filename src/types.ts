@@ -59,6 +59,7 @@ export interface AgentRecord {
   result?: string | undefined;
   error?: string | undefined;
   toolUses: number;
+  turnCount: number;
   startedAt: number;
   completedAt?: number | undefined;
   session?: AgentSession | undefined;

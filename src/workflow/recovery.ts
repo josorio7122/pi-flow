@@ -48,14 +48,6 @@ export function buildContinuationPrompt({
     sections.push(`Summary: ${previousHandoff.summary}`);
     sections.push("");
 
-    if (previousHandoff.filesModified.length > 0) {
-      sections.push("### Files Already Modified (verify before redoing)");
-      for (const f of previousHandoff.filesModified) {
-        sections.push(`- ${f}`);
-      }
-      sections.push("");
-    }
-
     if (previousHandoff.findings) {
       sections.push("### Context from Previous Attempt");
       sections.push(previousHandoff.findings);
