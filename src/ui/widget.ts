@@ -78,6 +78,9 @@ export class AgentWidget {
     const hasActive = running.length > 0 || queued.length > 0;
     if (!hasActive && finished.length === 0) return [];
 
+    // Single foreground agent with nothing else — tool block already shows everything
+    if (running.length === 1 && queued.length === 0 && finished.length === 0) return [];
+
     const frame = SPINNER[this.widgetFrame % SPINNER.length] ?? "⠋";
     const headingColor = hasActive ? "accent" : "dim";
     const headingIcon = hasActive ? "●" : "○";
