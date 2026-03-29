@@ -7,7 +7,7 @@
 
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { isUnsafeName, safeReadFile } from "./memory.js";
+import { isUnsafeName, safeReadFile } from "../infra/memory.js";
 
 export interface PreloadedSkill {
   name: string;

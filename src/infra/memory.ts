@@ -10,7 +10,7 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, } from "node:path";
-import type { MemoryScope } from "./types.js";
+import type { MemoryScope } from "../types.js";
 
 /** Maximum lines to read from MEMORY.md */
 const MAX_MEMORY_LINES = 200;

@@ -1,19 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentManager } from "./agent-manager.js";
-import type { AgentRecord } from "./types.js";
+import type { AgentRecord } from "../types.js";
+import { AgentManager } from "./manager.js";
 
-vi.mock("./agent-runner.js", () => ({
+vi.mock("./runner.js", () => ({
   runAgent: vi.fn(),
   resumeAgent: vi.fn(),
 }));
 
-vi.mock("./worktree.js", () => ({
+vi.mock("../infra/worktree.js", () => ({
   createWorktree: vi.fn(),
   cleanupWorktree: vi.fn(() => ({ hasChanges: false })),
   pruneWorktrees: vi.fn(),
 }));
 
-import { runAgent } from "./agent-runner.js";
+import { runAgent } from "./runner.js";
 
 const mockPi = {} as any;
 const mockCtx = { cwd: "/tmp" } as any;

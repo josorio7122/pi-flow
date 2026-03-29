@@ -23,7 +23,7 @@ vi.mock("@mariozechner/pi-tui", async (importOriginal) => {
 // Must import AFTER vi.mock declaration (vitest hoists vi.mock but the
 // dynamic import of the test subject must happen after)
 const { visibleWidth } = await import("@mariozechner/pi-tui");
-const { ConversationViewer } = await import("./conversation-viewer.js");
+const { ConversationViewer } = await import("./viewer.js");
 
 // ── Helpers ────────────────────────────────────────────────────────────
 

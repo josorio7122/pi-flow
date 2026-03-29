@@ -1,13 +1,13 @@
 /**
- * custom-agents.ts — Load user-defined agents from project (.pi/agents/) and global (~/.pi/agent/agents/) locations.
+ * custom.ts — Load user-defined agents from project (.pi/agents/) and global (~/.pi/agent/agents/) locations.
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
-import { BUILTIN_TOOL_NAMES } from "./agent-types.js";
-import type { AgentConfig, MemoryScope, ThinkingLevel } from "./types.js";
+import type { AgentConfig, MemoryScope, ThinkingLevel } from "../types.js";
+import { BUILTIN_TOOL_NAMES } from "./registry.js";
 
 /**
  * Scan for custom agent .md files from multiple locations.

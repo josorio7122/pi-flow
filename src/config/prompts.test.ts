@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { getAgentConfig, registerAgents } from "./agent-types.js";
+import { getAgentConfig, registerAgents } from "../agents/registry.js";
+import type { AgentConfig, EnvInfo } from "../types.js";
 import { buildAgentPrompt } from "./prompts.js";
-import type { AgentConfig, EnvInfo } from "./types.js";
 
 const env: EnvInfo = {
   isGitRepo: true,

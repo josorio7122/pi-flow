@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { resolveAgentInvocationConfig, resolveJoinMode } from "./invocation-config.js";
-import type { AgentConfig } from "./types.js";
+import type { AgentConfig } from "../types.js";
+import { resolveAgentInvocationConfig, resolveJoinMode } from "./invocation.js";
 
 function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {

@@ -1,4 +1,4 @@
-import type { AgentConfig, IsolationMode, JoinMode, ThinkingLevel } from "./types.js";
+import type { AgentConfig, IsolationMode, JoinMode, ThinkingLevel } from "../types.js";
 
 interface AgentInvocationParams {
   model?: string | undefined;

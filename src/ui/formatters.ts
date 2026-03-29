@@ -2,7 +2,7 @@
  * formatters.ts — Formatting helpers and shared types for agent UI.
  */
 
-import { getConfig } from "../agent-types.js";
+import { getConfig } from "../agents/registry.js";
 import type { SubagentType } from "../types.js";
 
 /** Braille spinner frames for animated running indicator. */

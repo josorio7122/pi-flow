@@ -16,17 +16,17 @@ import { join } from "node:path";
 import type { AgentSession, ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { AgentManager } from "./agent-manager.js";
-import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, normalizeMaxTurns, setDefaultMaxTurns, setGraceTurns, steerAgent } from "./agent-runner.js";
-import { BUILTIN_TOOL_NAMES, getAgentConfig, getAllTypes, getAvailableTypes, getDefaultAgentNames, getUserAgentNames, registerAgents, resolveType } from "./agent-types.js";
-import { registerAgentsCommand } from "./agents-command.js";
-import { registerRpcHandlers } from "./cross-extension-rpc.js";
-import { loadCustomAgents } from "./custom-agents.js";
-import { GroupJoinManager } from "./group-join.js";
-import { resolveAgentInvocationConfig, resolveJoinMode } from "./invocation-config.js";
-import { type ModelRegistry, resolveModel } from "./model-resolver.js";
-import { createOutputFilePath, streamToOutputFile, writeInitialEntry } from "./output-file.js";
-import { buildDetails, buildNotificationDetails, createActivityTracker, formatTaskNotification, getStatusNote, safeFormatTokens, textResult } from "./tool-helpers.js";
+import { loadCustomAgents } from "./agents/custom.js";
+import { AgentManager } from "./agents/manager.js";
+import { BUILTIN_TOOL_NAMES, getAgentConfig, getAllTypes, getAvailableTypes, getDefaultAgentNames, getUserAgentNames, registerAgents, resolveType } from "./agents/registry.js";
+import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, normalizeMaxTurns, setDefaultMaxTurns, setGraceTurns, steerAgent } from "./agents/runner.js";
+import { resolveAgentInvocationConfig, resolveJoinMode } from "./config/invocation.js";
+import { type ModelRegistry, resolveModel } from "./config/model-resolver.js";
+import { registerAgentsCommand } from "./extension/command.js";
+import { GroupJoinManager } from "./extension/group-join.js";
+import { buildDetails, buildNotificationDetails, createActivityTracker, formatTaskNotification, getStatusNote, safeFormatTokens, textResult } from "./extension/helpers.js";
+import { registerRpcHandlers } from "./extension/rpc.js";
+import { createOutputFilePath, streamToOutputFile, writeInitialEntry } from "./infra/output-file.js";
 import { type AgentConfig, type AgentRecord, type JoinMode, type NotificationDetails, type SubagentType } from "./types.js";
 import {
   type AgentActivity,
@@ -41,7 +41,7 @@ import {
   getPromptModeLabel,
   SPINNER,
   type UICtx,
-} from "./ui/agent-widget.js";
+} from "./ui/widget.js";
 
 export default function (pi: ExtensionAPI) {
   // ---- Register custom notification renderer ----

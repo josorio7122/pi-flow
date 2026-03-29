@@ -1,5 +1,5 @@
 /**
- * agent-manager.ts — Tracks agents, background execution, resume support.
+ * manager.ts — Tracks agents, background execution, resume support.
  *
  * Background agents are subject to a configurable concurrency limit (default: 4).
  * Excess agents are queued and auto-started as running agents complete.
@@ -9,9 +9,9 @@
 import { randomUUID } from "node:crypto";
 import type { Api, Model } from "@mariozechner/pi-ai";
 import type { AgentSession, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { resumeAgent, runAgent, type ToolActivity } from "./agent-runner.js";
-import type { AgentRecord, IsolationMode, SubagentType, ThinkingLevel } from "./types.js";
-import { cleanupWorktree, createWorktree, pruneWorktrees, } from "./worktree.js";
+import { cleanupWorktree, createWorktree, pruneWorktrees, } from "../infra/worktree.js";
+import type { AgentRecord, IsolationMode, SubagentType, ThinkingLevel } from "../types.js";
+import { resumeAgent, runAgent, type ToolActivity } from "./runner.js";
 
 export type OnAgentComplete = (record: AgentRecord) => void;
 export type OnAgentStart = (record: AgentRecord) => void;

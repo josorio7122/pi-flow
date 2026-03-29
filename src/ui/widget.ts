@@ -1,12 +1,12 @@
 /**
- * agent-widget.ts — Persistent widget showing running/completed agents above the editor.
+ * widget.ts — Persistent widget showing running/completed agents above the editor.
  *
  * Displays a tree of agents with animated spinners, live stats, and activity descriptions.
  * Uses the callback form of setWidget for themed rendering.
  */
 
 import { truncateToWidth } from "@mariozechner/pi-tui";
-import type { AgentManager } from "../agent-manager.js";
+import type { AgentManager } from "../agents/manager.js";
 import type { SubagentType } from "../types.js";
 import {
   type AgentActivity,

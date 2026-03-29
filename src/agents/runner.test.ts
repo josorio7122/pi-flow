@@ -13,7 +13,7 @@ vi.mock("@mariozechner/pi-coding-agent", () => ({
   SettingsManager: { create: vi.fn(() => ({ kind: "settings-manager" })) },
 }));
 
-vi.mock("./agent-types.js", () => ({
+vi.mock("./registry.js", () => ({
   getConfig: vi.fn(() => ({
     displayName: "Explore",
     description: "Explore",
@@ -39,24 +39,32 @@ vi.mock("./agent-types.js", () => ({
   getToolsForType: vi.fn(() => [{ name: "read" }]),
 }));
 
-vi.mock("./env.js", () => ({
+vi.mock("../infra/env.js", () => ({
   detectEnv: vi.fn(async () => ({ isGitRepo: false, branch: "", platform: "linux" })),
 }));
 
-vi.mock("./prompts.js", () => ({
+vi.mock("../config/prompts.js", () => ({
   buildAgentPrompt: vi.fn(() => "system prompt"),
 }));
 
-vi.mock("./memory.js", () => ({
+vi.mock("../infra/memory.js", () => ({
   buildMemoryBlock: vi.fn(() => ""),
   buildReadOnlyMemoryBlock: vi.fn(() => ""),
 }));
 
-vi.mock("./skill-loader.js", () => ({
+vi.mock("../config/skill-loader.js", () => ({
   preloadSkills: vi.fn(() => []),
 }));
 
-import { resumeAgent, runAgent } from "./agent-runner.js";
+import {
+  getDefaultMaxTurns,
+  getGraceTurns,
+  normalizeMaxTurns,
+  resumeAgent,
+  runAgent,
+  setDefaultMaxTurns,
+  setGraceTurns,
+} from "./runner.js";
 
 function createSession(finalText: string) {
   const listeners: Array<(event: any) => void> = [];
@@ -127,5 +135,90 @@ describe("agent-runner final output capture", () => {
     const result = await resumeAgent(session as any, "Continue");
 
     expect(result).toBe("RESUMED");
+  });
+});
+
+describe("setDefaultMaxTurns / getDefaultMaxTurns", () => {
+  beforeEach(() => {
+    setDefaultMaxTurns(undefined);
+  });
+
+  it("defaults to undefined (unlimited)", () => {
+    expect(getDefaultMaxTurns()).toBeUndefined();
+  });
+
+  it("stores a positive integer", () => {
+    setDefaultMaxTurns(30);
+    expect(getDefaultMaxTurns()).toBe(30);
+  });
+
+  it("accepts boundary value 1", () => {
+    setDefaultMaxTurns(1);
+    expect(getDefaultMaxTurns()).toBe(1);
+  });
+
+  it("treats 0 as unlimited", () => {
+    setDefaultMaxTurns(0);
+    expect(getDefaultMaxTurns()).toBeUndefined();
+  });
+
+  it("clamps negative values to 1", () => {
+    setDefaultMaxTurns(-10);
+    expect(getDefaultMaxTurns()).toBe(1);
+  });
+
+  it("undefined resets to unlimited after being set", () => {
+    setDefaultMaxTurns(50);
+    expect(getDefaultMaxTurns()).toBe(50);
+    setDefaultMaxTurns(undefined);
+    expect(getDefaultMaxTurns()).toBeUndefined();
+  });
+});
+
+describe("normalizeMaxTurns", () => {
+  it("treats undefined as unlimited", () => {
+    expect(normalizeMaxTurns(undefined)).toBeUndefined();
+  });
+
+  it("treats 0 as unlimited", () => {
+    expect(normalizeMaxTurns(0)).toBeUndefined();
+  });
+
+  it("keeps positive values", () => {
+    expect(normalizeMaxTurns(7)).toBe(7);
+  });
+
+  it("clamps negative values to 1", () => {
+    expect(normalizeMaxTurns(-3)).toBe(1);
+  });
+});
+
+describe("setGraceTurns / getGraceTurns", () => {
+  beforeEach(() => {
+    setGraceTurns(5);
+  });
+
+  it("defaults to 5", () => {
+    expect(getGraceTurns()).toBe(5);
+  });
+
+  it("stores a positive integer", () => {
+    setGraceTurns(10);
+    expect(getGraceTurns()).toBe(10);
+  });
+
+  it("accepts boundary value 1", () => {
+    setGraceTurns(1);
+    expect(getGraceTurns()).toBe(1);
+  });
+
+  it("clamps 0 to 1", () => {
+    setGraceTurns(0);
+    expect(getGraceTurns()).toBe(1);
+  });
+
+  it("clamps negative values to 1", () => {
+    setGraceTurns(-5);
+    expect(getGraceTurns()).toBe(1);
   });
 });

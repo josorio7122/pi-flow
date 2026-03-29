@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import type { AgentConfig } from "../types.js";
 import {
   BUILTIN_TOOL_NAMES,
   getAgentConfig,
@@ -12,8 +13,7 @@ import {
   isValidType,
   registerAgents,
   resolveType,
-} from "./agent-types.js";
-import type { AgentConfig } from "./types.js";
+} from "./registry.js";
 
 function makeAgentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {

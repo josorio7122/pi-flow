@@ -1,5 +1,5 @@
 /**
- * conversation-viewer.ts — Live conversation overlay for viewing agent sessions.
+ * viewer.ts — Live conversation overlay for viewing agent sessions.
  *
  * Displays a scrollable, live-updating view of an agent's conversation.
  * Subscribes to session events for real-time streaming updates.
@@ -7,10 +7,10 @@
 
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
 import { type Component, matchesKey, type TUI, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
-import { extractText } from "../context.js";
+import { extractText } from "../infra/context.js";
 import type { AgentRecord } from "../types.js";
-import type { Theme } from "./agent-widget.js";
-import { type AgentActivity, describeActivity, formatDuration, formatTokens, getDisplayName, getPromptModeLabel } from "./agent-widget.js";
+import type { Theme } from "./widget.js";
+import { type AgentActivity, describeActivity, formatDuration, formatTokens, getDisplayName, getPromptModeLabel } from "./widget.js";
 
 /** Lines consumed by chrome: top border + header + header sep + footer sep + footer + bottom border. */
 const CHROME_LINES = 6;

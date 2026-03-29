@@ -1,5 +1,5 @@
 /**
- * agent-runner.ts — Core execution engine: creates sessions, runs agents, collects results.
+ * runner.ts — Core execution engine: creates sessions, runs agents, collects results.
  */
 
 import type { Api, Model } from "@mariozechner/pi-ai";
@@ -15,13 +15,13 @@ import {
   SessionManager,
   SettingsManager,
 } from "@mariozechner/pi-coding-agent";
-import { getAgentConfig, getConfig, getMemoryTools, getReadOnlyMemoryTools, getToolsForType } from "./agent-types.js";
-import { buildParentContext, extractText } from "./context.js";
-import { detectEnv } from "./env.js";
-import { buildMemoryBlock, buildReadOnlyMemoryBlock } from "./memory.js";
-import { buildAgentPrompt, type PromptExtras } from "./prompts.js";
-import { preloadSkills } from "./skill-loader.js";
-import type { SubagentType, ThinkingLevel } from "./types.js";
+import { buildAgentPrompt, type PromptExtras } from "../config/prompts.js";
+import { preloadSkills } from "../config/skill-loader.js";
+import { buildParentContext, extractText } from "../infra/context.js";
+import { detectEnv } from "../infra/env.js";
+import { buildMemoryBlock, buildReadOnlyMemoryBlock } from "../infra/memory.js";
+import type { SubagentType, ThinkingLevel } from "../types.js";
+import { getAgentConfig, getConfig, getMemoryTools, getReadOnlyMemoryTools, getToolsForType } from "./registry.js";
 
 /** Names of tools registered by this extension that subagents must NOT inherit. */
 const EXCLUDED_TOOL_NAMES = ["Agent", "get_subagent_result", "steer_subagent"];

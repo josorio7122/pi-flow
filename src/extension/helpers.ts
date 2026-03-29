@@ -1,10 +1,10 @@
 /**
- * tool-helpers.ts — Shared helpers for tool execution and agent tracking.
+ * helpers.ts — Shared helpers for tool execution and agent tracking.
  */
 
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
-import type { AgentRecord, NotificationDetails } from "./types.js";
-import { type AgentActivity, type AgentDetails, formatTokens } from "./ui/agent-widget.js";
+import type { AgentRecord, NotificationDetails } from "../types.js";
+import { type AgentActivity, type AgentDetails, formatTokens } from "../ui/widget.js";
 
 /** Tool execute return value for a text response. */
 export function textResult(msg: string, details?: AgentDetails | undefined) {

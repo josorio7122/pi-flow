@@ -1,5 +1,5 @@
 /**
- * agent-types.ts — Unified agent type registry.
+ * registry.ts — Unified agent type registry.
  *
  * Merges embedded default agents with user-defined agents from .pi/agents/*.md.
  * User agents override defaults with the same name. Disabled agents are kept but excluded from spawning.
@@ -15,8 +15,8 @@ import {
   createReadTool,
   createWriteTool,
 } from "@mariozechner/pi-coding-agent";
-import { DEFAULT_AGENTS } from "./default-agents.js";
-import type { AgentConfig } from "./types.js";
+import type { AgentConfig } from "../types.js";
+import { DEFAULT_AGENTS } from "./defaults.js";
 
 // biome-ignore lint/suspicious/noExplicitAny: AgentTool generic requires TSchema subtype; each tool has a different concrete schema
 type ToolFactory = (cwd: string) => AgentTool<any>;
