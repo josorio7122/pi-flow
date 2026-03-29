@@ -93,13 +93,6 @@ describe("buildFixPrompt", () => {
       phase: "review",
       issues: [{ file: "src/foo.ts", line: 42, severity: "error", category: "bug", description: "Null check missing" }],
     };
-    const _phase: PhaseDefinition = {
-      name: "review",
-      role: "reviewer",
-      mode: "review-loop",
-      description: "",
-      fixRole: "builder",
-    };
     const prompt = buildFixPrompt({ definition: DEF, state: STATE, reviewHandoff });
     expect(prompt).toContain("[error] src/foo.ts:42");
     expect(prompt).toContain("Null check missing");
