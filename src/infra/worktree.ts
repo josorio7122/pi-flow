@@ -19,15 +19,6 @@ interface WorktreeInfo {
   branch: string;
 }
 
-interface WorktreeCleanupResult {
-  /** Whether changes were found in the worktree. */
-  hasChanges: boolean;
-  /** Branch name if changes were committed. */
-  branch?: string;
-  /** Worktree path if it was kept. */
-  path?: string;
-}
-
 /**
  * Create a temporary git worktree for an agent.
  * Returns the worktree path, or undefined if not in a git repo.

@@ -444,8 +444,7 @@ export default function (pi: ExtensionAPI) {
 
   // ---- Agent tool ----
 
-  // biome-ignore lint/suspicious/noExplicitAny: pi framework registerTool requires concrete schema type inference
-  pi.registerTool<any, AgentDetails>({
+  pi.registerTool({
     name: "Agent",
     label: "Agent",
     description: `Launch a new agent to handle complex, multi-step tasks autonomously.

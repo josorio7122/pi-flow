@@ -18,8 +18,9 @@ import {
 import type { AgentConfig } from "../types.js";
 import { DEFAULT_AGENTS } from "./defaults.js";
 
-// biome-ignore lint/suspicious/noExplicitAny: AgentTool generic requires TSchema subtype; each tool has a different concrete schema
-type ToolFactory = (cwd: string) => AgentTool<any>;
+// biome-ignore lint/suspicious/noExplicitAny: pi's Tool = AgentTool<any> — contravariance prevents TSchema for heterogeneous arrays
+type Tool = AgentTool<any>;
+type ToolFactory = (cwd: string) => Tool;
 
 const TOOL_FACTORIES: Record<string, ToolFactory> = {
   read: (cwd) => createReadTool(cwd),
@@ -88,22 +89,19 @@ export function createRegistry() {
       return agents.get(key)?.enabled !== false;
     },
 
-    // biome-ignore lint/suspicious/noExplicitAny: heterogeneous tool array requires any
-    getMemoryTools(cwd: string, existingToolNames: Set<string>): AgentTool<any>[] {
+    getMemoryTools(cwd: string, existingToolNames: Set<string>): Tool[] {
       return ["read", "write", "edit"]
         .filter((n) => !existingToolNames.has(n) && n in TOOL_FACTORIES)
         .map((n) => TOOL_FACTORIES[n]!(cwd));
     },
 
-    // biome-ignore lint/suspicious/noExplicitAny: heterogeneous tool array requires any
-    getReadOnlyMemoryTools(cwd: string, existingToolNames: Set<string>): AgentTool<any>[] {
+    getReadOnlyMemoryTools(cwd: string, existingToolNames: Set<string>): Tool[] {
       return ["read"]
         .filter((n) => !existingToolNames.has(n) && n in TOOL_FACTORIES)
         .map((n) => TOOL_FACTORIES[n]!(cwd));
     },
 
-    // biome-ignore lint/suspicious/noExplicitAny: heterogeneous tool array requires any
-    getToolsForType(type: string, cwd: string): AgentTool<any>[] {
+    getToolsForType(type: string, cwd: string): Tool[] {
       const key = resolveKey(type);
       const raw = key ? agents.get(key) : undefined;
       const config = raw?.enabled !== false ? raw : undefined;
