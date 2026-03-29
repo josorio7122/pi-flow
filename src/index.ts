@@ -19,7 +19,7 @@ import { Type } from "@sinclair/typebox";
 import { loadCustomAgents } from "./agents/custom.js";
 import { AgentManager } from "./agents/manager.js";
 import { BUILTIN_TOOL_NAMES, getAgentConfig, getAllTypes, getAvailableTypes, getDefaultAgentNames, getUserAgentNames, registerAgents, resolveType } from "./agents/registry.js";
-import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, normalizeMaxTurns, setDefaultMaxTurns, setGraceTurns, steerAgent } from "./agents/runner.js";
+import { createRunnerSettings, getAgentConversation, normalizeMaxTurns, steerAgent } from "./agents/runner.js";
 import { resolveAgentInvocationConfig, resolveJoinMode } from "./config/invocation.js";
 import { resolveModel } from "./config/model-resolver.js";
 import { registerAgentsCommand } from "./extension/command.js";
@@ -43,7 +43,9 @@ import {
 import { AgentWidget } from "./ui/widget.js";
 
 export default function (pi: ExtensionAPI) {
-  // ---- Register custom notification renderer ----
+  const runnerSettings = createRunnerSettings();
+
+  // ---- Agent manager ----
   pi.registerMessageRenderer<NotificationDetails>(
     "subagent-notification",
     (message, { expanded }, theme) => {
@@ -258,6 +260,7 @@ export default function (pi: ExtensionAPI) {
       description: record.description,
     });
   });
+  manager.setRunnerSettings(runnerSettings);
 
   // Expose manager via Symbol.for() global registry for cross-package access.
   // Standard Node.js pattern for cross-package singletons (used by OpenTelemetry, etc.).
@@ -619,7 +622,7 @@ Guidelines:
       if (thinking) agentTags.push(`thinking: ${thinking}`);
       if (isolated) agentTags.push("isolated");
       if (isolation === "worktree") agentTags.push("worktree");
-      const effectiveMaxTurns = normalizeMaxTurns(resolvedConfig.maxTurns ?? getDefaultMaxTurns());
+      const effectiveMaxTurns = normalizeMaxTurns(resolvedConfig.maxTurns ?? runnerSettings.defaultMaxTurns);
       // Shared base fields for all AgentDetails in this call
       const detailBase = {
         displayName,
@@ -934,6 +937,6 @@ Guidelines:
   });
 
   // ---- /agents interactive menu ----
-  registerAgentsCommand({ pi, manager, agentActivity, reloadCustomAgents, getDefaultJoinMode, setDefaultJoinMode });
+  registerAgentsCommand({ pi, manager, agentActivity, reloadCustomAgents, getDefaultJoinMode, setDefaultJoinMode, runnerSettings });
 }
 

@@ -25,27 +25,20 @@ import { getAgentConfig, getConfig, getMemoryTools, getReadOnlyMemoryTools, getT
 /** Names of tools registered by this extension that subagents must NOT inherit. */
 const EXCLUDED_TOOL_NAMES = ["Agent", "get_subagent_result", "steer_subagent"];
 
-/** Default max turns. undefined = unlimited (no turn limit). */
-let defaultMaxTurns: number | undefined;
-
 /** Normalize max turns. undefined or 0 = unlimited, otherwise minimum 1. */
 export function normalizeMaxTurns(n: number | undefined) {
   if (n == null || n === 0) return undefined;
   return Math.max(1, n);
 }
 
-/** Get the default max turns value. undefined = unlimited. */
-export function getDefaultMaxTurns() { return defaultMaxTurns; }
-/** Set the default max turns value. undefined or 0 = unlimited, otherwise minimum 1. */
-export function setDefaultMaxTurns(n: number | undefined) { defaultMaxTurns = normalizeMaxTurns(n); }
+export interface RunnerSettings {
+  defaultMaxTurns: number | undefined;
+  graceTurns: number;
+}
 
-/** Additional turns allowed after the soft limit steer message. */
-let graceTurns = 5;
-
-/** Get the grace turns value. */
-export function getGraceTurns() { return graceTurns; }
-/** Set the grace turns value (minimum 1). */
-export function setGraceTurns(n: number) { graceTurns = Math.max(1, n); }
+export function createRunnerSettings(): RunnerSettings {
+  return { defaultMaxTurns: undefined, graceTurns: 5 };
+}
 
 /**
  * Try to find the right model for an agent type.
@@ -102,6 +95,8 @@ export interface RunOptions {
   onSessionCreated?: ((session: AgentSession) => void) | undefined;
   /** Called at the end of each agentic turn with the cumulative count. */
   onTurnEnd?: ((turnCount: number) => void) | undefined;
+  /** Runner settings (max turns defaults, grace turns). */
+  settings?: RunnerSettings | undefined;
 }
 
 export interface RunResult {
@@ -316,7 +311,7 @@ export async function runAgent({ ctx, type, prompt, options }: {
 
   // Track turns for graceful max_turns enforcement
   let turnCount = 0;
-  const maxTurns = normalizeMaxTurns(options.maxTurns ?? agentConfig?.maxTurns ?? defaultMaxTurns);
+  const maxTurns = normalizeMaxTurns(options.maxTurns ?? agentConfig?.maxTurns ?? options.settings?.defaultMaxTurns);
   let softLimitReached = false;
   let aborted = false;
 
@@ -329,7 +324,7 @@ export async function runAgent({ ctx, type, prompt, options }: {
         if (!softLimitReached && turnCount >= maxTurns) {
           softLimitReached = true;
           session.steer("You have reached your turn limit. Wrap up immediately — provide your final answer now.");
-        } else if (softLimitReached && turnCount >= maxTurns + graceTurns) {
+        } else if (softLimitReached && turnCount >= maxTurns + (options.settings?.graceTurns ?? 5)) {
           aborted = true;
           session.abort();
         }
