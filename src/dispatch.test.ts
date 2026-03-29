@@ -70,7 +70,10 @@ describe('resolveAgentTasks', () => {
   it('resolves valid agent-task pairs', () => {
     const agents = [makeAgent('scout'), makeAgent('probe')];
     const result = resolveAgentTasks(
-      [{ agent: 'scout', task: 'Map code' }, { agent: 'probe', task: 'Check DB' }],
+      [
+        { agent: 'scout', task: 'Map code' },
+        { agent: 'probe', task: 'Check DB' },
+      ],
       agents,
     );
     expect('resolved' in result).toBe(true);

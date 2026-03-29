@@ -10,7 +10,8 @@ import type {
 } from './types.js';
 import { loadConfig } from './config.js';
 import { discoverAgents, buildVariableMap } from './agents.js';
-import { spawnAgentWithRetry } from './spawn.js';
+import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
+import { runAgent } from './runner.js';
 import { mapWithConcurrencyLimit, getFinalOutput, emptyResult } from './result-utils.js';
 import {
   readStateFile,
@@ -31,7 +32,13 @@ export type OnUpdateCallback = (partial: DispatchResult) => void;
 // ─── Feature-requiring agents ─────────────────────────────────────────────────
 
 /** Agents that produce feature-scoped artifacts and require a bound feature. */
-const FEATURE_REQUIRED_AGENTS = new Set(['builder', 'test-writer', 'doc-writer', 'planner', 'reviewer']);
+const FEATURE_REQUIRED_AGENTS = new Set([
+  'builder',
+  'test-writer',
+  'doc-writer',
+  'planner',
+  'reviewer',
+]);
 
 /**
  * Returns true when the given agent name requires an active feature to dispatch.
@@ -90,6 +97,7 @@ async function executeSingle(
   variableMap: Record<string, string>,
   feature: string | undefined,
   sessionDir: string | undefined,
+  ctx?: ExtensionContext,
   signal?: AbortSignal,
   onUpdate?: OnUpdateCallback,
 ): Promise<SingleAgentResult> {
@@ -103,16 +111,13 @@ async function executeSingle(
     });
   }
 
-  const onAgentUpdate = onUpdate
-    ? (result: SingleAgentResult) => {
-        onUpdate({
-          content: [{ type: 'text', text: getFinalOutput(result.messages) }],
-          details: buildDetailsForUpdate([result]),
-        });
-      }
-    : undefined;
-
-  const result = await spawnAgentWithRetry(cwd, agent, task, variableMap, signal, onAgentUpdate);
+  const result = await runAgent({
+    ctx: ctx as ExtensionContext,
+    agent,
+    task,
+    variableMap,
+    signal,
+  });
 
   // Session-scoped dispatch log
   if (sessionDir) {
@@ -146,6 +151,7 @@ async function executeParallel(
   maxWorkers: number,
   feature: string | undefined,
   sessionDir: string | undefined,
+  ctx?: ExtensionContext,
   signal?: AbortSignal,
   onUpdate?: OnUpdateCallback,
 ): Promise<SingleAgentResult[]> {
@@ -164,20 +170,13 @@ async function executeParallel(
   }
 
   await mapWithConcurrencyLimit(agentTasks, maxWorkers, async ({ agent, task }, index) => {
-    const onAgentUpdate = onUpdate
-      ? (result: SingleAgentResult) => {
-          results[index] = result;
-          onUpdate({
-            content: results.map((r) => ({
-              type: 'text' as const,
-              text: getFinalOutput(r.messages),
-            })),
-            details: buildDetailsForUpdate([...results]),
-          });
-        }
-      : undefined;
-
-    const result = await spawnAgentWithRetry(cwd, agent, task, variableMap, signal, onAgentUpdate);
+    const result = await runAgent({
+      ctx: ctx as ExtensionContext,
+      agent,
+      task,
+      variableMap,
+      signal,
+    });
     results[index] = result;
 
     if (sessionDir) {
@@ -212,6 +211,7 @@ async function executeChain(
   variableMap: Record<string, string>,
   feature: string | undefined,
   sessionDir: string | undefined,
+  ctx?: ExtensionContext,
   signal?: AbortSignal,
   onUpdate?: OnUpdateCallback,
 ): Promise<SingleAgentResult[]> {
@@ -240,20 +240,13 @@ async function executeChain(
         : '';
     const task = rawTask.replace(/\{previous\}/g, previousOutput);
 
-    const onAgentUpdate = onUpdate
-      ? (result: SingleAgentResult) => {
-          allResults[i] = result;
-          onUpdate({
-            content: allResults.map((r) => ({
-              type: 'text' as const,
-              text: getFinalOutput(r.messages),
-            })),
-            details: buildDetailsForUpdate([...allResults]),
-          });
-        }
-      : undefined;
-
-    const result = await spawnAgentWithRetry(cwd, agent, task, variableMap, signal, onAgentUpdate);
+    const result = await runAgent({
+      ctx: ctx as ExtensionContext,
+      agent,
+      task,
+      variableMap,
+      signal,
+    });
     allResults[i] = result;
     completedResults.push(result);
 
@@ -299,7 +292,10 @@ async function executeChain(
 
 // ─── State helpers ────────────────────────────────────────────────────────────
 
-function initializeState(cwd: string, feature: string): { featureDir: string; state: FlowState } | null {
+function initializeState(
+  cwd: string,
+  feature: string,
+): { featureDir: string; state: FlowState } | null {
   const featureDir = path.join(cwd, '.flow', 'features', feature);
   const existing = readStateFile(featureDir);
   if (existing) return { featureDir, state: existing };
@@ -421,6 +417,7 @@ export async function executeDispatch(
   params: DispatchParams,
   cwd: string,
   extensionDir: string,
+  ctx: ExtensionContext | undefined,
   signal?: AbortSignal,
   onUpdate?: OnUpdateCallback,
 ): Promise<DispatchResult> {
@@ -447,7 +444,7 @@ export async function executeDispatch(
       if (requiresFeature(name) && !feature) {
         return errorResult(
           `Agent '${name}' requires an active feature. ` +
-          `Provide a feature name: dispatch_flow({ feature: "my-feature", ... })`,
+            `Provide a feature name: dispatch_flow({ feature: "my-feature", ... })`,
           params,
         );
       }
@@ -481,6 +478,7 @@ export async function executeDispatch(
         config.concurrency.max_workers,
         feature,
         sessionDir,
+        ctx,
         signal,
         onUpdate,
       );
@@ -500,6 +498,7 @@ export async function executeDispatch(
         variableMap,
         feature,
         sessionDir,
+        ctx,
         signal,
         onUpdate,
       );
@@ -520,7 +519,15 @@ export async function executeDispatch(
 
     const task = params.task!;
     const result = await executeSingle(
-      agent, task, cwd, variableMap, feature, sessionDir, signal, onUpdate,
+      agent,
+      task,
+      cwd,
+      variableMap,
+      feature,
+      sessionDir,
+      ctx,
+      signal,
+      onUpdate,
     );
     const details = makeDetails('single', featureLabel)([result]);
     if (featureDir) updateBudget(featureDir, currentState, [result]);

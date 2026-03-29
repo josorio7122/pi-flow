@@ -3,12 +3,7 @@ import type { FlowAgentConfig } from './types.js';
 
 // ─── Hoisted mock state (available to vi.mock factory) ────────────────────────
 
-const {
-  state,
-  mockSession,
-  mockCreateAgentSession,
-  mockReload,
-} = vi.hoisted(() => {
+const { state, mockSession, mockCreateAgentSession, mockReload } = vi.hoisted(() => {
   const s = {
     listener: null as ((event: any) => void) | null,
     events: [] as any[],
@@ -46,8 +41,12 @@ const {
     dispose: vi.fn(),
     getSessionStats: vi.fn(() => s.stats),
     getLastAssistantText: vi.fn(() => s.lastText),
-    get messages() { return s.messages; },
-    get model() { return s.sessionModel; },
+    get messages() {
+      return s.messages;
+    },
+    get model() {
+      return s.sessionModel;
+    },
   };
 
   return {
@@ -64,14 +63,21 @@ vi.mock('@mariozechner/pi-coding-agent', () => {
   // Must use a real class for `new` to work
   class MockResourceLoader {
     opts: any;
-    constructor(opts: any) { this.opts = opts; }
-    async reload() { return mockReload(); }
+    constructor(opts: any) {
+      this.opts = opts;
+    }
+    async reload() {
+      return mockReload();
+    }
   }
 
   return {
     createAgentSession: mockCreateAgentSession,
     SessionManager: { inMemory: vi.fn(() => 'mock-session-manager') },
-    SettingsManager: { create: vi.fn(() => 'mock-settings-manager'), inMemory: vi.fn(() => 'mock-settings-manager') },
+    SettingsManager: {
+      create: vi.fn(() => 'mock-settings-manager'),
+      inMemory: vi.fn(() => 'mock-settings-manager'),
+    },
     DefaultResourceLoader: MockResourceLoader,
     readTool: { name: 'read' },
     bashTool: { name: 'bash' },
@@ -132,7 +138,13 @@ function toolStartEvent(toolName: string) {
 }
 
 function toolEndEvent(toolName: string) {
-  return { type: 'tool_execution_end', toolCallId: `tc-${toolName}`, toolName, result: {}, isError: false };
+  return {
+    type: 'tool_execution_end',
+    toolCallId: `tc-${toolName}`,
+    toolName,
+    result: {},
+    isError: false,
+  };
 }
 
 function textDeltaEvent(delta: string, fullText: string) {
@@ -260,8 +272,11 @@ describe('runAgent', () => {
     expect(result.model).toBe('anthropic/claude-sonnet-4-6');
   });
 
-  it('extracts final text from session', async () => {
-    state.lastText = 'Found 3 endpoints';
+  it('populates messages from session for text extraction', async () => {
+    // session.messages is used by getFinalOutput in dispatch/rendering
+    state.messages = [
+      { role: 'assistant', content: [{ type: 'text', text: 'Found 3 endpoints' }] },
+    ];
 
     const result = await runAgent({
       ctx: makeCtx(),
@@ -270,8 +285,8 @@ describe('runAgent', () => {
       variableMap: {},
     });
 
-    // getFinalOutput walks result.messages, but the text is also available
-    expect(mockSession.getLastAssistantText).toHaveBeenCalled();
+    expect(result.messages).toHaveLength(1);
+    expect(result.exitCode).toBe(0);
   });
 
   it('calls createAgentSession with correct options', async () => {
@@ -284,7 +299,7 @@ describe('runAgent', () => {
     });
 
     expect(mockCreateAgentSession).toHaveBeenCalledTimes(1);
-    const opts = mockCreateAgentSession.mock.calls[0][0];
+    const opts = (mockCreateAgentSession as any).mock.calls[0][0];
     expect(opts.cwd).toBe('/test/project');
     expect(opts.tools).toHaveLength(2);
     expect(opts.tools.map((t: any) => t.name)).toEqual(['read', 'bash']);
@@ -362,7 +377,7 @@ describe('runAgent', () => {
     });
 
     expect(ctx.modelRegistry.find).toHaveBeenCalledWith('anthropic', 'claude-opus-4-6');
-    const opts = mockCreateAgentSession.mock.calls[0][0];
+    const opts = (mockCreateAgentSession as any).mock.calls[0][0];
     expect(opts.model).toEqual({ provider: 'anthropic', id: 'claude-opus-4-6' });
   });
 
@@ -375,7 +390,7 @@ describe('runAgent', () => {
       variableMap: {},
     });
 
-    const opts = mockCreateAgentSession.mock.calls[0][0];
+    const opts = (mockCreateAgentSession as any).mock.calls[0][0];
     expect(opts.model).toEqual({ provider: 'anthropic', id: 'claude-sonnet-4-6' });
   });
 
@@ -394,7 +409,7 @@ describe('runAgent', () => {
     // Verify that createAgentSession was called (loader was passed to it).
     // The systemPromptOverride is on the loader instance — verify via
     // the createAgentSession call's resourceLoader arg.
-    const opts = mockCreateAgentSession.mock.calls[0][0];
+    const opts = (mockCreateAgentSession as any).mock.calls[0][0];
     const loader = opts.resourceLoader;
     const injectedPrompt = loader.opts.systemPromptOverride();
     expect(injectedPrompt).toContain('Feature: auth-refresh');
@@ -408,7 +423,7 @@ describe('runAgent', () => {
     // and calls session.abort() immediately if signal is already aborted
     controller.abort();
 
-    const result = await runAgent({
+    await runAgent({
       ctx: makeCtx(),
       agent: makeAgent(),
       task: 'Long task',
@@ -462,10 +477,7 @@ describe('runAgent', () => {
   });
 
   it('calls onTextDelta callback for text updates', async () => {
-    state.events = [
-      textDeltaEvent('Hello', 'Hello'),
-      textDeltaEvent(' world', 'Hello world'),
-    ];
+    state.events = [textDeltaEvent('Hello', 'Hello'), textDeltaEvent(' world', 'Hello world')];
     const onTextDelta = vi.fn();
 
     await runAgent({

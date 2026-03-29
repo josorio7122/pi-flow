@@ -44,7 +44,7 @@ const TOOL_MAP: Record<string, { name: string }> = {
  * Maps agent tool name strings to pi built-in tool objects.
  * Unknown names are silently filtered out.
  */
-export function resolveTools(toolNames: string[]): Array<{ name: string }> {
+export function resolveTools(toolNames: string[]): { name: string }[] {
   return toolNames.map((name) => TOOL_MAP[name]).filter((t): t is { name: string } => t != null);
 }
 
@@ -55,10 +55,10 @@ export function resolveTools(toolNames: string[]): Array<{ name: string }> {
  * model registry. Falls back to the parent model if not found.
  */
 export function resolveModel(
-  modelRegistry: { find(provider: string, modelId: string): any },
+  modelRegistry: { find(provider: string, modelId: string): unknown },
   modelString: string,
-  fallbackModel: any,
-): any {
+  fallbackModel: unknown,
+): unknown {
   if (!modelString) return fallbackModel;
 
   const slashIdx = modelString.indexOf('/');
@@ -121,7 +121,8 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
   await loader.reload();
 
   // 3. Resolve model
-  const model = resolveModel(ctx.modelRegistry, agent.model, ctx.model);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Model<any> from pi SDK
+  const model = resolveModel(ctx.modelRegistry, agent.model, ctx.model) as any;
 
   // 4. Resolve tools
   const tools = resolveTools(agent.tools);
@@ -133,8 +134,10 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
     settingsManager: SettingsManager.inMemory(),
     modelRegistry: ctx.modelRegistry,
     model,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- pi SDK Tool[] type is complex
     tools: tools as any,
     resourceLoader: loader,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ThinkingLevel is a string union
     thinkingLevel: agent.thinking as any,
   });
 
@@ -148,6 +151,7 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
   const maxSteps = agent.limits.max_steps > 0 ? agent.limits.max_steps : undefined;
 
   // 8. Subscribe to session events
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AgentSessionEvent union type
   const unsubscribe = session.subscribe((event: any) => {
     switch (event.type) {
       case 'turn_end':
@@ -205,19 +209,14 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
 
     // 11. Collect results
     const stats = session.getSessionStats();
-    const lastText = session.getLastAssistantText() ?? '';
-
-    const stopReason = aborted
-      ? 'aborted'
-      : softLimitReached
-        ? 'steered'
-        : undefined;
+    const stopReason = aborted ? 'aborted' : softLimitReached ? 'steered' : undefined;
 
     return {
       agent: agent.name,
       agentSource: agent.source,
       task,
       exitCode: aborted ? 1 : 0,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AgentMessage[] → Record<string, unknown>[]
       messages: session.messages as any,
       stderr: '',
       usage: {
@@ -229,9 +228,7 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
         contextTokens: stats.tokens.total,
         turns: turnCount,
       },
-      model: session.model
-        ? `${session.model.provider}/${session.model.id}`
-        : undefined,
+      model: session.model ? `${session.model.provider}/${session.model.id}` : undefined,
       stopReason,
       startedAt,
     };
@@ -246,9 +243,7 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
       messages: [],
       stderr: message,
       usage: emptyUsage(),
-      model: session.model
-        ? `${session.model.provider}/${session.model.id}`
-        : undefined,
+      model: session.model ? `${session.model.provider}/${session.model.id}` : undefined,
       stopReason: 'error',
       errorMessage: message,
       startedAt,
@@ -263,6 +258,7 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- AgentMessage content shape
 function extractTextFromMessage(message: any): string {
   if (!message?.content) return '';
   for (const part of message.content) {

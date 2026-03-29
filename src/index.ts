@@ -8,13 +8,11 @@
 
 import { fileURLToPath } from 'node:url';
 import * as path from 'node:path';
-import * as fs from 'node:fs';
 import { Type } from '@sinclair/typebox';
 import { Text } from '@mariozechner/pi-tui';
 import type {
   ExtensionAPI,
   ExtensionContext,
-  ExtensionCommandContext,
   BeforeAgentStartEvent,
   SessionStartEvent,
   ToolCallEvent,
@@ -26,7 +24,6 @@ import type { Theme, ThemeColor } from '@mariozechner/pi-coding-agent';
 
 import { executeDispatch } from './dispatch.js';
 import {
-  findFlowDir,
   readStateFile,
   generateSessionId,
   ensureSessionDir,
@@ -114,7 +111,9 @@ export default function piFlow(pi: ExtensionAPI) {
       'Feature must be explicitly set on first dispatch.',
     parameters: Type.Object({
       agent: Type.Optional(
-        Type.String({ description: 'Agent name (scout/probe/planner/test-writer/builder/doc-writer/reviewer)' }),
+        Type.String({
+          description: 'Agent name (scout/probe/planner/test-writer/builder/doc-writer/reviewer)',
+        }),
       ),
       task: Type.Optional(Type.String({ description: 'Task description' })),
       parallel: Type.Optional(
@@ -186,6 +185,7 @@ export default function piFlow(pi: ExtensionAPI) {
         { ...params, feature, sessionDir: sessionDir ?? undefined },
         ctx.cwd,
         rootDir,
+        ctx,
         signal,
         onUpdate
           ? (partial: {

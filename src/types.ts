@@ -64,6 +64,8 @@ export interface DispatchParams {
   chain?: Array<{ agent: string; task: string }>;
   feature?: string;
   sessionDir?: string;
+  /** Extension context — required for in-process agent execution */
+  ctx?: unknown;
 }
 
 export interface DispatchResult {

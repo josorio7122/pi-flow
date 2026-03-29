@@ -231,10 +231,7 @@ export function writeFinding(
  * Writes a dispatch audit log to `<sessionDir>/dispatches/`.
  * Filename: `<timestamp>-<agent>.md`.
  */
-export function writeSessionDispatchLog(
-  sessionDir: string,
-  entry: Record<string, unknown>,
-): void {
+export function writeSessionDispatchLog(sessionDir: string, entry: Record<string, unknown>): void {
   const dispatchesDir = path.join(sessionDir, 'dispatches');
   fs.mkdirSync(dispatchesDir, { recursive: true });
 
