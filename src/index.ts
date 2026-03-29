@@ -46,6 +46,7 @@ import {
   SPINNER,
 } from "./ui/formatters.js";
 import { AgentWidget } from "./ui/widget.js";
+import { registerWorkflowExtension } from "./workflow/integration.js";
 
 export default function (pi: ExtensionAPI) {
   const runnerSettings = createRunnerSettings();
@@ -1020,4 +1021,7 @@ Guidelines:
     runnerSettings,
     registry,
   });
+
+  // ---- Workflow engine ----
+  registerWorkflowExtension(pi);
 }
