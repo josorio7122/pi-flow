@@ -17,11 +17,6 @@ import type {
 } from "./types.js";
 import { parseVerdict } from "./verdict.js";
 
-export interface ReviewOutcome {
-  type: "complete" | "stuck" | "max_cycles" | "escalate";
-  finalVerdict?: string | undefined;
-}
-
 export async function executeReviewLoop({
   phase,
   definition,
@@ -44,7 +39,7 @@ export async function executeReviewLoop({
   ctx: ExtensionContext;
   manager: AgentManager;
   emitEvent: (event: WorkflowEvent) => void;
-}): Promise<ReviewOutcome> {
+}) {
   const maxCycles = phase.maxCycles ?? 3;
   const reviewerRole = phase.role ?? "reviewer";
   const fixRole = phase.fixRole ?? "builder";

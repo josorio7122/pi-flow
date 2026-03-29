@@ -101,10 +101,6 @@ export async function executeCurrentPhase({
 
 // ── Phase Dispatch ───────────────────────────────────────────────────
 
-interface DispatchResult {
-  type: "complete" | "gate-waiting" | "stuck" | "escalate" | "max_cycles" | "partial";
-}
-
 async function dispatchPhase({
   phase,
   definition,
@@ -127,7 +123,7 @@ async function dispatchPhase({
   ctx: ExtensionContext;
   manager: AgentManager;
   emitEvent: (event: WorkflowEvent) => void;
-}): Promise<DispatchResult> {
+}) {
   switch (phase.mode) {
     case "gate":
       return executeGatePhase({ phase, emitEvent });

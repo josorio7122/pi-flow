@@ -8,11 +8,6 @@ import { buildPhasePrompt } from "./prompt-builder.js";
 import { writeHandoff } from "./store.js";
 import type { AgentHandoff, PhaseDefinition, WorkflowDefinition, WorkflowEvent, WorkflowState } from "./types.js";
 
-export interface SingleOutcome {
-  type: "complete";
-  handoff: AgentHandoff;
-}
-
 export async function executeSinglePhase({
   phase,
   definition,
@@ -35,7 +30,7 @@ export async function executeSinglePhase({
   ctx: ExtensionContext;
   manager: AgentManager;
   emitEvent: (event: WorkflowEvent) => void;
-}): Promise<SingleOutcome> {
+}) {
   const role = phase.role ?? "general-purpose";
 
   emitEvent({ type: "phase_start", phase: phase.name, ts: Date.now() });

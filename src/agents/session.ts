@@ -5,7 +5,7 @@
 
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { Api, Model } from "@mariozechner/pi-ai";
-import type { AgentSession, ExtensionContext, ModelRegistry } from "@mariozechner/pi-coding-agent";
+import type { ExtensionContext, ModelRegistry } from "@mariozechner/pi-coding-agent";
 import {
   createAgentSession,
   DefaultResourceLoader,
@@ -17,7 +17,7 @@ import { buildAgentPrompt, type PromptExtras } from "../config/prompts.js";
 import { preloadSkills } from "../config/skill-loader.js";
 import { detectEnv } from "../infra/env.js";
 import { buildMemoryBlock, buildReadOnlyMemoryBlock } from "../infra/memory.js";
-import type { AgentConfig, SubagentType } from "../types.js";
+import type { SubagentType } from "../types.js";
 import type { Registry } from "./registry.js";
 
 const EXCLUDED_TOOL_NAMES = ["Agent", "get_subagent_result", "steer_subagent"];
@@ -47,12 +47,6 @@ function resolveDefaultModel({
   return parentModel;
 }
 
-interface SessionResult {
-  session: AgentSession;
-  agentConfig: AgentConfig | undefined;
-  effectiveCwd: string;
-}
-
 export async function buildAgentSession({
   ctx,
   type,
@@ -70,7 +64,7 @@ export async function buildAgentSession({
     disallowedTools?: Set<string> | undefined;
     onToolActivity?: ((activity: { type: "start" | "end"; toolName: string }) => void) | undefined;
   };
-}): Promise<SessionResult> {
+}) {
   const config = options.registry.getConfig(type);
   const agentConfig = options.registry.getAgentConfig(type);
   const effectiveCwd = options.cwd ?? ctx.cwd;

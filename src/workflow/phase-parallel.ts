@@ -9,12 +9,6 @@ import { writeHandoff } from "./store.js";
 import { completeTask, getReadyTasks, getTasks } from "./task-store.js";
 import type { AgentHandoff, PhaseDefinition, WorkflowDefinition, WorkflowEvent, WorkflowState } from "./types.js";
 
-export interface ParallelOutcome {
-  type: "complete" | "partial";
-  completedTasks: number;
-  totalTasks: number;
-}
-
 export async function executeParallelPhase({
   phase,
   definition,
@@ -37,7 +31,7 @@ export async function executeParallelPhase({
   ctx: ExtensionContext;
   manager: AgentManager;
   emitEvent: (event: WorkflowEvent) => void;
-}): Promise<ParallelOutcome> {
+}) {
   const role = phase.role ?? "builder";
 
   emitEvent({ type: "phase_start", phase: phase.name, ts: Date.now() });

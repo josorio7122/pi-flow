@@ -89,19 +89,19 @@ export function createRegistry() {
       return agents.get(key)?.enabled !== false;
     },
 
-    getMemoryTools(cwd: string, existingToolNames: Set<string>): Tool[] {
+    getMemoryTools(cwd: string, existingToolNames: Set<string>) {
       return ["read", "write", "edit"]
         .filter((n) => !existingToolNames.has(n) && n in TOOL_FACTORIES)
         .map((n) => TOOL_FACTORIES[n]!(cwd));
     },
 
-    getReadOnlyMemoryTools(cwd: string, existingToolNames: Set<string>): Tool[] {
+    getReadOnlyMemoryTools(cwd: string, existingToolNames: Set<string>) {
       return ["read"]
         .filter((n) => !existingToolNames.has(n) && n in TOOL_FACTORIES)
         .map((n) => TOOL_FACTORIES[n]!(cwd));
     },
 
-    getToolsForType(type: string, cwd: string): Tool[] {
+    getToolsForType(type: string, cwd: string) {
       const key = resolveKey(type);
       const raw = key ? agents.get(key) : undefined;
       const config = raw?.enabled !== false ? raw : undefined;
