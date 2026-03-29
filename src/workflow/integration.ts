@@ -35,7 +35,7 @@ export function registerWorkflowExtension(
   let activeDefinition: WorkflowDefinition | undefined;
 
   function emitEvent(cwd: string, event: WorkflowEvent) {
-    if (activeWorkflowId) appendEvent({ cwd: cwd, workflowId: activeWorkflowId, event: event });
+    if (activeWorkflowId) appendEvent({ cwd, workflowId: activeWorkflowId, event });
   }
 
   function doRefreshWidget(ctx: ExtensionContext) {
@@ -92,7 +92,7 @@ export function registerWorkflowExtension(
     const workflowId = `flow-${randomUUID().slice(0, 8)}`;
     initWorkflowDir(ctx.cwd, workflowId);
     const state = createWorkflowState({ definition, description: desc, workflowId });
-    writeState({ cwd: ctx.cwd, workflowId: workflowId, state: state });
+    writeState({ cwd: ctx.cwd, workflowId, state });
 
     activeWorkflowId = workflowId;
     activeDefinition = definition;
@@ -177,14 +177,14 @@ export function registerWorkflowExtension(
       if (!nextPhase) {
         state.exitReason = "clean";
         state.completedAt = Date.now();
-        writeState({ cwd: ctx.cwd, workflowId: activeWorkflowId, state: state });
+        writeState({ cwd: ctx.cwd, workflowId: activeWorkflowId, state });
         activeWorkflowId = undefined;
         activeDefinition = undefined;
         doRefreshWidget(ctx);
         return textResult("Workflow completed (no more phases after gate).");
       }
       state.currentPhase = nextPhase.name;
-      writeState({ cwd: ctx.cwd, workflowId: activeWorkflowId, state: state });
+      writeState({ cwd: ctx.cwd, workflowId: activeWorkflowId, state });
     }
 
     if (!deps?.manager) {

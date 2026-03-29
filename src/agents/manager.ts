@@ -118,8 +118,8 @@ export function createAgentManager({
       type,
       prompt: effectivePrompt,
       options: {
-        settings: settings,
-        registry: registry,
+        settings,
+        registry,
         pi,
         model: options.model,
         maxTurns: options.maxTurns,

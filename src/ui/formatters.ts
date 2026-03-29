@@ -44,7 +44,7 @@ export interface AgentDetails {
   activity?: string | undefined;
   spinnerFrame?: number | undefined;
   modelName?: string | undefined;
-  tags?: string[] | undefined;
+  tags?: readonly string[] | undefined;
   turnCount?: number | undefined;
   maxTurns?: number | undefined;
   agentId?: string | undefined;

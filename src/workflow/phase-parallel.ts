@@ -91,8 +91,8 @@ export async function executeParallelPhase({
       const taskPrompt = `## Task: ${task.title}\n\n${buildPhasePrompt({ phase, definition, state, previousHandoff })}`;
 
       emitEvent({ type: "agent_start", role, agentId: "", phase: phase.name, ts: Date.now() });
-      trackAgentStart({ state, agentId: `task-${task.id}`, role: role, phase: phase.name });
-      writeState({ cwd: cwd, workflowId: workflowId, state: state });
+      trackAgentStart({ state, agentId: `task-${task.id}`, role, phase: phase.name });
+      writeState({ cwd, workflowId, state });
 
       const record = await manager.spawnAndWait({
         pi,
@@ -118,7 +118,7 @@ export async function executeParallelPhase({
         timestamp: Date.now(),
       };
 
-      const handoffFile = writeHandoff({ cwd: cwd, workflowId: workflowId, handoff: handoff });
+      const handoffFile = writeHandoff({ cwd, workflowId, handoff });
       const exitStatus = record.status === "error" ? ("error" as const) : ("completed" as const);
 
       trackAgentComplete({
@@ -132,7 +132,7 @@ export async function executeParallelPhase({
         error: record.error,
       });
       state.activeAgents = state.activeAgents.filter((a) => a.agentId !== `task-${task.id}`);
-      writeState({ cwd: cwd, workflowId: workflowId, state: state });
+      writeState({ cwd, workflowId, state });
 
       if (record.status === "error") {
         blockTask({ cwd, workflowId, taskId: task.id, reason: record.error ?? "Agent error" });

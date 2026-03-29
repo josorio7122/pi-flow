@@ -35,7 +35,15 @@ type CompleteResult =
   | { action: "deliver"; records: AgentRecord[]; partial: boolean };
 
 /** Pure — register a group of agent IDs. */
-function registerGroup({ state, groupId, agentIds }: { state: GroupJoinState; groupId: string; agentIds: string[] }) {
+function registerGroup({
+  state,
+  groupId,
+  agentIds,
+}: {
+  state: GroupJoinState;
+  groupId: string;
+  agentIds: readonly string[];
+}) {
   const group: AgentGroup = {
     groupId,
     agentIds: new Set(agentIds),
@@ -129,7 +137,7 @@ export function createGroupJoinManager(deliverCb: DeliveryCallback, groupTimeout
   }
 
   return {
-    registerGroup: (groupId: string, agentIds: string[]) => registerGroup({ state, groupId, agentIds }),
+    registerGroup: (groupId: string, agentIds: readonly string[]) => registerGroup({ state, groupId, agentIds }),
 
     onAgentComplete: (record: AgentRecord): "delivered" | "held" | "pass" => {
       const result = processCompletion(state, record);

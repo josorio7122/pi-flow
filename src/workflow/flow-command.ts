@@ -55,7 +55,7 @@ export function registerFlowCommand({
         if (confirmed) {
           state.exitReason = "user_abort";
           state.completedAt = Date.now();
-          writeState({ cwd: ctx.cwd, workflowId: activeWorkflowId, state: state });
+          writeState({ cwd: ctx.cwd, workflowId: activeWorkflowId, state });
           emitEvent(ctx.cwd, {
             type: "workflow_complete",
             exitReason: "user_abort",

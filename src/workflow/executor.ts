@@ -38,13 +38,13 @@ export async function executeCurrentPhase({
   const phase = definition.phases.find((p) => p.name === state.currentPhase);
   if (!phase) return { type: "error", error: `Phase "${state.currentPhase}" not found in definition.` };
 
-  const emitEvent = (event: WorkflowEvent) => appendEvent({ cwd: cwd, workflowId: workflowId, event: event });
+  const emitEvent = (event: WorkflowEvent) => appendEvent({ cwd, workflowId, event });
 
   // Token budget check
   if (checkTokenLimit(state.tokens)) {
     state.exitReason = "token_limit";
     state.completedAt = Date.now();
-    writeState({ cwd: cwd, workflowId: workflowId, state: state });
+    writeState({ cwd, workflowId, state });
     emitEvent({
       type: "workflow_complete",
       exitReason: "token_limit",
@@ -60,15 +60,15 @@ export async function executeCurrentPhase({
     state,
     phaseName: phase.name,
     role: phase.role ?? "unknown",
-    handoffs: listHandoffs({ cwd: cwd, workflowId: workflowId }),
+    handoffs: listHandoffs({ cwd, workflowId }),
   });
 
   // Mark phase running
   updatePhaseStatus({ state, phase: phase.name, status: "running", onEvent: emitEvent });
-  writeState({ cwd: cwd, workflowId: workflowId, state: state });
+  writeState({ cwd, workflowId, state });
 
   // Resolve previous handoff (for contextFrom)
-  const previousHandoff = resolveContextHandoff({ cwd: cwd, workflowId: workflowId, phase: phase });
+  const previousHandoff = resolveContextHandoff({ cwd, workflowId, phase });
 
   try {
     const outcome = await dispatchPhase({
@@ -87,20 +87,20 @@ export async function executeCurrentPhase({
 
     if (outcome.type === "gate-waiting") {
       updatePhaseStatus({ state, phase: phase.name, status: "gate-waiting", onEvent: emitEvent });
-      writeState({ cwd: cwd, workflowId: workflowId, state: state });
+      writeState({ cwd, workflowId, state });
       return { type: "gate-waiting" };
     }
 
     // Phase completed — update tokens and advance
     updatePhaseStatus({ state, phase: phase.name, status: "complete", onEvent: emitEvent });
-    accumulateTokens({ state: state, phaseName: phase.name, manager: manager });
-    writeState({ cwd: cwd, workflowId: workflowId, state: state });
+    accumulateTokens({ state, phaseName: phase.name, manager });
+    writeState({ cwd, workflowId, state });
 
     return advanceToNextPhase({ definition, state, cwd, workflowId, pi, ctx, manager, emitEvent });
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     updatePhaseStatus({ state, phase: phase.name, status: "failed", error, onEvent: emitEvent });
-    writeState({ cwd: cwd, workflowId: workflowId, state: state });
+    writeState({ cwd, workflowId, state });
     emitEvent({ type: "agent_error", role: phase.role ?? "unknown", agentId: "", error, ts: Date.now() });
     return { type: "error", error };
   }
@@ -133,7 +133,7 @@ function advanceToNextPhase({
   if (nextIndex >= definition.phases.length) {
     state.exitReason = "clean";
     state.completedAt = Date.now();
-    writeState({ cwd: cwd, workflowId: workflowId, state: state });
+    writeState({ cwd, workflowId, state });
     emitEvent({
       type: "workflow_complete",
       exitReason: "clean",
@@ -148,7 +148,7 @@ function advanceToNextPhase({
   if (!nextPhase) return { type: "error", error: "Next phase not found." };
 
   state.currentPhase = nextPhase.name;
-  writeState({ cwd: cwd, workflowId: workflowId, state: state });
+  writeState({ cwd, workflowId, state });
 
   // Recurse — execute the next phase immediately
   return executeCurrentPhase({ definition, state, cwd, workflowId, pi, ctx, manager });

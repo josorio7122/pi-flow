@@ -58,7 +58,6 @@ function escapeXml(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** Format a structured task notification matching Claude Code's <task-notification> XML. */
 /** Safely extract total token count from a session. */
 function getTokenCount(session: { getSessionStats(): { tokens: { total: number } } } | undefined) {
   try {
@@ -68,6 +67,7 @@ function getTokenCount(session: { getSessionStats(): { tokens: { total: number }
   }
 }
 
+/** Format a structured task notification matching Claude Code's <task-notification> XML. */
 export function formatTaskNotification(record: AgentRecord, resultMaxLen: number) {
   const status = getStatusLabel(record.status, record.error);
   const durationMs = record.completedAt ? record.completedAt - record.startedAt : 0;
@@ -106,7 +106,7 @@ export function buildDetails({
     description: string;
     subagentType: string;
     modelName?: string | undefined;
-    tags?: string[] | undefined;
+    tags?: readonly string[] | undefined;
   };
   record: {
     toolUses: number;

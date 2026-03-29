@@ -10,7 +10,6 @@ import { resolveModel } from "../../config/model-resolver.js";
 import { createActivityTracker } from "../../extension/activity-tracker.js";
 import { buildDetails, getStatusNote, safeFormatTokens, textResult } from "../../extension/helpers.js";
 import { createOutputFilePath, streamToOutputFile, writeInitialEntry } from "../../infra/output-file.js";
-import type { SubagentType } from "../../types.js";
 import {
   type AgentActivity,
   type AgentDetails,
@@ -104,7 +103,7 @@ Guidelines:
       widget.setUICtx(ctx.ui);
       deps.reloadCustomAgents();
 
-      const rawType = params.subagent_type as SubagentType;
+      const rawType = params.subagent_type;
       const resolved = registry.resolveType(rawType);
       const subagentType = resolved ?? "general-purpose";
       const fellBack = resolved === undefined;

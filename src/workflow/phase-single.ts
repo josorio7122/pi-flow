@@ -45,7 +45,7 @@ export async function executeSinglePhase({
   // Track agent as active before spawning (persisted for crash recovery)
   const placeholderId = `${phase.name}-pending`;
   trackAgentStart({ state, agentId: placeholderId, role, phase: phase.name });
-  writeState({ cwd: cwd, workflowId: workflowId, state: state });
+  writeState({ cwd, workflowId, state });
 
   const record = await manager.spawnAndWait({
     pi,
@@ -87,7 +87,7 @@ export async function executeSinglePhase({
     timestamp: Date.now(),
   };
 
-  const handoffFile = writeHandoff({ cwd: cwd, workflowId: workflowId, handoff: handoff });
+  const handoffFile = writeHandoff({ cwd, workflowId, handoff });
   emitEvent({ type: "handoff_written", from: role, handoffFile, ts: Date.now() });
 
   // Move agent from active to completed
@@ -103,7 +103,7 @@ export async function executeSinglePhase({
   });
   // Remove placeholder
   state.activeAgents = state.activeAgents.filter((a) => a.agentId !== placeholderId);
-  writeState({ cwd: cwd, workflowId: workflowId, state: state });
+  writeState({ cwd, workflowId, state });
 
   emitEvent({ type: "phase_complete", phase: phase.name, duration, tokens, ts: Date.now() });
 

@@ -19,13 +19,13 @@ export interface AgentConfig {
   name: string;
   displayName?: string | undefined;
   description: string;
-  builtinToolNames?: string[] | undefined;
+  builtinToolNames?: readonly string[] | undefined;
   /** Tool denylist — these tools are removed even if `builtinToolNames` or extensions include them. */
-  disallowedTools?: string[] | undefined;
+  disallowedTools?: readonly string[] | undefined;
   /** true = inherit all, string[] = only listed, false = none */
-  extensions: true | string[] | false;
+  extensions: true | readonly string[] | false;
   /** true = inherit all, string[] = only listed, false = none */
-  skills: true | string[] | false;
+  skills: true | readonly string[] | false;
   model?: string | undefined;
   thinking?: ThinkingLevel | undefined;
   maxTurns?: number | undefined;

@@ -22,7 +22,7 @@ interface PreloadedSkill {
  * @param cwd         Working directory for project-level skills.
  * @returns Array of loaded skills (missing skills are skipped with a warning comment).
  */
-export function preloadSkills(skillNames: string[], cwd: string) {
+export function preloadSkills(skillNames: readonly string[], cwd: string) {
   const results: PreloadedSkill[] = [];
 
   for (const name of skillNames) {

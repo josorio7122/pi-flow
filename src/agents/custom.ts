@@ -116,7 +116,7 @@ function parseCsvField(val: unknown) {
  * Parse a comma-separated list field with defaults.
  * omitted → defaults; "none"/empty → []; csv → listed items.
  */
-function csvList(val: unknown, defaults: string[]) {
+function csvList(val: unknown, defaults: readonly string[]) {
   if (val === undefined || val === null) return defaults;
   return parseCsvField(val) ?? [];
 }

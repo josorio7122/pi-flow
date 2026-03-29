@@ -55,7 +55,7 @@ export async function executeReviewLoop({
 
     // Spawn reviewer — track as active
     trackAgentStart({ state, agentId: `review-${cycle}`, role: reviewerRole, phase: phase.name });
-    writeState({ cwd: cwd, workflowId: workflowId, state: state });
+    writeState({ cwd, workflowId, state });
 
     const reviewPrompt = buildReviewPrompt({
       phase,
@@ -96,7 +96,7 @@ export async function executeReviewLoop({
       timestamp: Date.now(),
     };
 
-    const reviewHandoffFile = writeHandoff({ cwd: cwd, workflowId: workflowId, handoff: reviewHandoff });
+    const reviewHandoffFile = writeHandoff({ cwd, workflowId, handoff: reviewHandoff });
     trackAgentComplete({
       state,
       agentId: reviewRecord.id,
@@ -109,7 +109,7 @@ export async function executeReviewLoop({
     });
     // Remove placeholder
     state.activeAgents = state.activeAgents.filter((a) => a.agentId !== `review-${cycle}`);
-    writeState({ cwd: cwd, workflowId: workflowId, state: state });
+    writeState({ cwd, workflowId, state });
 
     emitEvent({
       type: "review_verdict",
@@ -137,7 +137,7 @@ export async function executeReviewLoop({
 
     // Spawn fixer — track as active
     trackAgentStart({ state, agentId: `fix-${cycle}`, role: fixRole, phase: phase.name });
-    writeState({ cwd: cwd, workflowId: workflowId, state: state });
+    writeState({ cwd, workflowId, state });
 
     const fixPrompt = buildFixPrompt({ definition, state, reviewHandoff });
     const fixRecord = await manager.spawnAndWait({
@@ -163,7 +163,7 @@ export async function executeReviewLoop({
       timestamp: Date.now(),
     };
 
-    const fixHandoffFile = writeHandoff({ cwd: cwd, workflowId: workflowId, handoff: currentHandoff });
+    const fixHandoffFile = writeHandoff({ cwd, workflowId, handoff: currentHandoff });
     trackAgentComplete({
       state,
       agentId: fixRecord.id,
@@ -175,7 +175,7 @@ export async function executeReviewLoop({
     });
     // Remove placeholder
     state.activeAgents = state.activeAgents.filter((a) => a.agentId !== `fix-${cycle}`);
-    writeState({ cwd: cwd, workflowId: workflowId, state: state });
+    writeState({ cwd, workflowId, state });
 
     emitEvent({
       type: "agent_complete",

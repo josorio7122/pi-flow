@@ -122,8 +122,8 @@ export function assembleWidgetLines({
   theme,
 }: {
   heading: string;
-  finishedLines: string[];
-  runningPairs: { header: string; activity: string }[];
+  finishedLines: readonly string[];
+  runningPairs: readonly { header: string; activity: string }[];
   queuedLine: string | undefined;
   width: number;
   theme: Theme;
