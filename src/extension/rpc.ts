@@ -9,11 +9,9 @@
  *   error   → { success: false, error: string }
  */
 
-/** Minimal event bus interface needed by the RPC handlers. */
-export interface EventBus {
-  on(event: string, handler: (data: unknown) => void): () => void;
-  emit(event: string, data: unknown): void;
-}
+import type { EventBus } from "@mariozechner/pi-coding-agent";
+
+export type { EventBus };
 
 /** RPC reply envelope — matches pi-mono's RpcResponse shape. */
 export type RpcReply<T = void> =

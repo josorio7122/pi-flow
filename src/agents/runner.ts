@@ -3,9 +3,7 @@
  */
 
 import type { Api, Model } from "@mariozechner/pi-ai";
-
-
-import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionContext, ModelRegistry } from "@mariozechner/pi-coding-agent";
 import {
   type AgentSession,
   type AgentSessionEvent,
@@ -54,7 +52,7 @@ export function setGraceTurns(n: number): void { graceTurns = Math.max(1, n); }
  */
 function resolveDefaultModel({ parentModel, registry, configModel }: {
   parentModel: Model<Api> | undefined;
-  registry: { find(provider: string, modelId: string): Model<Api> | undefined; getAvailable?: (() => Model<Api>[]) | undefined };
+  registry: ModelRegistry;
   configModel?: string | undefined;
 }): Model<Api> | undefined {
   if (configModel) {
@@ -66,7 +64,7 @@ function resolveDefaultModel({ parentModel, registry, configModel }: {
       // Build a set of available model keys for fast lookup
       const available = registry.getAvailable?.();
       const availableKeys = available
-        ? new Set(available.map((m) => `${(m as { provider: string; id: string }).provider}/${(m as { provider: string; id: string }).id}`))
+        ? new Set(available.map((m) => `${m.provider}/${m.id}`))
         : undefined;
       const isAvailable = (p: string, id: string) =>
         !availableKeys || availableKeys.has(`${p}/${id}`);
@@ -136,7 +134,7 @@ function getLastAssistantText(session: AgentSession): string {
   for (let i = session.messages.length - 1; i >= 0; i--) {
     const msg = session.messages[i];
     if (!msg || msg.role !== "assistant") continue;
-    const text = extractText((msg as { content: unknown[] }).content).trim();
+    const text = extractText(msg.content).trim();
     if (text) return text;
   }
   return "";
@@ -432,7 +430,7 @@ export function getAgentConversation(session: AgentSession): string {
       const toolCalls: string[] = [];
       for (const c of msg.content) {
         if (c.type === "text" && c.text) textParts.push(c.text);
-        else if (c.type === "toolCall") { const tc = c as { name?: string; toolName?: string }; toolCalls.push(`  Tool: ${tc.name ?? tc.toolName ?? "unknown"}`); }
+        else if (c.type === "toolCall") { toolCalls.push(`  Tool: ${c.name ?? "unknown"}`); }
       }
       if (textParts.length > 0) parts.push(`[Assistant]: ${textParts.join("\n")}`);
       if (toolCalls.length > 0) parts.push(`[Tool Calls]:\n${toolCalls.join("\n")}`);

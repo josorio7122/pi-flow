@@ -40,7 +40,7 @@ import {
   getDisplayName,
   getPromptModeLabel,
   SPINNER,
-  type UICtx,
+
 } from "./ui/widget.js";
 
 export default function (pi: ExtensionAPI) {
@@ -359,7 +359,7 @@ export default function (pi: ExtensionAPI) {
 
   // Grab UI context from first tool execution + clear lingering widget on new turn
   pi.on("tool_execution_start", async (_event, ctx) => {
-    widget.setUICtx(ctx.ui as UICtx);
+    widget.setUICtx(ctx.ui);
     widget.onTurnStart();
   });
 
@@ -573,7 +573,7 @@ Guidelines:
 
     execute: async (toolCallId, params, signal, onUpdate, ctx) => {
       // Ensure we have UI context for widget rendering
-      widget.setUICtx(ctx.ui as UICtx);
+      widget.setUICtx(ctx.ui);
 
       // Reload custom agents so new .pi/agents/*.md files are picked up without restart
       reloadCustomAgents();
@@ -598,7 +598,7 @@ Guidelines:
           if (resolvedConfig.modelFromParams) return textResult(resolved);
           // config-specified: silent fallback to parent
         } else {
-          model = resolved as typeof model;
+          model = resolved;
         }
       }
 

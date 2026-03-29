@@ -191,8 +191,7 @@ export class ConversationViewer implements Component {
         for (const c of msg.content) {
           if (c.type === "text" && c.text) textParts.push(c.text);
           else if (c.type === "toolCall") {
-            const tc = c as { name?: string; toolName?: string };
-            toolCalls.push(tc.name ?? tc.toolName ?? "unknown");
+            toolCalls.push(c.name ?? "unknown");
           }
         }
         if (needsSeparator) lines.push(th.fg("dim", "───"));

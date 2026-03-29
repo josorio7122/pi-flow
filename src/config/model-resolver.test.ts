@@ -10,7 +10,7 @@ const MODELS = [
   { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", provider: "google" },
 ];
 
-function makeRegistry(models = MODELS, available?: typeof MODELS): ModelRegistry {
+function makeRegistry(models = MODELS, available?: typeof MODELS) {
   return {
     find(provider: string, modelId: string) {
       return models.find(m => m.provider === provider && m.id === modelId);
@@ -19,7 +19,7 @@ function makeRegistry(models = MODELS, available?: typeof MODELS): ModelRegistry
       return models;
     },
     getAvailable: available ? () => available : undefined,
-  };
+  } as unknown as ModelRegistry;
 }
 
 describe("resolveModel", () => {

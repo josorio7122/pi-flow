@@ -2,6 +2,9 @@
  * formatters.ts — Formatting helpers and shared types for agent UI.
  */
 
+import type { ExtensionUIContext } from "@mariozechner/pi-coding-agent";
+import { Theme } from "@mariozechner/pi-coding-agent";
+import type { TUI } from "@mariozechner/pi-tui";
 import { getConfig } from "../agents/registry.js";
 import type { SubagentType } from "../types.js";
 
@@ -22,19 +25,9 @@ const TOOL_DISPLAY: Record<string, string> = {
   ls: "listing",
 };
 
-export type Theme = {
-  fg(color: string, text: string): string;
-  bold(text: string): string;
-};
-
-export type UICtx = {
-  setStatus(key: string, text: string | undefined): void;
-  setWidget(
-    key: string,
-    content: undefined | ((tui: unknown, theme: Theme) => { render(): string[]; invalidate(): void }),
-    options?: { placement?: "aboveEditor" | "belowEditor" },
-  ): void;
-};
+export type { Theme };
+export type UICtx = ExtensionUIContext;
+export type { TUI };
 
 /** Per-agent live activity state. */
 export interface AgentActivity {

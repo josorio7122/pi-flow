@@ -2,16 +2,15 @@
  * Model resolution: exact match ("provider/modelId") with fuzzy fallback.
  */
 
-export interface ModelEntry {
+import type { Api, Model } from "@mariozechner/pi-ai";
+import type { ModelRegistry } from "@mariozechner/pi-coding-agent";
+
+export type { ModelRegistry };
+
+interface ModelEntry {
   id: string;
   name: string;
   provider: string;
-}
-
-export interface ModelRegistry {
-  find(provider: string, modelId: string): unknown;
-  getAll(): unknown[];
-  getAvailable?: (() => unknown[]) | undefined;
 }
 
 /**
@@ -22,7 +21,7 @@ export interface ModelRegistry {
 export function resolveModel(
   input: string,
   registry: ModelRegistry,
-): unknown {
+): Model<Api> | string {
   // Available models (those with auth configured)
   const all = (registry.getAvailable?.() ?? registry.getAll()) as ModelEntry[];
   const availableSet = new Set(all.map(m => `${m.provider}/${m.id}`.toLowerCase()));
