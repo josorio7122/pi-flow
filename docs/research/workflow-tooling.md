@@ -135,8 +135,8 @@ Our workflows run in the orchestrator's turn — there's no concurrent file acce
 |----------|--------|-------------|---------|
 | `createWorkflowState()` | ADAPT `initializePipelineState` (L75-101) | Initialize state for a workflow type. Maps `WorkflowType` → list of phases. | New phase mapping logic. Drop `planPath`/`planHash`. |
 | `createCostState()` | ADAPT `initializeCostState` (L103-120) | Initialize cost tracking. | Change `byPhase` key type. |
-| `updatePhaseStatus()` | ADAPT (L122-173) | Transition a phase: pending→running→complete/failed. Track timing. | Strip all `ctx.obs` calls. Strip `ctx.storage.appendEvent` — caller handles events. Pure state mutation. |
-| `checkCostLimit()` | ADAPT (L193-209) | Check if cost exceeds limit. Returns boolean. | Strip observability. Make it a pure function: `(costState) => boolean`. |
+| `updatePhaseStatus()` | ADAPT (L122-173) | Transition a phase: pending→running→complete/failed. Track timing. | Replace `ctx.obs` calls with `onEvent` callback that routes to `appendEvent`/`events.jsonl`. Same instrumentation points, simpler backend. |
+| `checkCostLimit()` | ADAPT (L193-209) | Check if cost exceeds limit. Returns boolean. | Replace `ctx.obs` with `onEvent` callback. Emit token limit event. |
 | `detectStuckIssues()` | COPY (L211-229) | Detect repeated issues across review cycles. Returns boolean. | Zero changes — pure function operating on `ReviewIssue[]`. |
 
 **NOT taking the phase wrapper functions** (`runScoutPhaseWrapper`, etc.) — those are tied to pi-coordination's spawning model. Our workflows call `runAgent()` directly.

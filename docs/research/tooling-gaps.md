@@ -249,8 +249,8 @@ Every tooling file mapped to its exact source:
 |--------|--------|--------|
 | `createWorkflowState()` | ADAPT pi-coordination `initializePipelineState` L75-101 | Initialize from `WorkflowDefinition.phases` |
 | `createTokenState()` | ADAPT pi-coordination `initializeCostState` L103-120 | Tokens not dollars |
-| `updatePhaseStatus()` | ADAPT pi-coordination L122-173 | Strip observability, pure state mutation |
-| `checkTokenLimit()` | ADAPT pi-coordination `checkCostLimit` L193-209 | Rename cost→tokens |
+| `updatePhaseStatus()` | ADAPT pi-coordination L122-173 | Redirect observability calls to `onEvent` callback (routes to `appendEvent`/`events.jsonl`) |
+| `checkTokenLimit()` | ADAPT pi-coordination `checkCostLimit` L193-209 | Rename cost→tokens, emit event via `onEvent` |
 | `detectStuckIssues()` | COPY pi-coordination L211-229 | Pure function, zero changes |
 | `runReviewFixLoop()` | ADAPT pi-coordination L757-817 | Takes `onReview`/`onFix` callbacks |
 | Gate phase handling | NEW | Return pending status, resume on continue |
