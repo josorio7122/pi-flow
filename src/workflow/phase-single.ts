@@ -4,8 +4,9 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
+import { trackAgentComplete, trackAgentStart } from "./executor-helpers.js";
 import { buildPhasePrompt } from "./prompt-builder.js";
-import { writeHandoff } from "./store.js";
+import { writeHandoff, writeState } from "./store.js";
 import type { AgentHandoff, PhaseDefinition, WorkflowDefinition, WorkflowEvent, WorkflowState } from "./types.js";
 
 export async function executeSinglePhase({
@@ -40,6 +41,11 @@ export async function executeSinglePhase({
 
   const basePrompt = buildPhasePrompt({ phase, definition, state, previousHandoff });
   const prompt = continuationContext ? `${continuationContext}\n\n${basePrompt}` : basePrompt;
+
+  // Track agent as active before spawning (persisted for crash recovery)
+  const placeholderId = `${phase.name}-pending`;
+  trackAgentStart(state, placeholderId, role, phase.name);
+  writeState(cwd, workflowId, state);
 
   const record = await manager.spawnAndWait({
     pi,
@@ -81,8 +87,24 @@ export async function executeSinglePhase({
     timestamp: Date.now(),
   };
 
-  writeHandoff(cwd, workflowId, handoff);
-  emitEvent({ type: "handoff_written", from: role, handoffFile: `${phase.name}.json`, ts: Date.now() });
+  const handoffFile = writeHandoff(cwd, workflowId, handoff);
+  emitEvent({ type: "handoff_written", from: role, handoffFile, ts: Date.now() });
+
+  // Move agent from active to completed
+  trackAgentComplete({
+    state,
+    agentId: record.id,
+    role,
+    phase: phase.name,
+    handoffFile,
+    duration,
+    exitStatus: record.status === "error" ? "error" : "completed",
+    error: record.error,
+  });
+  // Remove placeholder
+  state.activeAgents = state.activeAgents.filter((a) => a.agentId !== placeholderId);
+  writeState(cwd, workflowId, state);
+
   emitEvent({ type: "phase_complete", phase: phase.name, duration, tokens, ts: Date.now() });
 
   return { type: "complete", handoff };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildInterruptedContext } from "./executor-helpers.js";
+import { buildInterruptedContext, trackAgentComplete, trackAgentStart } from "./executor-helpers.js";
 import type { AgentHandoff, WorkflowState } from "./types.js";
 
 function makeState(phaseStatus: string, attempt = 1): WorkflowState {
@@ -99,5 +99,53 @@ describe("buildInterruptedContext", () => {
       handoffs: [],
     });
     expect(result).toContain("Attempt 3");
+  });
+});
+
+describe("trackAgentStart", () => {
+  it("adds an entry to activeAgents", () => {
+    const state = makeState("running");
+    trackAgentStart(state, "agent-1", "builder", "build");
+    expect(state.activeAgents).toHaveLength(1);
+    expect(state.activeAgents[0]?.agentId).toBe("agent-1");
+    expect(state.activeAgents[0]?.role).toBe("builder");
+  });
+});
+
+describe("trackAgentComplete", () => {
+  it("moves agent from active to completed", () => {
+    const state = makeState("running");
+    trackAgentStart(state, "agent-1", "builder", "build");
+    expect(state.activeAgents).toHaveLength(1);
+
+    trackAgentComplete({
+      state,
+      agentId: "agent-1",
+      role: "builder",
+      phase: "build",
+      handoffFile: "001-builder.json",
+      duration: 5000,
+      exitStatus: "completed",
+    });
+    expect(state.activeAgents).toHaveLength(0);
+    expect(state.completedAgents).toHaveLength(1);
+    expect(state.completedAgents[0]?.agentId).toBe("agent-1");
+  });
+
+  it("records error info for failed agents", () => {
+    const state = makeState("running");
+    trackAgentStart(state, "agent-1", "builder", "build");
+    trackAgentComplete({
+      state,
+      agentId: "agent-1",
+      role: "builder",
+      phase: "build",
+      handoffFile: "001-builder.json",
+      duration: 3000,
+      exitStatus: "error",
+      error: "timeout",
+    });
+    expect(state.completedAgents[0]?.exitStatus).toBe("error");
+    expect(state.completedAgents[0]?.error).toBe("timeout");
   });
 });

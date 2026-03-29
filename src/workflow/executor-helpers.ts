@@ -54,6 +54,37 @@ export function resolveContextHandoff(cwd: string, workflowId: string, phase: Ph
   return undefined;
 }
 
+// ── Active Agent Tracking ────────────────────────────────────────────
+
+export function trackAgentStart(state: WorkflowState, agentId: string, role: string, phase: string) {
+  state.activeAgents.push({ agentId, role, phase, startedAt: Date.now() });
+}
+
+export function trackAgentComplete({
+  state,
+  agentId,
+  role,
+  phase,
+  handoffFile,
+  duration,
+  exitStatus,
+  error,
+}: {
+  state: WorkflowState;
+  agentId: string;
+  role: string;
+  phase: string;
+  handoffFile: string;
+  duration: number;
+  exitStatus: "completed" | "error" | "aborted";
+  error?: string | undefined;
+}) {
+  state.activeAgents = state.activeAgents.filter((a) => a.agentId !== agentId);
+  state.completedAgents.push({ agentId, role, phase, handoffFile, duration, exitStatus, error });
+}
+
+// ── Token Accumulation ───────────────────────────────────────────────
+
 export function accumulateTokens(state: WorkflowState, phaseName: string, manager: AgentManager) {
   for (const agent of manager.listAgents()) {
     if (!agent.completedAt || !agent.session) continue;

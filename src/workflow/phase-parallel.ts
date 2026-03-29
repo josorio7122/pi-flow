@@ -4,8 +4,9 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
+import { trackAgentComplete, trackAgentStart } from "./executor-helpers.js";
 import { buildPhasePrompt } from "./prompt-builder.js";
-import { writeHandoff } from "./store.js";
+import { writeHandoff, writeState } from "./store.js";
 import { blockTask, completeTask, createTask, getReadyTasks, getTasks } from "./task-store.js";
 import type { AgentHandoff, PhaseDefinition, WorkflowDefinition, WorkflowEvent, WorkflowState } from "./types.js";
 
@@ -90,6 +91,8 @@ export async function executeParallelPhase({
       const taskPrompt = `## Task: ${task.title}\n\n${buildPhasePrompt({ phase, definition, state, previousHandoff })}`;
 
       emitEvent({ type: "agent_start", role, agentId: "", phase: phase.name, ts: Date.now() });
+      trackAgentStart(state, `task-${task.id}`, role, phase.name);
+      writeState(cwd, workflowId, state);
 
       const record = await manager.spawnAndWait({
         pi,
@@ -115,7 +118,21 @@ export async function executeParallelPhase({
         timestamp: Date.now(),
       };
 
-      writeHandoff(cwd, workflowId, handoff);
+      const handoffFile = writeHandoff(cwd, workflowId, handoff);
+      const exitStatus = record.status === "error" ? ("error" as const) : ("completed" as const);
+
+      trackAgentComplete({
+        state,
+        agentId: record.id,
+        role,
+        phase: phase.name,
+        handoffFile,
+        duration,
+        exitStatus,
+        error: record.error,
+      });
+      state.activeAgents = state.activeAgents.filter((a) => a.agentId !== `task-${task.id}`);
+      writeState(cwd, workflowId, state);
 
       if (record.status === "error") {
         blockTask({ cwd, workflowId, taskId: task.id, reason: record.error ?? "Agent error" });

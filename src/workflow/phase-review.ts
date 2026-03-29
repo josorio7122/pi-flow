@@ -4,9 +4,10 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
+import { trackAgentComplete, trackAgentStart } from "./executor-helpers.js";
 import { detectStuckIssues } from "./pipeline.js";
 import { buildFixPrompt, buildReviewPrompt } from "./prompt-builder.js";
-import { writeHandoff } from "./store.js";
+import { writeHandoff, writeState } from "./store.js";
 import type {
   AgentHandoff,
   PhaseDefinition,
@@ -52,7 +53,10 @@ export async function executeReviewLoop({
   for (let cycle = 0; cycle < maxCycles; cycle++) {
     state.reviewCycle = cycle + 1;
 
-    // Spawn reviewer
+    // Spawn reviewer — track as active
+    trackAgentStart(state, `review-${cycle}`, reviewerRole, phase.name);
+    writeState(cwd, workflowId, state);
+
     const reviewPrompt = buildReviewPrompt({
       phase,
       definition,
@@ -70,6 +74,9 @@ export async function executeReviewLoop({
 
     const review = parseVerdict(reviewRecord.result ?? "");
     const reviewDuration = (reviewRecord.completedAt ?? Date.now()) - reviewRecord.startedAt;
+
+    // Track reviewer completion
+    state.activeAgents = state.activeAgents.filter((a) => a.agentId !== `review-${cycle}`);
 
     const reviewHandoff: AgentHandoff = {
       agentId: reviewRecord.id,
@@ -117,7 +124,10 @@ export async function executeReviewLoop({
       return { type: "stuck", finalVerdict: "NEEDS_WORK" };
     }
 
-    // Spawn fixer
+    // Spawn fixer — track as active
+    trackAgentStart(state, `fix-${cycle}`, fixRole, phase.name);
+    writeState(cwd, workflowId, state);
+
     const fixPrompt = buildFixPrompt({ definition, state, reviewHandoff });
     const fixRecord = await manager.spawnAndWait({
       pi,
@@ -142,7 +152,20 @@ export async function executeReviewLoop({
       timestamp: Date.now(),
     };
 
-    writeHandoff(cwd, workflowId, currentHandoff);
+    const fixHandoffFile = writeHandoff(cwd, workflowId, currentHandoff);
+    trackAgentComplete({
+      state,
+      agentId: fixRecord.id,
+      role: fixRole,
+      phase: phase.name,
+      handoffFile: fixHandoffFile,
+      duration: fixDuration,
+      exitStatus: "completed",
+    });
+    // Remove placeholder
+    state.activeAgents = state.activeAgents.filter((a) => a.agentId !== `fix-${cycle}`);
+    writeState(cwd, workflowId, state);
+
     emitEvent({
       type: "agent_complete",
       role: fixRole,
