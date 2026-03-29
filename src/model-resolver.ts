@@ -1,8 +1,5 @@
 /**
- * model-resolver.ts — Fuzzy model resolution.
- *
- * Resolves model strings (exact "provider/modelId" or fuzzy "haiku"/"sonnet")
- * against the model registry. Only considers available models (with auth).
+ * Model resolution: exact match ("provider/modelId") with fuzzy fallback.
  */
 
 export interface ModelEntry {
@@ -12,30 +9,26 @@ export interface ModelEntry {
 }
 
 export interface ModelRegistry {
-  find(provider: string, modelId: string): unknown;
-  getAll(): unknown[];
-  getAvailable?(): unknown[];
+  find(provider: string, modelId: string): any;
+  getAll(): any[];
+  getAvailable?(): any[];
 }
 
 /**
  * Resolve a model string to a Model instance.
- *
- * Resolution order:
- * 1. Exact match: "provider/modelId" against available models
- * 2. Fuzzy match: scored against all available models
- *    - Exact id or full key: 100
- *    - id/full contains query: 60-90 (tighter = higher)
- *    - name contains query: 40-60
- *    - All query parts present somewhere: 20
- *
+ * Tries exact match first ("provider/modelId"), then fuzzy match against all available models.
  * Returns the Model on success, or an error message string on failure.
  */
-export function resolveModel(input: string, registry: ModelRegistry): unknown | string {
+export function resolveModel(
+  input: string,
+  registry: ModelRegistry,
+): any | string {
+  // Available models (those with auth configured)
   const all = (registry.getAvailable?.() ?? registry.getAll()) as ModelEntry[];
-  const availableSet = new Set(all.map((m) => `${m.provider}/${m.id}`.toLowerCase()));
+  const availableSet = new Set(all.map(m => `${m.provider}/${m.id}`.toLowerCase()));
 
-  // 1. Exact match
-  const slashIdx = input.indexOf('/');
+  // 1. Exact match: "provider/modelId" — only if available (has auth)
+  const slashIdx = input.indexOf("/");
   if (slashIdx !== -1) {
     const provider = input.slice(0, slashIdx);
     const modelId = input.slice(slashIdx + 1);
@@ -45,8 +38,10 @@ export function resolveModel(input: string, registry: ModelRegistry): unknown | 
     }
   }
 
-  // 2. Fuzzy match
+  // 2. Fuzzy match against available models
   const query = input.toLowerCase();
+
+  // Score each model: prefer exact id match > id contains > name contains > provider+id contains
   let bestMatch: ModelEntry | undefined;
   let bestScore = 0;
 
@@ -57,20 +52,13 @@ export function resolveModel(input: string, registry: ModelRegistry): unknown | 
 
     let score = 0;
     if (id === query || full === query) {
-      score = 100;
+      score = 100; // exact
     } else if (id.includes(query) || full.includes(query)) {
-      score = 60 + (query.length / id.length) * 30;
+      score = 60 + (query.length / id.length) * 30; // substring, prefer tighter matches
     } else if (name.includes(query)) {
       score = 40 + (query.length / name.length) * 20;
-    } else if (
-      query
-        .split(/[\s\-/]+/)
-        .every(
-          (part) =>
-            id.includes(part) || name.includes(part) || m.provider.toLowerCase().includes(part),
-        )
-    ) {
-      score = 20;
+    } else if (query.split(/[\s\-/]+/).every(part => id.includes(part) || name.includes(part) || m.provider.toLowerCase().includes(part))) {
+      score = 20; // all parts present somewhere
     }
 
     if (score > bestScore) {
@@ -84,10 +72,10 @@ export function resolveModel(input: string, registry: ModelRegistry): unknown | 
     if (found) return found;
   }
 
-  // 3. No match
+  // 3. No match — list available models
   const modelList = all
-    .map((m) => `  ${m.provider}/${m.id}`)
+    .map(m => `  ${m.provider}/${m.id}`)
     .sort()
-    .join('\n');
+    .join("\n");
   return `Model not found: "${input}".\n\nAvailable models:\n${modelList}`;
 }

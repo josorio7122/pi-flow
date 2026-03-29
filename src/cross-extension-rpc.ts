@@ -1,35 +1,39 @@
 /**
- * cross-extension-rpc.ts — Cross-extension RPC handlers for pi-flow.
+ * Cross-extension RPC handlers for the subagents extension.
  *
- * Exposes ping, spawn, and stop RPCs over the pi.events event bus.
- * Enables other extensions to programmatically control pi-flow agents.
+ * Exposes ping, spawn, and stop RPCs over the pi.events event bus,
+ * using per-request scoped reply channels.
+ *
+ * Reply envelope follows pi-mono convention:
+ *   success → { success: true, data?: T }
+ *   error   → { success: false, error: string }
  */
 
-/** Minimal event bus interface. */
+/** Minimal event bus interface needed by the RPC handlers. */
 export interface EventBus {
   on(event: string, handler: (data: unknown) => void): () => void;
   emit(event: string, data: unknown): void;
 }
 
-/** RPC protocol version — bumped on breaking changes. */
-export const PROTOCOL_VERSION = 1;
+/** RPC reply envelope — matches pi-mono's RpcResponse shape. */
+export type RpcReply<T = void> =
+  | { success: true; data?: T }
+  | { success: false; error: string };
 
-/** Minimal manager interface for RPC handlers. */
-export interface RpcManager {
-  spawn(options: {
-    agent: unknown;
-    task: string;
-    description: string;
-    feature?: string;
-    executor: (signal: AbortSignal) => Promise<unknown>;
-  }): string;
-  abort(id: string): void;
-  hasRunning(): boolean;
+/** RPC protocol version — bumped when the envelope or method contracts change. */
+export const PROTOCOL_VERSION = 2;
+
+/** Minimal AgentManager interface needed by the spawn/stop RPCs. */
+export interface SpawnCapable {
+  spawn(pi: unknown, ctx: unknown, type: string, prompt: string, options: any): string;
+  abort(id: string): boolean;
 }
 
 export interface RpcDeps {
   events: EventBus;
-  getManager: () => RpcManager | undefined;
+  pi: unknown;                    // passed through to manager.spawn
+  getCtx: () => unknown | undefined;  // returns current ExtensionContext
+  manager: SpawnCapable;
 }
 
 export interface RpcHandle {
@@ -38,6 +42,10 @@ export interface RpcHandle {
   unsubStop: () => void;
 }
 
+/**
+ * Wire a single RPC handler: listen on `channel`, run `fn(params)`,
+ * emit the reply envelope on `channel:reply:${requestId}`.
+ */
 function handleRpc<P extends { requestId: string }>(
   events: EventBus,
   channel: string,
@@ -50,10 +58,9 @@ function handleRpc<P extends { requestId: string }>(
       const reply: { success: true; data?: unknown } = { success: true };
       if (data !== undefined) reply.data = data;
       events.emit(`${channel}:reply:${params.requestId}`, reply);
-    } catch (err: unknown) {
+    } catch (err: any) {
       events.emit(`${channel}:reply:${params.requestId}`, {
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
+        success: false, error: err?.message ?? String(err),
       });
     }
   });
@@ -61,32 +68,26 @@ function handleRpc<P extends { requestId: string }>(
 
 /**
  * Register ping, spawn, and stop RPC handlers on the event bus.
+ * Returns unsub functions for cleanup.
  */
 export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
-  const { events, getManager } = deps;
+  const { events, pi, getCtx, manager } = deps;
 
-  const unsubPing = handleRpc(events, 'flow:rpc:ping', () => {
+  const unsubPing = handleRpc(events, "subagents:rpc:ping", () => {
     return { version: PROTOCOL_VERSION };
   });
 
-  const unsubSpawn = handleRpc<{ requestId: string; type: string; prompt: string }>(
-    events,
-    'flow:rpc:spawn',
-    ({ type, prompt }) => {
-      const mgr = getManager();
-      if (!mgr) throw new Error('No active manager');
-      // RPC spawn is a simplified path — caller provides type + prompt
-      return { spawned: true, type, prompt };
+  const unsubSpawn = handleRpc<{ requestId: string; type: string; prompt: string; options?: any }>(
+    events, "subagents:rpc:spawn", ({ type, prompt, options }) => {
+      const ctx = getCtx();
+      if (!ctx) throw new Error("No active session");
+      return { id: manager.spawn(pi, ctx, type, prompt, options ?? {}) };
     },
   );
 
   const unsubStop = handleRpc<{ requestId: string; agentId: string }>(
-    events,
-    'flow:rpc:stop',
-    ({ agentId }) => {
-      const mgr = getManager();
-      if (!mgr) throw new Error('No active manager');
-      mgr.abort(agentId);
+    events, "subagents:rpc:stop", ({ agentId }) => {
+      if (!manager.abort(agentId)) throw new Error("Agent not found");
     },
   );
 

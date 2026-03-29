@@ -7,8 +7,8 @@ Use **npm**: `npm install`, `npm test`, `npm run check`
 | Task | Command |
 |------|---------|
 | Typecheck | `npx tsc --noEmit` |
-| Lint | `npx eslint path/to/file.ts` |
-| Format | `npx prettier --write path/to/file.ts` |
+| Lint | `npx biome check path/to/file.ts` |
+| Lint fix | `npx biome check --fix path/to/file.ts` |
 | Test file | `npx vitest run path/to/file.test.ts` |
 | Test watch | `npx vitest path/to/file.test.ts` |
 | All checks | `npm run check` |

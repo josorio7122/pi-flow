@@ -1,154 +1,111 @@
-// ─── Agent config parsed from .md frontmatter ────────────────────────────────
+/**
+ * types.ts — Type definitions for the subagent system.
+ */
 
-export interface FlowAgentConfig {
+import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
+import type { AgentSession } from "@mariozechner/pi-coding-agent";
+
+export type { ThinkingLevel };
+
+/** Agent type: any string name (built-in defaults or user-defined). */
+export type SubagentType = string;
+
+/** Names of the three embedded default agents. */
+export const DEFAULT_AGENT_NAMES = ["general-purpose", "Explore", "Plan"] as const;
+
+/** Memory scope for persistent agent memory. */
+export type MemoryScope = "user" | "project" | "local";
+
+/** Isolation mode for agent execution. */
+export type IsolationMode = "worktree";
+
+/** Unified agent configuration — used for both default and user-defined agents. */
+export interface AgentConfig {
   name: string;
-  label: string;
+  displayName?: string | undefined;
   description: string;
-  model: string;
-  thinking: string;
-  tools: string[];
-  writable: boolean;
-  limits: { max_tokens: number; max_steps: number };
-  variables: string[];
-  writes: string[];
-  systemPrompt: string; // markdown body after frontmatter
-  source: 'builtin' | 'custom';
-  filePath: string;
-  /** Persistent memory scope — agents with memory get a MEMORY.md directory */
-  memory?: 'project' | 'global' | 'local';
+  builtinToolNames?: string[] | undefined;
+  /** Tool denylist — these tools are removed even if `builtinToolNames` or extensions include them. */
+  disallowedTools?: string[] | undefined;
+  /** true = inherit all, string[] = only listed, false = none */
+  extensions: true | string[] | false;
+  /** true = inherit all, string[] = only listed, false = none */
+  skills: true | string[] | false;
+  model?: string | undefined;
+  thinking?: ThinkingLevel | undefined;
+  maxTurns?: number | undefined;
+  systemPrompt: string;
+  promptMode: "replace" | "append";
+  /** Default for spawn: fork parent conversation. undefined = caller decides. */
+  inheritContext?: boolean | undefined;
+  /** Default for spawn: run in background. undefined = caller decides. */
+  runInBackground?: boolean | undefined;
+  /** Default for spawn: no extension tools. undefined = caller decides. */
+  isolated?: boolean | undefined;
+  /** Persistent memory scope — agents with memory get a persistent directory and MEMORY.md */
+  memory?: MemoryScope | undefined;
   /** Isolation mode — "worktree" runs the agent in a temporary git worktree */
-  isolation?: 'worktree';
-  /** Whether this agent is enabled (disabled agents are hidden from dispatch) */
-  enabled?: boolean;
-  /** Tool denylist — these tools are removed even if the agent's tools list includes them */
-  disallowedTools?: string[];
-  /** Default: fork parent conversation context into agent */
-  inheritContext?: boolean;
-  /** Default: run in background */
-  runInBackground?: boolean;
-  /** Default: no extension tools */
-  isolated?: boolean;
-  /** Extension inheritance: true = all, string[] = listed, false = none */
-  extensions?: true | string[] | false;
-  /** Skill inheritance: true = all, string[] = listed, false = none */
-  skills?: true | string[] | false;
-  /** Prompt mode: replace (standalone) or append (inherit parent identity) */
-  promptMode?: 'replace' | 'append';
+  isolation?: IsolationMode | undefined;
+  /** true = this is an embedded default agent (informational) */
+  isDefault?: boolean | undefined;
+  /** false = agent is hidden from the registry */
+  enabled?: boolean | undefined;
+  /** Where this agent was loaded from */
+  source?: "default" | "project" | "global" | undefined;
 }
 
-// ─── Skill config parsed from .md frontmatter ────────────────────────────────
+export type JoinMode = 'async' | 'group' | 'smart';
 
-export interface FlowSkillConfig {
-  name: string;
+export interface AgentRecord {
+  id: string;
+  type: SubagentType;
   description: string;
-  body: string; // markdown body after frontmatter
-  source: 'builtin' | 'custom';
-  filePath: string;
+  status: "queued" | "running" | "completed" | "steered" | "aborted" | "stopped" | "error";
+  result?: string | undefined;
+  error?: string | undefined;
+  toolUses: number;
+  startedAt: number;
+  completedAt?: number | undefined;
+  session?: AgentSession | undefined;
+  abortController?: AbortController | undefined;
+  promise?: Promise<string> | undefined;
+  groupId?: string | undefined;
+  joinMode?: JoinMode | undefined;
+  /** Set when result was already consumed via get_subagent_result — suppresses completion notification. */
+  resultConsumed?: boolean | undefined;
+  /** Steering messages queued before the session was ready. */
+  pendingSteers?: string[] | undefined;
+  /** Worktree info if the agent is running in an isolated worktree. */
+  worktree?: { path: string; branch: string } | undefined;
+  /** Worktree cleanup result after agent completion. */
+  worktreeResult?: { hasChanges: boolean; branch?: string | undefined } | undefined;
+  /** The tool_use_id from the original Agent tool call. */
+  toolCallId?: string | undefined;
+  /** Path to the streaming output transcript file. */
+  outputFile?: string | undefined;
+  /** Cleanup function for the output file stream subscription. */
+  outputCleanup?: (() => void) | undefined;
 }
 
-// ─── Flow state — just feature + budget ───────────────────────────────────────
-
-export interface FlowState {
-  feature: string;
-  started_at: string;
-  last_updated: string;
-  budget: { total_tokens: number; total_cost_usd: number };
+/** Details attached to custom notification messages for visual rendering. */
+export interface NotificationDetails {
+  id: string;
+  description: string;
+  status: string;
+  toolUses: number;
+  turnCount: number;
+  maxTurns?: number | undefined;
+  totalTokens: number;
+  durationMs: number;
+  outputFile?: string | undefined;
+  error?: string | undefined;
+  resultPreview: string;
+  /** Additional agents in a group notification. */
+  others?: NotificationDetails[] | undefined;
 }
 
-// ─── Session state — per-process isolation ────────────────────────────────────
-
-export interface SessionState {
-  session_id: string;
-  started_at: string;
-  last_updated: string;
-  feature: string | null; // null = featureless (ad-hoc scouting)
-  budget: { total_tokens: number; total_cost_usd: number };
-}
-
-// ─── Config from config.yaml ──────────────────────────────────────────────────
-
-export interface FlowConfig {
-  concurrency: { max_parallel: number; max_workers: number; stagger_ms: number };
-  guardrails: {
-    loop_detection_window: number;
-    loop_detection_threshold: number;
-  };
-}
-
-// ─── Dispatch types ───────────────────────────────────────────────────────────
-
-/** Activity update callback — fired during agent execution for live tracking. */
-export interface AgentActivityCallback {
-  onAgentStart?: (agentId: string, agentName: string, description: string) => void;
-  onToolActivity?: (agentId: string, activity: { type: 'start' | 'end'; toolName: string }) => void;
-  onTextDelta?: (agentId: string, delta: string, fullText: string) => void;
-  onTurnEnd?: (agentId: string, turnCount: number) => void;
-}
-
-export interface DispatchParams {
-  agent?: string;
-  task?: string;
-  parallel?: Array<{ agent: string; task: string }>;
-  chain?: Array<{ agent: string; task: string }>;
-  feature?: string;
-  sessionDir?: string;
-  /** Extension context — required for in-process agent execution */
-  ctx?: unknown;
-  /** Run agents in background — returns IDs immediately */
-  background?: boolean;
-  /** Model override (exact "provider/modelId" or fuzzy "haiku", "sonnet") */
-  model?: string;
-  /** Thinking level override */
-  thinking?: string;
-  /** Max turns override */
-  max_turns?: number;
-  /** Isolated mode override (no extension tools) */
-  isolated?: boolean;
-  /** Isolation mode override */
-  isolation?: 'worktree';
-  /** Fork parent conversation context into agent */
-  inherit_context?: boolean;
-  /** Activity callbacks for live UI tracking */
-  activityCallbacks?: AgentActivityCallback;
-}
-
-export interface DispatchResult {
-  content: Array<{ type: 'text'; text: string }>;
-  details: FlowDispatchDetails;
-  isError?: boolean;
-}
-
-// ─── Execution types ──────────────────────────────────────────────────────────
-
-export interface SingleAgentResult {
-  agent: string;
-  agentSource: 'builtin' | 'custom';
-  task: string;
-  exitCode: number;
-  messages: Record<string, unknown>[];
-  stderr: string;
-  usage: UsageStats;
-  model?: string;
-  stopReason?: string;
-  errorMessage?: string;
-  step?: number;
-  startedAt?: number;
-  /** Branch name if agent ran in a worktree and made changes */
-  worktreeBranch?: string;
-}
-
-export interface UsageStats {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  cost: number;
-  contextTokens: number;
-  turns: number;
-}
-
-export interface FlowDispatchDetails {
-  mode: 'single' | 'parallel' | 'chain';
-  feature: string;
-  results: SingleAgentResult[];
+export interface EnvInfo {
+  isGitRepo: boolean;
+  branch: string;
+  platform: string;
 }

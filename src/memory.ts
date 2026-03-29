@@ -1,33 +1,23 @@
 /**
- * memory.ts — Persistent per-agent memory with project and global scopes.
- *
- * Adopted from tintinweb/pi-subagents' memory system, enhanced for pi-flow's
- * two-tier memory model (per-agent + cross-agent shared memory).
+ * memory.ts — Persistent agent memory: per-agent memory directories that persist across sessions.
  *
  * Memory scopes:
- *   - "project" → .flow/agent-memory/{agent-name}/
- *   - "global"  → ~/.pi/flow-memory/{agent-name}/
- *
- * Each agent gets a MEMORY.md index file (200-line limit) and can store
- * additional files in their memory directory.
+ *   - "user"    → ~/.pi/agent-memory/{agent-name}/
+ *   - "project" → .pi/agent-memory/{agent-name}/
+ *   - "local"   → .pi/agent-memory-local/{agent-name}/
  */
 
-import { existsSync, lstatSync, mkdirSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { existsSync, lstatSync, mkdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, } from "node:path";
+import type { MemoryScope } from "./types.js";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-export type MemoryScope = 'project' | 'global' | 'local';
-
-/** Maximum lines to read from MEMORY.md before truncation. */
-export const MAX_MEMORY_LINES = 200;
-
-// ─── Security helpers ─────────────────────────────────────────────────────────
+/** Maximum lines to read from MEMORY.md */
+const MAX_MEMORY_LINES = 200;
 
 /**
- * Returns true if a name contains characters not allowed in agent names.
- * Whitelist: alphanumeric, hyphens, underscores, dots (no leading dot).
+ * Returns true if a name contains characters not allowed in agent/skill names.
+ * Uses a whitelist: only alphanumeric, hyphens, underscores, and dots (no leading dot).
  */
 export function isUnsafeName(name: string): boolean {
   if (!name || name.length > 128) return true;
@@ -35,8 +25,7 @@ export function isUnsafeName(name: string): boolean {
 }
 
 /**
- * Returns true if the given path is a symlink.
- * Defense against symlink-based directory traversal attacks.
+ * Returns true if the given path is a symlink (defense against symlink attacks).
  */
 export function isSymlink(filePath: string): boolean {
   try {
@@ -54,13 +43,11 @@ export function safeReadFile(filePath: string): string | undefined {
   if (!existsSync(filePath)) return undefined;
   if (isSymlink(filePath)) return undefined;
   try {
-    return readFileSync(filePath, 'utf-8');
+    return readFileSync(filePath, "utf-8");
   } catch {
     return undefined;
   }
 }
-
-// ─── Directory resolution ─────────────────────────────────────────────────────
 
 /**
  * Resolve the memory directory path for a given agent + scope + cwd.
@@ -71,20 +58,22 @@ export function resolveMemoryDir(agentName: string, scope: MemoryScope, cwd: str
     throw new Error(`Unsafe agent name for memory directory: "${agentName}"`);
   }
   switch (scope) {
-    case 'project':
-      return join(cwd, '.flow', 'agent-memory', agentName);
-    case 'global':
-      return join(homedir(), '.pi', 'flow-memory', agentName);
-    case 'local':
-      return join(cwd, '.flow', 'agent-memory-local', agentName);
+    case "user":
+      return join(homedir(), ".pi", "agent-memory", agentName);
+    case "project":
+      return join(cwd, ".pi", "agent-memory", agentName);
+    case "local":
+      return join(cwd, ".pi", "agent-memory-local", agentName);
   }
 }
 
 /**
  * Ensure the memory directory exists, creating it if needed.
- * Refuses to create directories if the target path is a symlink.
+ * Refuses to create directories if any component in the path is a symlink
+ * to prevent symlink-based directory traversal attacks.
  */
 export function ensureMemoryDir(memoryDir: string): void {
+  // If the directory already exists, verify it's not a symlink
   if (existsSync(memoryDir)) {
     if (isSymlink(memoryDir)) {
       throw new Error(`Refusing to use symlinked memory directory: ${memoryDir}`);
@@ -94,34 +83,32 @@ export function ensureMemoryDir(memoryDir: string): void {
   mkdirSync(memoryDir, { recursive: true });
 }
 
-// ─── Memory reading ───────────────────────────────────────────────────────────
-
 /**
- * Read the first N lines of MEMORY.md from the memory directory.
- * Returns undefined if no MEMORY.md exists or if the directory is a symlink.
+ * Read the first N lines of MEMORY.md from the memory directory, if it exists.
+ * Returns undefined if no MEMORY.md exists or if the path is a symlink.
  */
 export function readMemoryIndex(memoryDir: string): string | undefined {
+  // Reject symlinked memory directories
   if (isSymlink(memoryDir)) return undefined;
 
-  const memoryFile = join(memoryDir, 'MEMORY.md');
+  const memoryFile = join(memoryDir, "MEMORY.md");
   const content = safeReadFile(memoryFile);
   if (content === undefined) return undefined;
 
-  const lines = content.split('\n');
+  const lines = content.split("\n");
   if (lines.length > MAX_MEMORY_LINES) {
-    return lines.slice(0, MAX_MEMORY_LINES).join('\n') + '\n... (truncated at 200 lines)';
+    return lines.slice(0, MAX_MEMORY_LINES).join("\n") + "\n... (truncated at 200 lines)";
   }
   return content;
 }
 
-// ─── Prompt building ──────────────────────────────────────────────────────────
-
 /**
- * Build the memory block for writable agents.
- * Creates the memory directory and includes write instructions.
+ * Build the memory block to inject into the agent's system prompt.
+ * Also ensures the memory directory exists (creates it if needed).
  */
 export function buildMemoryBlock(agentName: string, scope: MemoryScope, cwd: string): string {
   const memoryDir = resolveMemoryDir(agentName, scope, cwd);
+  // Create the memory directory so the agent can immediately write to it
   ensureMemoryDir(memoryDir);
 
   const existingMemory = readMemoryIndex(memoryDir);
@@ -135,7 +122,7 @@ This memory persists across sessions. Use it to build up knowledge over time.`;
 
   const memoryContent = existingMemory
     ? `\n\n## Current MEMORY.md\n${existingMemory}`
-    : `\n\nNo MEMORY.md exists yet. Create one at ${join(memoryDir, 'MEMORY.md')} to start building persistent memory.`;
+    : `\n\nNo MEMORY.md exists yet. Create one at ${join(memoryDir, "MEMORY.md")} to start building persistent memory.`;
 
   const instructions = `
 
@@ -159,13 +146,9 @@ This memory persists across sessions. Use it to build up knowledge over time.`;
 
 /**
  * Build a read-only memory block for agents that lack write/edit tools.
- * Does NOT create the memory directory — read-only agents only consume existing memory.
+ * Does NOT create the memory directory — agents can only consume existing memory.
  */
-export function buildReadOnlyMemoryBlock(
-  agentName: string,
-  scope: MemoryScope,
-  cwd: string,
-): string {
+export function buildReadOnlyMemoryBlock(agentName: string, scope: MemoryScope, cwd: string): string {
   const memoryDir = resolveMemoryDir(agentName, scope, cwd);
   const existingMemory = readMemoryIndex(memoryDir);
 
@@ -176,7 +159,7 @@ You have read-only access to memory. You can reference existing memories but can
 
   const memoryContent = existingMemory
     ? `\n\n## Current MEMORY.md\n${existingMemory}`
-    : '\n\nNo memory is available yet. Other agents or sessions with write access can create memories for you to consume.';
+    : `\n\nNo memory is available yet. Other agents or sessions with write access can create memories for you to consume.`;
 
   return header + memoryContent;
 }
