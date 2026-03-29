@@ -16,7 +16,6 @@ interface AgentGroup {
   completedRecords: Map<string, AgentRecord>;
   timeoutHandle?: ReturnType<typeof setTimeout> | undefined;
   delivered: boolean;
-  /** Shorter timeout for stragglers after a partial delivery. */
   isStraggler: boolean;
 }
 
@@ -25,117 +24,142 @@ const DEFAULT_TIMEOUT = 30_000;
 /** Straggler re-batch timeout: 15s. */
 const STRAGGLER_TIMEOUT = 15_000;
 
-export class GroupJoinManager {
-  private groups = new Map<string, AgentGroup>();
-  private agentToGroup = new Map<string, string>();
+export interface GroupJoinState {
+  groups: Map<string, AgentGroup>;
+  agentToGroup: Map<string, string>;
+}
 
-  constructor(
-    private deliverCb: DeliveryCallback,
-    private groupTimeout = DEFAULT_TIMEOUT,
-  ) {}
+export type CompleteResult =
+  | { action: "pass" }
+  | { action: "held" }
+  | { action: "deliver"; records: AgentRecord[]; partial: boolean };
 
-  /** Register a group of agent IDs that should be joined. */
-  registerGroup(groupId: string, agentIds: string[]) {
-    const group: AgentGroup = {
-      groupId,
-      agentIds: new Set(agentIds),
-      completedRecords: new Map(),
-      delivered: false,
-      isStraggler: false,
-    };
-    this.groups.set(groupId, group);
-    for (const id of agentIds) {
-      this.agentToGroup.set(id, groupId);
-    }
-  }
-
-  /**
-   * Called when an agent completes.
-   * Returns:
-   * - 'pass'      — agent is not grouped, caller should send individual nudge
-   * - 'held'      — result held, waiting for group completion
-   * - 'delivered'  — this completion triggered the group notification
-   */
-  onAgentComplete(record: AgentRecord): 'delivered' | 'held' | 'pass' {
-    const groupId = this.agentToGroup.get(record.id);
-    if (!groupId) return 'pass';
-
-    const group = this.groups.get(groupId);
-    if (!group || group.delivered) return 'pass';
-
-    group.completedRecords.set(record.id, record);
-
-    // All done — deliver immediately
-    if (group.completedRecords.size >= group.agentIds.size) {
-      this.deliver(group, false);
-      return 'delivered';
-    }
-
-    // First completion in this batch — start timeout
-    if (!group.timeoutHandle) {
-      const timeout = group.isStraggler ? STRAGGLER_TIMEOUT : this.groupTimeout;
-      group.timeoutHandle = setTimeout(() => {
-        this.onTimeout(group);
-      }, timeout);
-    }
-
-    return 'held';
-  }
-
-  private onTimeout(group: AgentGroup) {
-    if (group.delivered) return;
-    group.timeoutHandle = undefined;
-
-    // Partial delivery — some agents still running
-    const remaining = new Set<string>();
-    for (const id of group.agentIds) {
-      if (!group.completedRecords.has(id)) remaining.add(id);
-    }
-
-    // Clean up agentToGroup for delivered agents (they won't complete again)
-    for (const id of group.completedRecords.keys()) {
-      this.agentToGroup.delete(id);
-    }
-
-    // Deliver what we have
-    this.deliverCb([...group.completedRecords.values()], true);
-
-    // Set up straggler group for remaining agents
-    group.completedRecords.clear();
-    group.agentIds = remaining;
-    group.isStraggler = true;
-    // Timeout will be started when the next straggler completes
-  }
-
-  private deliver(group: AgentGroup, partial: boolean) {
-    if (group.timeoutHandle) {
-      clearTimeout(group.timeoutHandle);
-      group.timeoutHandle = undefined;
-    }
-    group.delivered = true;
-    this.deliverCb([...group.completedRecords.values()], partial);
-    this.cleanupGroup(group.groupId);
-  }
-
-  private cleanupGroup(groupId: string) {
-    const group = this.groups.get(groupId);
-    if (!group) return;
-    for (const id of group.agentIds) {
-      this.agentToGroup.delete(id);
-    }
-    this.groups.delete(groupId);
-  }
-
-  /** Check if an agent is in a group. */
-  isGrouped(agentId: string) {
-    return this.agentToGroup.has(agentId);
-  }
-
-  dispose() {
-    for (const group of this.groups.values()) {
-      if (group.timeoutHandle) clearTimeout(group.timeoutHandle);
-    }
-    this.groups.clear();
-    this.agentToGroup.clear();
+/** Pure — register a group of agent IDs. */
+export function registerGroup(state: GroupJoinState, groupId: string, agentIds: string[]) {
+  const group: AgentGroup = {
+    groupId,
+    agentIds: new Set(agentIds),
+    completedRecords: new Map(),
+    delivered: false,
+    isStraggler: false,
+  };
+  state.groups.set(groupId, group);
+  for (const id of agentIds) {
+    state.agentToGroup.set(id, groupId);
   }
 }
+
+/** Pure — process an agent completion, return what action should be taken. */
+export function processCompletion(state: GroupJoinState, record: AgentRecord): CompleteResult {
+  const groupId = state.agentToGroup.get(record.id);
+  if (!groupId) return { action: "pass" };
+
+  const group = state.groups.get(groupId);
+  if (!group || group.delivered) return { action: "pass" };
+
+  group.completedRecords.set(record.id, record);
+
+  if (group.completedRecords.size >= group.agentIds.size) {
+    return { action: "deliver", records: [...group.completedRecords.values()], partial: false };
+  }
+
+  return { action: "held" };
+}
+
+/** Pure — process a timeout, return partial delivery result. */
+export function processTimeout(state: GroupJoinState, groupId: string): CompleteResult {
+  const group = state.groups.get(groupId);
+  if (!group || group.delivered) return { action: "pass" };
+
+  const records = [...group.completedRecords.values()];
+
+  // Clean up delivered agents
+  for (const id of group.completedRecords.keys()) {
+    state.agentToGroup.delete(id);
+  }
+
+  // Set up straggler group for remaining
+  const remaining = new Set<string>();
+  for (const id of group.agentIds) {
+    if (!group.completedRecords.has(id)) remaining.add(id);
+  }
+  group.completedRecords.clear();
+  group.agentIds = remaining;
+  group.isStraggler = true;
+
+  return { action: "deliver", records, partial: true };
+}
+
+/** Pure — mark a group as fully delivered and clean up state. */
+export function markDelivered(state: GroupJoinState, groupId: string) {
+  const group = state.groups.get(groupId);
+  if (!group) return;
+  if (group.timeoutHandle) {
+    clearTimeout(group.timeoutHandle);
+    group.timeoutHandle = undefined;
+  }
+  group.delivered = true;
+  for (const id of group.agentIds) {
+    state.agentToGroup.delete(id);
+  }
+  state.groups.delete(groupId);
+}
+
+/** Check if an agent is in a group. */
+export function isGrouped(state: GroupJoinState, agentId: string) {
+  return state.agentToGroup.has(agentId);
+}
+
+/** Impure shell — wraps pure functions with timeout scheduling. */
+export function createGroupJoinManager(deliverCb: DeliveryCallback, groupTimeout = DEFAULT_TIMEOUT) {
+  const state: GroupJoinState = {
+    groups: new Map(),
+    agentToGroup: new Map(),
+  };
+
+  function scheduleTimeout(groupId: string, timeout: number) {
+    const group = state.groups.get(groupId);
+    if (!group || group.timeoutHandle) return;
+    group.timeoutHandle = setTimeout(() => {
+      const result = processTimeout(state, groupId);
+      if (result.action === "deliver") {
+        deliverCb(result.records, result.partial);
+      }
+    }, timeout);
+  }
+
+  return {
+    registerGroup: (groupId: string, agentIds: string[]) =>
+      registerGroup(state, groupId, agentIds),
+
+    onAgentComplete: (record: AgentRecord): "delivered" | "held" | "pass" => {
+      const result = processCompletion(state, record);
+      if (result.action === "deliver") {
+        const groupId = state.agentToGroup.get(record.id);
+        if (groupId) markDelivered(state, groupId);
+        deliverCb(result.records, result.partial);
+        return "delivered";
+      }
+      if (result.action === "held") {
+        const groupId = state.agentToGroup.get(record.id)!;
+        const group = state.groups.get(groupId);
+        const timeout = group?.isStraggler ? STRAGGLER_TIMEOUT : groupTimeout;
+        scheduleTimeout(groupId, timeout);
+        return "held";
+      }
+      return "pass";
+    },
+
+    isGrouped: (agentId: string) => isGrouped(state, agentId),
+
+    dispose: () => {
+      for (const group of state.groups.values()) {
+        if (group.timeoutHandle) clearTimeout(group.timeoutHandle);
+      }
+      state.groups.clear();
+      state.agentToGroup.clear();
+    },
+  };
+}
+
+export type GroupJoinManager = ReturnType<typeof createGroupJoinManager>;

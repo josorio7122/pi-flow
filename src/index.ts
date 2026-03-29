@@ -23,7 +23,7 @@ import { createRunnerSettings, getAgentConversation, normalizeMaxTurns, steerAge
 import { resolveAgentInvocationConfig, resolveJoinMode } from "./config/invocation.js";
 import { resolveModel } from "./config/model-resolver.js";
 import { registerAgentsCommand } from "./extension/command.js";
-import { GroupJoinManager } from "./extension/group-join.js";
+import { createGroupJoinManager } from "./extension/group-join.js";
 import { buildDetails, buildNotificationDetails, createActivityTracker, formatTaskNotification, getStatusNote, safeFormatTokens, textResult } from "./extension/helpers.js";
 import { registerRpcHandlers } from "./extension/rpc.js";
 import { createOutputFilePath, streamToOutputFile, writeInitialEntry } from "./infra/output-file.js";
@@ -151,7 +151,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   // ---- Group join manager ----
-  const groupJoin = new GroupJoinManager(
+  const groupJoin = createGroupJoinManager(
     (records, partial) => {
       for (const r of records) { agentActivity.delete(r.id); widget.markFinished(r.id); }
 
