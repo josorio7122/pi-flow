@@ -2,8 +2,6 @@
  * formatters.ts — Formatting helpers and shared types for agent UI.
  */
 
-import type { Theme } from "@mariozechner/pi-coding-agent";
-import { getConfig } from "../agents/registry.js";
 import type { SubagentType } from "../types.js";
 
 /** Braille spinner frames for animated running indicator. */
@@ -78,17 +76,14 @@ export function formatDuration(startedAt: number, completedAt?: number) {
   return formatMs((completedAt ?? Date.now()) - startedAt);
 }
 
-/** Get display name for any agent type (built-in or custom). */
-export function getDisplayName(type: SubagentType) {
-  const config = getConfig(type);
-  return config?.displayName ?? type;
+/** Get display name — uses displayName if provided, otherwise falls back to type. */
+export function getDisplayName(type: SubagentType, displayName?: string) {
+  return displayName ?? type;
 }
 
-/** Get the prompt mode label for an agent type (undefined if "replace"). */
-export function getPromptModeLabel(type: SubagentType) {
-  const config = getConfig(type);
-  if (!config) return undefined;
-  return config.promptMode === "append" ? "append" : undefined;
+/** Get the prompt mode label ("append" or undefined for "replace"). */
+export function getPromptModeLabel(promptMode?: "replace" | "append") {
+  return promptMode === "append" ? "append" : undefined;
 }
 
 /** Build a human-readable activity description from active tools and response text. */

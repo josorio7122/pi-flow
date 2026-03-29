@@ -152,7 +152,8 @@ export function registerAgentsCommand(deps: AgentsCommandDeps) {
     }
 
     const options = agents.map(a => {
-      const dn = getDisplayName(a.type);
+      const acfg = getAgentConfig(a.type);
+      const dn = getDisplayName(a.type, acfg?.displayName);
       const dur = formatDuration(a.startedAt, a.completedAt);
       return `${dn} (${a.description}) · ${a.toolUses} tools · ${a.status} · ${dur}`;
     });

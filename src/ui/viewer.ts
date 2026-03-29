@@ -8,6 +8,7 @@
 import type { AgentSession, Theme } from "@mariozechner/pi-coding-agent";
 import { type Component, matchesKey, type TUI, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
 import { extractText } from "../infra/context.js";
+import { getConfig } from "../agents/registry.js";
 import type { AgentRecord } from "../types.js";
 import { type AgentActivity, describeActivity, formatDuration, formatTokens, getDisplayName, getPromptModeLabel } from "./formatters.js";
 
@@ -87,8 +88,9 @@ export class ConversationViewer implements Component {
 
     // Header
     lines.push(hrTop);
-    const name = getDisplayName(this.record.type);
-    const modeLabel = getPromptModeLabel(this.record.type);
+    const cfg = getConfig(this.record.type);
+    const name = getDisplayName(this.record.type, cfg.displayName);
+    const modeLabel = getPromptModeLabel(cfg.promptMode);
     const modeTag = modeLabel ? ` ${th.fg("dim", `(${modeLabel})`)}` : "";
     const statusIcon = this.record.status === "running"
       ? th.fg("accent", "●")

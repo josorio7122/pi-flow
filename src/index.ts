@@ -481,7 +481,8 @@ Guidelines:
     // ---- Custom rendering: Claude Code style ----
 
     renderCall(args, theme) {
-      const displayName = args.subagent_type ? getDisplayName(args.subagent_type) : "Agent";
+      const argConfig = args.subagent_type ? getAgentConfig(args.subagent_type) : undefined;
+      const displayName = args.subagent_type ? getDisplayName(args.subagent_type, argConfig?.displayName) : "Agent";
       const desc = args.description ?? "";
       return new Text("▸ " + theme.fg("toolTitle", theme.bold(displayName)) + (desc ? "  " + theme.fg("muted", desc) : ""), 0, 0);
     },
@@ -582,10 +583,9 @@ Guidelines:
       const subagentType = resolved ?? "general-purpose";
       const fellBack = resolved === undefined;
 
-      const displayName = getDisplayName(subagentType);
-
       // Get agent config (if any)
       const customConfig = getAgentConfig(subagentType);
+      const displayName = getDisplayName(subagentType, customConfig?.displayName);
 
       const resolvedConfig = resolveAgentInvocationConfig(customConfig, params);
 
@@ -614,7 +614,7 @@ Guidelines:
         ? (model?.name ?? effectiveModelId).replace(/^Claude\s+/i, "").toLowerCase()
         : undefined;
       const agentTags: string[] = [];
-      const modeLabel = getPromptModeLabel(subagentType);
+      const modeLabel = getPromptModeLabel(customConfig?.promptMode);
       if (modeLabel) agentTags.push(modeLabel);
       if (thinking) agentTags.push(`thinking: ${thinking}`);
       if (isolated) agentTags.push("isolated");
@@ -854,7 +854,8 @@ Guidelines:
         await record.promise;
       }
 
-      const displayName = getDisplayName(record.type);
+      const recConfig = getAgentConfig(record.type);
+      const displayName = getDisplayName(record.type, recConfig?.displayName);
       const duration = formatDuration(record.startedAt, record.completedAt);
       const tokens = safeFormatTokens(record.session);
       const toolStats = tokens ? `Tool uses: ${record.toolUses} | ${tokens}` : `Tool uses: ${record.toolUses}`;

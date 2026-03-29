@@ -8,6 +8,7 @@
 import type { ExtensionUIContext, Theme } from "@mariozechner/pi-coding-agent";
 import { type TUI, truncateToWidth } from "@mariozechner/pi-tui";
 import type { AgentManager } from "../agents/manager.js";
+import { getConfig } from "../agents/registry.js";
 import type { SubagentType } from "../types.js";
 import {
   type AgentActivity,
@@ -96,8 +97,9 @@ export class AgentWidget {
 
   /** Render a finished agent line. */
   private renderFinishedLine(a: { id: string; type: SubagentType; status: string; description: string; toolUses: number; startedAt: number; completedAt?: number | undefined; error?: string | undefined }, theme: Theme) {
-    const name = getDisplayName(a.type);
-    const modeLabel = getPromptModeLabel(a.type);
+    const cfg = getConfig(a.type);
+    const name = getDisplayName(a.type, cfg.displayName);
+    const modeLabel = getPromptModeLabel(cfg.promptMode);
     const duration = formatMs((a.completedAt ?? Date.now()) - a.startedAt);
 
     let icon: string;
@@ -166,8 +168,9 @@ export class AgentWidget {
 
     const runningLines: string[][] = []; // each entry is [header, activity]
     for (const a of running) {
-      const name = getDisplayName(a.type);
-      const modeLabel = getPromptModeLabel(a.type);
+      const rcfg = getConfig(a.type);
+      const name = getDisplayName(a.type, rcfg.displayName);
+      const modeLabel = getPromptModeLabel(rcfg.promptMode);
       const modeTag = modeLabel ? ` ${theme.fg("dim", `(${modeLabel})`)}` : "";
       const elapsed = formatMs(Date.now() - a.startedAt);
 
