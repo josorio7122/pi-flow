@@ -20,7 +20,7 @@ export async function showAllAgentsList(deps: CommandDeps, ctx: ExtensionCommand
   const sourceIndicator = (cfg: AgentConfig | undefined) => {
     const disabled = cfg?.enabled === false;
     if (cfg?.source === "project") return disabled ? "✕• " : "•  ";
-    if (cfg?.source === "global") return disabled ? "✕◦ " : "◦  ";
+    if (cfg?.source === "global" || cfg?.source === "default") return disabled ? "✕◦ " : "◦  ";
     return disabled ? "✕  " : "   ";
   };
 
@@ -37,7 +37,7 @@ export async function showAllAgentsList(deps: CommandDeps, ctx: ExtensionCommand
 
   const hasCustom = allNames.some((n) => {
     const c = registry.getAgentConfig(n);
-    return c && !c.isDefault && c.enabled !== false;
+    return c && c.source !== undefined && c.enabled !== false;
   });
   const hasDisabled = allNames.some((n) => registry.getAgentConfig(n)?.enabled === false);
   const legendParts: string[] = [];

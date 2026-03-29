@@ -24,6 +24,7 @@ export const DEFAULT_AGENTS: Map<string, AgentConfig> = new Map([
       runInBackground: false,
       isolated: false,
       isDefault: true,
+      source: "default",
     },
   ],
   [
@@ -69,6 +70,7 @@ Use Bash ONLY for read-only operations: ls, git status, git log, git diff, find,
       runInBackground: false,
       isolated: false,
       isDefault: true,
+      source: "default",
     },
   ],
   [
@@ -125,6 +127,7 @@ List 3-5 files most critical for implementing this plan:
       runInBackground: false,
       isolated: false,
       isDefault: true,
+      source: "default",
     },
   ],
 ]);
