@@ -66,10 +66,10 @@ export function registerWorkflowExtension(
       description: Type.Optional(Type.String({ description: "What the user wants done (required for start)" })),
     }),
     // biome-ignore lint/complexity/useMaxParams: pi tool execute callback signature is fixed
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       if (params.action === "status") return buildWorkflowStatusText({ ctx, activeWorkflowId });
-      if (params.action === "continue") return continueWorkflow(ctx);
-      return startWorkflow({ typeName: params.workflow_type, desc: params.description ?? "", ctx });
+      if (params.action === "continue") return continueWorkflow(ctx, signal);
+      return startWorkflow({ typeName: params.workflow_type, desc: params.description ?? "", ctx, signal });
     },
   });
 
@@ -77,10 +77,12 @@ export function registerWorkflowExtension(
     typeName,
     desc,
     ctx,
+    signal,
   }: {
     typeName: string | undefined;
     desc: string;
     ctx: ExtensionContext;
+    signal?: AbortSignal | undefined;
   }) {
     if (!typeName) return textResult("Error: workflow_type is required for action 'start'.", true);
     const definition = workflows.get(typeName);
@@ -111,10 +113,10 @@ export function registerWorkflowExtension(
       );
     }
 
-    return runPhaseAndReport(ctx);
+    return runPhaseAndReport(ctx, signal);
   }
 
-  async function runPhaseAndReport(ctx: ExtensionContext) {
+  async function runPhaseAndReport(ctx: ExtensionContext, signal?: AbortSignal | undefined) {
     if (!activeWorkflowId || !activeDefinition || !deps?.manager) {
       return textResult("No active workflow or manager not available.", true);
     }
@@ -129,6 +131,7 @@ export function registerWorkflowExtension(
       pi,
       ctx,
       manager: deps.manager,
+      signal,
     });
 
     doRefreshWidget(ctx);
@@ -154,7 +157,7 @@ export function registerWorkflowExtension(
     return textResult("Phase completed.");
   }
 
-  async function continueWorkflow(ctx: ExtensionContext) {
+  async function continueWorkflow(ctx: ExtensionContext, signal?: AbortSignal | undefined) {
     if (!activeWorkflowId || !activeDefinition) {
       return textResult("No active workflow to continue.", true);
     }
@@ -193,7 +196,7 @@ export function registerWorkflowExtension(
       );
     }
 
-    return runPhaseAndReport(ctx);
+    return runPhaseAndReport(ctx, signal);
   }
 
   // ── /flow Command ──────────────────────────────────────────────

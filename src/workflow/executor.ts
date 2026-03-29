@@ -5,7 +5,12 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
-import { accumulateTokens, buildInterruptedContext, resolveContextHandoff } from "./executor-helpers.js";
+import {
+  accumulateTokens,
+  buildInterruptedContext,
+  resolveContextHandoff,
+  WorkflowAbortError,
+} from "./executor-helpers.js";
 import { dispatchPhase } from "./phase-dispatch.js";
 import { checkTokenLimit, updatePhaseStatus } from "./pipeline.js";
 import { appendEvent, listHandoffs, writeState } from "./store.js";
@@ -26,6 +31,7 @@ export async function executeCurrentPhase({
   pi,
   ctx,
   manager,
+  signal,
 }: {
   definition: WorkflowDefinition;
   state: WorkflowState;
@@ -34,7 +40,10 @@ export async function executeCurrentPhase({
   pi: ExtensionAPI;
   ctx: ExtensionContext;
   manager: AgentManager;
+  signal?: AbortSignal | undefined;
 }): Promise<PhaseOutcome> {
+  if (signal?.aborted) return { type: "workflow-complete", exitReason: "user_abort" };
+
   const phase = definition.phases.find((p) => p.name === state.currentPhase);
   if (!phase) return { type: "error", error: `Phase "${state.currentPhase}" not found in definition.` };
 
@@ -83,6 +92,7 @@ export async function executeCurrentPhase({
       ctx,
       manager,
       emitEvent,
+      signal,
     });
 
     if (outcome.type === "gate-waiting") {
@@ -96,8 +106,14 @@ export async function executeCurrentPhase({
     accumulateTokens({ state, phaseName: phase.name, manager });
     writeState({ cwd, workflowId, state });
 
-    return advanceToNextPhase({ definition, state, cwd, workflowId, pi, ctx, manager, emitEvent });
+    return advanceToNextPhase({ definition, state, cwd, workflowId, pi, ctx, manager, emitEvent, signal });
   } catch (err) {
+    if (err instanceof WorkflowAbortError) {
+      state.exitReason = "user_abort";
+      state.completedAt = Date.now();
+      writeState({ cwd, workflowId, state });
+      return { type: "workflow-complete", exitReason: "user_abort" };
+    }
     const error = err instanceof Error ? err.message : String(err);
     updatePhaseStatus({ state, phase: phase.name, status: "failed", error, onEvent: emitEvent });
     writeState({ cwd, workflowId, state });
@@ -117,6 +133,7 @@ function advanceToNextPhase({
   ctx,
   manager,
   emitEvent,
+  signal,
 }: {
   definition: WorkflowDefinition;
   state: WorkflowState;
@@ -126,6 +143,7 @@ function advanceToNextPhase({
   ctx: ExtensionContext;
   manager: AgentManager;
   emitEvent: (event: WorkflowEvent) => void;
+  signal?: AbortSignal | undefined;
 }): PhaseOutcome | Promise<PhaseOutcome> {
   const currentIndex = definition.phases.findIndex((p) => p.name === state.currentPhase);
   const nextIndex = currentIndex + 1;
@@ -151,5 +169,5 @@ function advanceToNextPhase({
   writeState({ cwd, workflowId, state });
 
   // Recurse — execute the next phase immediately
-  return executeCurrentPhase({ definition, state, cwd, workflowId, pi, ctx, manager });
+  return executeCurrentPhase({ definition, state, cwd, workflowId, pi, ctx, manager, signal });
 }

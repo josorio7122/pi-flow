@@ -22,6 +22,7 @@ export async function dispatchPhase({
   ctx,
   manager,
   emitEvent,
+  signal,
 }: {
   phase: PhaseDefinition;
   definition: WorkflowDefinition;
@@ -34,6 +35,7 @@ export async function dispatchPhase({
   ctx: ExtensionContext;
   manager: AgentManager;
   emitEvent: (event: WorkflowEvent) => void;
+  signal?: AbortSignal | undefined;
 }) {
   switch (phase.mode) {
     case "gate":
@@ -52,6 +54,7 @@ export async function dispatchPhase({
         ctx,
         manager,
         emitEvent,
+        signal,
       });
       return { type: result.type };
     }
@@ -79,6 +82,7 @@ export async function dispatchPhase({
         ctx,
         manager,
         emitEvent,
+        signal,
       });
     }
 
@@ -94,6 +98,7 @@ export async function dispatchPhase({
         ctx,
         manager,
         emitEvent,
+        signal,
       });
     }
   }

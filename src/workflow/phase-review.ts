@@ -4,7 +4,7 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
-import { trackAgentComplete, trackAgentStart } from "./executor-helpers.js";
+import { spawnWithAbort, trackAgentComplete, trackAgentStart } from "./executor-helpers.js";
 import { detectStuckIssues } from "./pipeline.js";
 import { buildFixPrompt, buildReviewPrompt } from "./prompt-builder.js";
 import { writeHandoff, writeState } from "./store.js";
@@ -29,6 +29,7 @@ export async function executeReviewLoop({
   ctx,
   manager,
   emitEvent,
+  signal,
 }: {
   phase: PhaseDefinition;
   definition: WorkflowDefinition;
@@ -40,6 +41,7 @@ export async function executeReviewLoop({
   ctx: ExtensionContext;
   manager: AgentManager;
   emitEvent: (event: WorkflowEvent) => void;
+  signal?: AbortSignal | undefined;
 }) {
   const maxCycles = phase.maxCycles ?? 3;
   const reviewerRole = phase.role ?? "reviewer";
@@ -64,12 +66,14 @@ export async function executeReviewLoop({
       targetHandoff: currentHandoff,
       reviewCycle: cycle,
     });
-    const reviewRecord = await manager.spawnAndWait({
+    const reviewRecord = await spawnWithAbort({
+      manager,
       pi,
       ctx,
       type: reviewerRole,
       prompt: reviewPrompt,
-      options: { description: `${definition.name}: review (cycle ${cycle + 1})` },
+      description: `${definition.name}: review (cycle ${cycle + 1})`,
+      signal,
     });
 
     const review = parseVerdict(reviewRecord.result ?? "");
@@ -138,12 +142,14 @@ export async function executeReviewLoop({
     writeState({ cwd, workflowId, state });
 
     const fixPrompt = buildFixPrompt({ definition, state, reviewHandoff });
-    const fixRecord = await manager.spawnAndWait({
+    const fixRecord = await spawnWithAbort({
+      manager,
       pi,
       ctx,
       type: fixRole,
       prompt: fixPrompt,
-      options: { description: `${definition.name}: fix (cycle ${cycle + 1})` },
+      description: `${definition.name}: fix (cycle ${cycle + 1})`,
+      signal,
     });
 
     const fixDuration = (fixRecord.completedAt ?? Date.now()) - fixRecord.startedAt;

@@ -1,8 +1,10 @@
 /**
- * Executor helpers — handoff resolution, token accumulation, crash recovery.
+ * Executor helpers — handoff resolution, token accumulation, crash recovery, abort-aware spawn.
  */
 
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
+import type { AgentRecord } from "../types.js";
 import { buildContinuationPrompt } from "./recovery.js";
 import { listHandoffs } from "./store.js";
 import type { AgentHandoff, PhaseDefinition, WorkflowState } from "./types.js";
@@ -126,4 +128,61 @@ export function accumulateTokens({
       /* stats unavailable */
     }
   }
+}
+
+// ── Abort-Aware Spawn ────────────────────────────────────────────────
+
+export class WorkflowAbortError extends Error {
+  constructor() {
+    super("Workflow aborted");
+    this.name = "WorkflowAbortError";
+  }
+}
+
+/**
+ * Spawn an agent and wait for completion, aborting if the signal fires.
+ * Throws WorkflowAbortError if aborted before or during execution.
+ */
+export async function spawnWithAbort({
+  manager,
+  pi,
+  ctx,
+  type,
+  prompt,
+  description,
+  signal,
+}: {
+  manager: AgentManager;
+  pi: ExtensionAPI;
+  ctx: ExtensionContext;
+  type: string;
+  prompt: string;
+  description: string;
+  signal?: AbortSignal | undefined;
+}): Promise<AgentRecord> {
+  if (signal?.aborted) throw new WorkflowAbortError();
+
+  const id = manager.spawn({
+    pi,
+    ctx,
+    type,
+    prompt,
+    options: { description, isBackground: false },
+  });
+
+  if (signal) {
+    const onAbort = () => manager.abort(id);
+    signal.addEventListener("abort", onAbort, { once: true });
+    try {
+      const record = manager.getRecord(id)!;
+      await record.promise;
+      return record;
+    } finally {
+      signal.removeEventListener("abort", onAbort);
+    }
+  }
+
+  const record = manager.getRecord(id)!;
+  await record.promise;
+  return record;
 }
