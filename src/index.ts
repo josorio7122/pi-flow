@@ -708,7 +708,7 @@ export default function piFlow(pi: ExtensionAPI) {
         const typeChoice = await ctx.ui.select('Agent types', typeOptions);
         if (!typeChoice) return;
 
-        // Show agent detail
+        // Show agent detail with actions
         const agentName = typeChoice.split(' · ')[0];
         const agent = allAgents.find((a) => a.name === agentName);
         if (agent) {
@@ -728,11 +728,65 @@ export default function piFlow(pi: ExtensionAPI) {
           ]
             .filter(Boolean)
             .join('\n');
-          pi.sendMessage({
-            customType: 'pi-flow-agent-detail',
-            content: detail,
-            display: true,
-          });
+
+          // Build action menu (#97-103)
+          const actions: string[] = ['Back'];
+          const isCustom = agent.source === 'custom';
+          const isBuiltin = agent.source === 'builtin';
+          if (isCustom && ctx.ui?.editor) actions.unshift('Edit');
+          if (isCustom) actions.unshift('Delete');
+          if (isBuiltin && ctx.ui?.editor) actions.unshift('Eject (export as .md)');
+
+          const actionChoice = await ctx.ui?.select?.(`${agent.name}\n\n${detail}`, actions);
+
+          if (actionChoice === 'Edit' && ctx.ui?.editor) {
+            // #99: Edit agent in TUI editor
+            const { readFileSync, writeFileSync } = await import('node:fs');
+            try {
+              const content = readFileSync(agent.filePath, 'utf-8');
+              const edited = await ctx.ui.editor(`Edit ${agent.name}`, content);
+              if (edited !== undefined && edited !== content) {
+                writeFileSync(agent.filePath, edited, 'utf-8');
+                ctx.ui.notify?.(`Agent "${agent.name}" saved.`, 'info');
+              }
+            } catch (err: unknown) {
+              ctx.ui.notify?.(
+                `Failed to edit: ${err instanceof Error ? err.message : String(err)}`,
+                'warning',
+              );
+            }
+          } else if (actionChoice === 'Delete') {
+            // #103: Delete custom agent
+            const { unlinkSync } = await import('node:fs');
+            try {
+              unlinkSync(agent.filePath);
+              ctx.ui.notify?.(`Agent "${agent.name}" deleted.`, 'info');
+            } catch (err: unknown) {
+              ctx.ui.notify?.(
+                `Failed to delete: ${err instanceof Error ? err.message : String(err)}`,
+                'warning',
+              );
+            }
+          } else if (actionChoice?.startsWith('Eject')) {
+            // #101: Eject builtin agent to .md file
+            const { mkdirSync, writeFileSync, readFileSync } = await import('node:fs');
+            const { join } = await import('node:path');
+            const customDir = join(ctx.cwd, '.flow', 'agents', 'custom');
+            mkdirSync(customDir, { recursive: true });
+            const targetPath = join(customDir, `${agent.name}.md`);
+            try {
+              const content = readFileSync(agent.filePath, 'utf-8');
+              writeFileSync(targetPath, content, 'utf-8');
+              ctx.ui.notify?.(`Agent "${agent.name}" ejected to ${targetPath}`, 'info');
+            } catch (err: unknown) {
+              ctx.ui.notify?.(
+                `Failed to eject: ${err instanceof Error ? err.message : String(err)}`,
+                'warning',
+              );
+            }
+          } else if (!actionChoice || actionChoice === 'Back') {
+            // Do nothing
+          }
         }
       } else if (choice === 'Settings') {
         const { getGraceTurns, getDefaultMaxTurns } = await import('./runner.js');

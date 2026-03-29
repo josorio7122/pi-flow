@@ -17,6 +17,13 @@ import {
   grepTool,
   findTool,
   lsTool,
+  createReadTool,
+  createBashTool,
+  createEditTool,
+  createWriteTool,
+  createGrepTool,
+  createFindTool,
+  createLsTool,
 } from '@mariozechner/pi-coding-agent';
 import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
 import type { FlowAgentConfig, SingleAgentResult, UsageStats } from './types.js';
@@ -59,6 +66,7 @@ export const GRACE_TURNS = 5;
 
 // ─── Tool resolution ──────────────────────────────────────────────────────────
 
+/** Global tool singletons (default — no cwd binding). */
 const TOOL_MAP: Record<string, { name: string }> = {
   read: readTool,
   bash: bashTool,
@@ -69,16 +77,34 @@ const TOOL_MAP: Record<string, { name: string }> = {
   ls: lsTool,
 };
 
+/** cwd-specific tool factory functions (#20/#117). */
+const TOOL_FACTORIES: Record<string, (cwd: string) => { name: string }> = {
+  read: (cwd) => createReadTool(cwd),
+  bash: (cwd) => createBashTool(cwd),
+  edit: (cwd) => createEditTool(cwd),
+  write: (cwd) => createWriteTool(cwd),
+  grep: (cwd) => createGrepTool(cwd),
+  find: (cwd) => createFindTool(cwd),
+  ls: (cwd) => createLsTool(cwd),
+};
+
 /**
  * Maps agent tool name strings to pi built-in tool objects.
- * Unknown names are silently filtered out.
+ * When `cwd` is provided, creates cwd-specific tool instances.
  * Applies denylist filtering when provided.
  */
-export function resolveTools(toolNames: string[], disallowedTools?: string[]): { name: string }[] {
+export function resolveTools(
+  toolNames: string[],
+  disallowedTools?: string[],
+  cwd?: string,
+): { name: string }[] {
   const denied = disallowedTools ? new Set(disallowedTools) : undefined;
   return toolNames
     .filter((name) => !denied?.has(name))
-    .map((name) => TOOL_MAP[name])
+    .map((name) => {
+      if (cwd && TOOL_FACTORIES[name]) return TOOL_FACTORIES[name](cwd);
+      return TOOL_MAP[name];
+    })
     .filter((t): t is { name: string } => t != null);
 }
 
@@ -160,7 +186,7 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
   }
 
   // 1. Build system prompt with variable injection + env block + memory block
-  const env = detectEnv(effectiveCwd);
+  const env = await detectEnv(effectiveCwd);
   const envBlock = buildEnvBlock(effectiveCwd, env);
   let systemPrompt: string;
 
@@ -221,8 +247,9 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Model<any> from pi SDK
   const model = resolveModel(ctx.modelRegistry, agent.model, ctx.model) as any;
 
-  // 4. Resolve tools (with denylist)
-  const tools = resolveTools(agent.tools, agent.disallowedTools);
+  // 4. Resolve tools (with denylist, cwd-specific when worktree changes cwd)
+  const cwdForTools = worktreeInfo ? effectiveCwd : undefined;
+  const tools = resolveTools(agent.tools, agent.disallowedTools, cwdForTools);
 
   // 5. Create session
   const { session } = await createAgentSession({

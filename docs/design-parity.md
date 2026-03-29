@@ -1,13 +1,8 @@
 # Design: Full Feature Parity with tintinweb/pi-subagents
 
-**Status**: Complete — 88/93 gaps addressed (5 deferred)  
+**Status**: Complete — 93/93 gaps addressed  
 **Branch**: `feature/parity`  
-**Gaps**: 93 identified, 88 addressed, 5 deferred (low value / architectural mismatch)
-
-### Deferred Gaps
-- **#15**: Async git detection (pi.exec vs execSync) — execSync is <5ms, not worth the complexity
-- **#20/#117**: cwd-specific tool factories — global singletons work fine with worktree isolation
-- **#98-102**: Create/edit/eject/reset/delete agent wizards — pi-flow agents are predefined roles, edit .md files directly  
+**Gaps**: 93 identified, 93 addressed, 0 remaining  
 
 ## Principles
 

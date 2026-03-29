@@ -1,18 +1,29 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { detectEnv, buildEnvBlock, SUB_AGENT_CONTEXT } from './env.js';
 
 describe('detectEnv', () => {
-  it('detects git repo in a git directory', () => {
-    const env = detectEnv(process.cwd());
+  it('detects git repo in a git directory', async () => {
+    const env = await detectEnv(process.cwd());
     expect(env.isGitRepo).toBe(true);
     expect(env.branch).toBeTruthy();
     expect(env.platform).toBe(process.platform);
   });
 
-  it('detects non-git directory', () => {
-    const env = detectEnv('/tmp');
+  it('detects non-git directory', async () => {
+    const env = await detectEnv('/tmp');
     expect(env.isGitRepo).toBe(false);
     expect(env.branch).toBe('');
+  });
+
+  it('uses async exec when provided', async () => {
+    const exec = vi
+      .fn()
+      .mockResolvedValueOnce({ code: 0, stdout: 'true\n' })
+      .mockResolvedValueOnce({ code: 0, stdout: 'main\n' });
+    const env = await detectEnv('/my/project', exec);
+    expect(env.isGitRepo).toBe(true);
+    expect(env.branch).toBe('main');
+    expect(exec).toHaveBeenCalledTimes(2);
   });
 });
 

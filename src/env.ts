@@ -2,46 +2,79 @@
  * env.ts — Detect environment info (git, platform) for agent system prompts.
  */
 
-import { execFileSync } from 'node:child_process';
-
 export interface EnvInfo {
   isGitRepo: boolean;
   branch: string;
   platform: string;
 }
 
+/** Async exec interface matching pi's ExtensionAPI.exec signature. */
+export interface AsyncExec {
+  (
+    command: string,
+    args: string[],
+    options?: { cwd?: string; timeout?: number },
+  ): Promise<{
+    code: number;
+    stdout: string;
+  }>;
+}
+
 /**
  * Detect environment information for the given working directory.
- * Uses synchronous git calls (fast, <5ms each).
+ * Uses async exec when provided (pi.exec), falls back to child_process.
  */
-export function detectEnv(cwd: string): EnvInfo {
+export async function detectEnv(cwd: string, exec?: AsyncExec): Promise<EnvInfo> {
   let isGitRepo = false;
   let branch = '';
 
-  try {
-    const result = execFileSync('git', ['rev-parse', '--is-inside-work-tree'], {
-      cwd,
-      stdio: 'pipe',
-      timeout: 5000,
-    })
-      .toString()
-      .trim();
-    isGitRepo = result === 'true';
-  } catch {
-    // Not a git repo
-  }
-
-  if (isGitRepo) {
+  if (exec) {
     try {
-      branch = execFileSync('git', ['branch', '--show-current'], {
+      const result = await exec('git', ['rev-parse', '--is-inside-work-tree'], {
+        cwd,
+        timeout: 5000,
+      });
+      isGitRepo = result.code === 0 && result.stdout.trim() === 'true';
+    } catch {
+      // Not a git repo
+    }
+
+    if (isGitRepo) {
+      try {
+        const result = await exec('git', ['branch', '--show-current'], { cwd, timeout: 5000 });
+        branch = result.code === 0 ? result.stdout.trim() : 'unknown';
+      } catch {
+        branch = 'unknown';
+      }
+    }
+  } else {
+    // Fallback: synchronous (for tests / when pi.exec unavailable)
+    const { execFileSync } = await import('node:child_process');
+    try {
+      const result = execFileSync('git', ['rev-parse', '--is-inside-work-tree'], {
         cwd,
         stdio: 'pipe',
         timeout: 5000,
       })
         .toString()
         .trim();
+      isGitRepo = result === 'true';
     } catch {
-      branch = 'unknown';
+      // Not a git repo
+    }
+
+    if (isGitRepo) {
+      try {
+        branch = execFileSync('git', ['branch', '--show-current'], {
+          cwd,
+          stdio: 'pipe',
+          timeout: 5000,
+        })
+          .toString()
+          .trim();
+      } catch {
+        branch = 'unknown';
+      }
     }
   }
 
