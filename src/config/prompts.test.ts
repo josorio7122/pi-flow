@@ -27,7 +27,7 @@ function getDefaultConfig(name: string): AgentConfig {
 describe("buildAgentPrompt", () => {
   it("includes cwd and git info", () => {
     const config = getDefaultConfig("general-purpose");
-    const prompt = buildAgentPrompt(config, "/workspace", env);
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env });
     expect(prompt).toContain("/workspace");
     expect(prompt).toContain("Branch: main");
     expect(prompt).toContain("darwin");
@@ -35,21 +35,21 @@ describe("buildAgentPrompt", () => {
 
   it("handles non-git repos", () => {
     const config = getDefaultConfig("Explore");
-    const prompt = buildAgentPrompt(config, "/workspace", envNoGit);
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env: envNoGit });
     expect(prompt).toContain("Not a git repository");
     expect(prompt).not.toContain("Branch:");
   });
 
   it("Explore prompt is read-only", () => {
     const config = getDefaultConfig("Explore");
-    const prompt = buildAgentPrompt(config, "/workspace", env);
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env });
     expect(prompt).toContain("READ-ONLY");
     expect(prompt).toContain("file search specialist");
   });
 
   it("Plan prompt is read-only", () => {
     const config = getDefaultConfig("Plan");
-    const prompt = buildAgentPrompt(config, "/workspace", env);
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env });
     expect(prompt).toContain("READ-ONLY");
     expect(prompt).toContain("software architect");
   });
@@ -57,7 +57,7 @@ describe("buildAgentPrompt", () => {
   it("general-purpose uses append mode (parent twin)", () => {
     const config = getDefaultConfig("general-purpose");
     const parentPrompt = "You are a parent coding agent with full powers.";
-    const prompt = buildAgentPrompt(config, "/workspace", env, parentPrompt);
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env, parentSystemPrompt: parentPrompt });
     expect(prompt).toContain("parent coding agent with full powers");
     expect(prompt).toContain("<sub_agent_context>");
     expect(prompt).toContain("<inherited_system_prompt>");
@@ -68,7 +68,7 @@ describe("buildAgentPrompt", () => {
 
   it("general-purpose without parent prompt falls back to generic base", () => {
     const config = getDefaultConfig("general-purpose");
-    const prompt = buildAgentPrompt(config, "/workspace", env);
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env });
     expect(prompt).toContain("general-purpose coding agent");
     expect(prompt).not.toContain("READ-ONLY");
   });
@@ -87,7 +87,7 @@ describe("buildAgentPrompt", () => {
       isolated: false,
     };
     const parentPrompt = "You are a parent coding agent with special powers.";
-    const prompt = buildAgentPrompt(config, "/workspace", env, parentPrompt);
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env, parentSystemPrompt: parentPrompt });
     expect(prompt).toContain("/workspace");
     expect(prompt).toContain("parent coding agent with special powers");
     expect(prompt).toContain("<sub_agent_context>");
@@ -109,7 +109,7 @@ describe("buildAgentPrompt", () => {
       runInBackground: false,
       isolated: false,
     };
-    const prompt = buildAgentPrompt(config, "/workspace", env);
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env });
     expect(prompt).toContain("/workspace");
     expect(prompt).toContain("general-purpose coding agent");
     expect(prompt).toContain("Extra custom instructions here.");
@@ -129,7 +129,7 @@ describe("buildAgentPrompt", () => {
       isolated: false,
     };
     const parentPrompt = "You are a parent coding agent.";
-    const prompt = buildAgentPrompt(config, "/workspace", env, parentPrompt);
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env, parentSystemPrompt: parentPrompt });
     expect(prompt).toContain("parent coding agent");
     expect(prompt).toContain("<sub_agent_context>");
     expect(prompt).toContain("<inherited_system_prompt>");
@@ -149,7 +149,7 @@ describe("buildAgentPrompt", () => {
       runInBackground: false,
       isolated: false,
     };
-    const prompt = buildAgentPrompt(config, "/workspace", env);
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env });
     expect(prompt).toContain("You are a specialized agent.");
     expect(prompt).toContain("/workspace");
     expect(prompt).toContain("You are a pi coding agent sub-agent");
@@ -168,7 +168,7 @@ describe("buildAgentPrompt", () => {
       runInBackground: false,
       isolated: false,
     };
-    const prompt = buildAgentPrompt(config, "/workspace", env, "SECRET parent prompt content");
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env, parentSystemPrompt: "SECRET parent prompt content" });
     expect(prompt).toContain("You are a standalone agent.");
     expect(prompt).not.toContain("SECRET parent prompt content");
     expect(prompt).not.toContain("<sub_agent_context>");
@@ -176,7 +176,7 @@ describe("buildAgentPrompt", () => {
 
   it("append mode bridge contains tool reminders", () => {
     const config = getDefaultConfig("general-purpose");
-    const prompt = buildAgentPrompt(config, "/workspace", env, "Parent prompt.");
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env, parentSystemPrompt: "Parent prompt." });
     expect(prompt).toContain("Use the read tool instead of cat");
     expect(prompt).toContain("Use the edit tool instead of sed");
     expect(prompt).toContain("Use the grep tool instead of");
@@ -195,7 +195,7 @@ describe("buildAgentPrompt", () => {
       runInBackground: false,
       isolated: false,
     };
-    const prompt = buildAgentPrompt(config, "/workspace", env);
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env });
     expect(prompt).toContain("<sub_agent_context>");
     expect(prompt).toContain("<inherited_system_prompt>");
     expect(prompt).toContain("Use the read tool instead of cat");
@@ -217,7 +217,7 @@ describe("buildAgentPrompt", () => {
       isolated: false,
     };
     const extras = { memoryBlock: "# Agent Memory\nYou have persistent memory at /tmp/mem/" };
-    const prompt = buildAgentPrompt(config, "/workspace", env, undefined, extras);
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env, extras });
     expect(prompt).toContain("You are a memory agent.");
     expect(prompt).toContain("Agent Memory");
     expect(prompt).toContain("persistent memory");
@@ -237,7 +237,7 @@ describe("buildAgentPrompt", () => {
       isolated: false,
     };
     const extras = { memoryBlock: "# Agent Memory\nPersistent memory here." };
-    const prompt = buildAgentPrompt(config, "/workspace", env, "Parent prompt.", extras);
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env, parentSystemPrompt: "Parent prompt.", extras });
     expect(prompt).toContain("<sub_agent_context>");
     expect(prompt).toContain("Agent Memory");
     expect(prompt).toContain("Custom instructions.");
@@ -262,7 +262,7 @@ describe("buildAgentPrompt", () => {
         { name: "error-handling", content: "Handle errors gracefully." },
       ],
     };
-    const prompt = buildAgentPrompt(config, "/workspace", env, undefined, extras);
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env, extras });
     expect(prompt).toContain("Preloaded Skill: api-conventions");
     expect(prompt).toContain("Use REST endpoints.");
     expect(prompt).toContain("Preloaded Skill: error-handling");
@@ -286,7 +286,7 @@ describe("buildAgentPrompt", () => {
       memoryBlock: "# Memory\nRemember this.",
       skillBlocks: [{ name: "skill1", content: "Skill content." }],
     };
-    const prompt = buildAgentPrompt(config, "/workspace", env, undefined, extras);
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env, extras });
     expect(prompt).toContain("# Memory");
     expect(prompt).toContain("Preloaded Skill: skill1");
   });
@@ -304,7 +304,7 @@ describe("buildAgentPrompt", () => {
       runInBackground: false,
       isolated: false,
     };
-    const prompt = buildAgentPrompt(config, "/workspace", env);
+    const prompt = buildAgentPrompt({ config, cwd: "/workspace", env });
     expect(prompt).not.toContain("Agent Memory");
     expect(prompt).not.toContain("Preloaded Skill");
   });

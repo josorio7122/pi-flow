@@ -52,11 +52,11 @@ export function setGraceTurns(n: number): void { graceTurns = Math.max(1, n); }
  * Try to find the right model for an agent type.
  * Priority: explicit option > config.model > parent model.
  */
-function resolveDefaultModel(
-  parentModel: Model<Api> | undefined,
-  registry: { find(provider: string, modelId: string): Model<Api> | undefined; getAvailable?(): Model<Api>[] },
-  configModel?: string | undefined,
-): Model<Api> | undefined {
+function resolveDefaultModel({ parentModel, registry, configModel }: {
+  parentModel: Model<Api> | undefined;
+  registry: { find(provider: string, modelId: string): Model<Api> | undefined; getAvailable?: (() => Model<Api>[]) | undefined };
+  configModel?: string | undefined;
+}): Model<Api> | undefined {
   if (configModel) {
     const slashIdx = configModel.indexOf("/");
     if (slashIdx !== -1) {
@@ -153,12 +153,12 @@ function forwardAbortSignal(session: AgentSession, signal?: AbortSignal): () => 
   return () => signal.removeEventListener("abort", onAbort);
 }
 
-export async function runAgent(
-  ctx: ExtensionContext,
-  type: SubagentType,
-  prompt: string,
-  options: RunOptions,
-): Promise<RunResult> {
+export async function runAgent({ ctx, type, prompt, options }: {
+  ctx: ExtensionContext;
+  type: SubagentType;
+  prompt: string;
+  options: RunOptions;
+}): Promise<RunResult> {
   const config = getConfig(type);
   const agentConfig = getAgentConfig(type);
 
@@ -213,21 +213,27 @@ export async function runAgent(
   // Build system prompt from agent config
   let systemPrompt: string;
   if (agentConfig) {
-    systemPrompt = buildAgentPrompt(agentConfig, effectiveCwd, env, parentSystemPrompt, extras);
+    systemPrompt = buildAgentPrompt({ config: agentConfig, cwd: effectiveCwd, env, parentSystemPrompt, extras });
   } else {
     // Unknown type fallback: general-purpose (defensive — unreachable in practice
     // since index.ts resolves unknown types to "general-purpose" before calling runAgent)
     systemPrompt = buildAgentPrompt({
-      name: type,
-      description: "General-purpose agent",
-      systemPrompt: "",
-      promptMode: "append",
-      extensions: true,
-      skills: true,
-      inheritContext: false,
-      runInBackground: false,
-      isolated: false,
-    }, effectiveCwd, env, parentSystemPrompt, extras);
+      config: {
+        name: type,
+        description: "General-purpose agent",
+        systemPrompt: "",
+        promptMode: "append",
+        extensions: true,
+        skills: true,
+        inheritContext: false,
+        runInBackground: false,
+        isolated: false,
+      },
+      cwd: effectiveCwd,
+      env,
+      parentSystemPrompt,
+      extras,
+    });
   }
 
   // When skills is string[], we've already preloaded them into the prompt.
@@ -246,9 +252,9 @@ export async function runAgent(
   await loader.reload();
 
   // Resolve model: explicit option > config.model > parent model
-  const model = options.model ?? resolveDefaultModel(
-    ctx.model, ctx.modelRegistry, agentConfig?.model,
-  );
+  const model = options.model ?? resolveDefaultModel({
+    parentModel: ctx.model, registry: ctx.modelRegistry, configModel: agentConfig?.model,
+  });
 
   // Resolve thinking level: explicit option > agent config > undefined (inherit)
   const thinkingLevel = options.thinkingLevel ?? agentConfig?.thinking;
@@ -372,11 +378,11 @@ export async function runAgent(
 /**
  * Send a new prompt to an existing session (resume).
  */
-export async function resumeAgent(
-  session: AgentSession,
-  prompt: string,
-  options: { onToolActivity?: (activity: ToolActivity) => void; signal?: AbortSignal } = {},
-): Promise<string> {
+export async function resumeAgent({ session, prompt, options = {} }: {
+  session: AgentSession;
+  prompt: string;
+  options?: { onToolActivity?: (activity: ToolActivity) => void; signal?: AbortSignal };
+}): Promise<string> {
   const collector = collectResponseText(session);
   const cleanupAbort = forwardAbortSignal(session, options.signal);
 

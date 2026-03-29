@@ -244,7 +244,7 @@ export function registerAgentsCommand(deps: AgentsCommandDeps) {
         ctx.ui.notify(`Restored default ${name}`, "info");
       }
     } else if (choice.startsWith("Eject")) {
-      await ejectAgent(ctx, name, cfg);
+      await ejectAgent({ ctx, name, cfg });
     } else if (choice === "Disable") {
       await disableAgent(ctx, name);
     } else if (choice === "Enable") {
@@ -252,7 +252,7 @@ export function registerAgentsCommand(deps: AgentsCommandDeps) {
     }
   }
 
-  async function ejectAgent(ctx: ExtensionCommandContext, name: string, cfg: AgentConfig) {
+  async function ejectAgent({ ctx, name, cfg }: { ctx: ExtensionCommandContext; name: string; cfg: AgentConfig }) {
     const location = await ctx.ui.select("Choose location", [
       "Project (.pi/agents/)",
       "Personal (~/.pi/agent/agents/)",
@@ -423,10 +423,10 @@ Guidelines for choosing settings:
 
 Write the file using the write tool. Only write the file, nothing else.`;
 
-    const record = await manager.spawnAndWait(pi, ctx, "general-purpose", generatePrompt, {
+    const record = await manager.spawnAndWait({ pi, ctx, type: "general-purpose", prompt: generatePrompt, options: {
       description: `Generate ${name} agent`,
       maxTurns: 5,
-    });
+    }});
 
     if (record.status === "error") {
       ctx.ui.notify(`Generation failed: ${record.error}`, "warning");

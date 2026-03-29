@@ -111,12 +111,12 @@ export function formatTaskNotification(record: AgentRecord, resultMaxLen: number
 }
 
 /** Build AgentDetails from a base + record-specific fields. */
-export function buildDetails(
-  base: { displayName: string; description: string; subagentType: string; modelName?: string | undefined; tags?: string[] | undefined },
-  record: { toolUses: number; startedAt: number; completedAt?: number | undefined; status: string; error?: string | undefined; id?: string | undefined; session?: { getSessionStats(): { tokens: { total: number } } } | undefined },
-  activity?: AgentActivity | undefined,
-  overrides?: Partial<AgentDetails> | undefined,
-): AgentDetails {
+export function buildDetails({ base, record, activity, overrides }: {
+  base: { displayName: string; description: string; subagentType: string; modelName?: string | undefined; tags?: string[] | undefined };
+  record: { toolUses: number; startedAt: number; completedAt?: number | undefined; status: string; error?: string | undefined; id?: string | undefined; session?: { getSessionStats(): { tokens: { total: number } } } | undefined };
+  activity?: AgentActivity | undefined;
+  overrides?: Partial<AgentDetails> | undefined;
+}): AgentDetails {
   return {
     ...base,
     toolUses: record.toolUses,
@@ -132,7 +132,7 @@ export function buildDetails(
 }
 
 /** Build notification details for the custom message renderer. */
-export function buildNotificationDetails(record: AgentRecord, resultMaxLen: number, activity?: AgentActivity): NotificationDetails {
+export function buildNotificationDetails({ record, resultMaxLen, activity }: { record: AgentRecord; resultMaxLen: number; activity?: AgentActivity | undefined }): NotificationDetails {
   let totalTokens = 0;
   try {
     if (record.session) totalTokens = record.session.getSessionStats().tokens?.total ?? 0;

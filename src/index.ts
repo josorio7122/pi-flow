@@ -138,7 +138,7 @@ export default function (pi: ExtensionAPI) {
       customType: "subagent-notification",
       content: notification + footer,
       display: true,
-      details: buildNotificationDetails(record, 500, agentActivity.get(record.id)),
+      details: buildNotificationDetails({ record, resultMaxLen: 500, activity: agentActivity.get(record.id) }),
     }, { deliverAs: "followUp", triggerTurn: true });
   }
 
@@ -167,9 +167,9 @@ export default function (pi: ExtensionAPI) {
 
         const [first, ...rest] = unconsumed;
         if (!first) return;
-        const details = buildNotificationDetails(first, 300, agentActivity.get(first.id));
+        const details = buildNotificationDetails({ record: first, resultMaxLen: 300, activity: agentActivity.get(first.id) });
         if (rest.length > 0) {
-          details.others = rest.map(r => buildNotificationDetails(r, 300, agentActivity.get(r.id)));
+          details.others = rest.map(r => buildNotificationDetails({ record: r, resultMaxLen: 300, activity: agentActivity.get(r.id) }));
         }
 
         pi.sendMessage<NotificationDetails>({
@@ -267,7 +267,7 @@ export default function (pi: ExtensionAPI) {
     waitForAll: () => manager.waitForAll(),
     hasRunning: () => manager.hasRunning(),
     spawn: (piRef: unknown, ctx: unknown, type: string, prompt: string, options: unknown) =>
-      manager.spawn(piRef as ExtensionAPI, ctx as ExtensionContext, type, prompt, options as Parameters<typeof manager.spawn>[4]),
+      manager.spawn({ pi: piRef as ExtensionAPI, ctx: ctx as ExtensionContext, type, prompt, options } as Parameters<typeof manager.spawn>[0]),
     getRecord: (id: string) => manager.getRecord(id),
   };
 
@@ -639,13 +639,13 @@ Guidelines:
         if (!existing.session) {
           return textResult(`Agent "${params.resume}" has no active session to resume.`);
         }
-        const record = await manager.resume(params.resume, params.prompt, signal);
+        const record = await manager.resume({ id: params.resume, prompt: params.prompt, signal });
         if (!record) {
           return textResult(`Failed to resume agent "${params.resume}".`);
         }
         return textResult(
           record.result?.trim() || record.error?.trim() || "No output.",
-          buildDetails(detailBase, record),
+          buildDetails({ base: detailBase, record }),
         );
       }
 
@@ -666,7 +666,7 @@ Guidelines:
           }
         };
 
-        id = manager.spawn(pi, ctx, subagentType, params.prompt, {
+        id = manager.spawn({ pi, ctx, type: subagentType, prompt: params.prompt, options: {
           description: params.description,
           model,
           maxTurns: effectiveMaxTurns,
@@ -676,7 +676,7 @@ Guidelines:
           isBackground: true,
           isolation,
           ...bgCallbacks,
-        });
+        }});
 
         // Set output file + join mode synchronously after spawn, before the
         // event loop yields — onSessionCreated is async so this is safe.
@@ -774,7 +774,7 @@ Guidelines:
 
       streamUpdate();
 
-      const record = await manager.spawnAndWait(pi, ctx, subagentType, params.prompt, {
+      const record = await manager.spawnAndWait({ pi, ctx, type: subagentType, prompt: params.prompt, options: {
         description: params.description,
         model,
         maxTurns: effectiveMaxTurns,
@@ -783,7 +783,7 @@ Guidelines:
         thinkingLevel: thinking,
         isolation,
         ...fgCallbacks,
-      });
+      }});
 
       clearInterval(spinnerInterval);
 
@@ -796,7 +796,7 @@ Guidelines:
       // Get final token count
       const tokenText = safeFormatTokens(fgState.session);
 
-      const details = buildDetails(detailBase, record, fgState, { tokens: tokenText });
+      const details = buildDetails({ base: detailBase, record, activity: fgState, overrides: { tokens: tokenText } });
 
       const fallbackNote = fellBack
         ? `Note: Unknown agent type "${rawType}" — using general-purpose.\n\n`

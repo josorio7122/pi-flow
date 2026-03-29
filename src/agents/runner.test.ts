@@ -108,7 +108,7 @@ describe("agent-runner final output capture", () => {
     const { session } = createSession("LOCKED");
     createAgentSession.mockResolvedValue({ session });
 
-    const result = await runAgent(ctx, "Explore", "Say LOCKED", { pi });
+    const result = await runAgent({ ctx, type: "Explore", prompt: "Say LOCKED", options: { pi } });
 
     expect(result.responseText).toBe("LOCKED");
   });
@@ -117,7 +117,7 @@ describe("agent-runner final output capture", () => {
     const { session } = createSession("BOUND");
     createAgentSession.mockResolvedValue({ session });
 
-    await runAgent(ctx, "Explore", "Say BOUND", { pi });
+    await runAgent({ ctx, type: "Explore", prompt: "Say BOUND", options: { pi } });
 
     expect(session.bindExtensions).toHaveBeenCalledTimes(1);
     expect(session.bindExtensions).toHaveBeenCalledWith(
@@ -132,7 +132,7 @@ describe("agent-runner final output capture", () => {
   it("resumeAgent also falls back to the final assistant message text", async () => {
     const { session } = createSession("RESUMED");
 
-    const result = await resumeAgent(session as any, "Continue");
+    const result = await resumeAgent({ session: session as any, prompt: "Continue" });
 
     expect(result).toBe("RESUMED");
   });

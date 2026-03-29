@@ -84,13 +84,7 @@ export class AgentManager {
    * Spawn an agent and return its ID immediately (for background use).
    * If the concurrency limit is reached, the agent is queued.
    */
-  spawn(
-    pi: ExtensionAPI,
-    ctx: ExtensionContext,
-    type: SubagentType,
-    prompt: string,
-    options: SpawnOptions,
-  ): string {
+  spawn({ pi, ctx, type, prompt, options }: SpawnArgs): string {
     const id = randomUUID().slice(0, 17);
     const abortController = new AbortController();
     const record: AgentRecord = {
@@ -112,12 +106,13 @@ export class AgentManager {
       return id;
     }
 
-    this.startAgent(id, record, args);
+    this.startAgent({ id, record, args });
     return id;
   }
 
   /** Actually start an agent (called immediately or from queue drain). */
-  private startAgent(id: string, record: AgentRecord, { pi, ctx, type, prompt, options }: SpawnArgs) {
+  private startAgent({ id, record, args }: { id: string; record: AgentRecord; args: SpawnArgs }) {
+    const { pi, ctx, type, prompt, options } = args;
     record.status = "running";
     record.startedAt = Date.now();
     if (options.isBackground) this.runningBackground++;
@@ -139,7 +134,7 @@ export class AgentManager {
     // Prepend worktree warning to prompt if isolation failed
     const effectivePrompt = worktreeWarning ? worktreeWarning + "\n\n" + prompt : prompt;
 
-    const promise = runAgent(ctx, type, effectivePrompt, {
+    const promise = runAgent({ ctx, type, prompt: effectivePrompt, options: {
       pi,
       model: options.model,
       maxTurns: options.maxTurns,
@@ -165,7 +160,7 @@ export class AgentManager {
         }
         options.onSessionCreated?.(session);
       },
-    })
+    }})
       .then(({ responseText, session, aborted, steered }) => {
         // Don't overwrite status if externally stopped via abort()
         if (record.status !== "stopped") {
@@ -183,7 +178,7 @@ export class AgentManager {
 
         // Clean up worktree if used
         if (record.worktree) {
-          const wtResult = cleanupWorktree(ctx.cwd, record.worktree, options.description);
+          const wtResult = cleanupWorktree({ cwd: ctx.cwd, worktree: record.worktree, agentDescription: options.description });
           record.worktreeResult = wtResult;
           if (wtResult.hasChanges && wtResult.branch) {
             record.result = (record.result ?? "") +
@@ -215,7 +210,7 @@ export class AgentManager {
         // Best-effort worktree cleanup on error
         if (record.worktree) {
           try {
-            const wtResult = cleanupWorktree(ctx.cwd, record.worktree, options.description);
+            const wtResult = cleanupWorktree({ cwd: ctx.cwd, worktree: record.worktree, agentDescription: options.description });
             record.worktreeResult = wtResult;
           } catch { /* ignore cleanup errors */ }
         }
@@ -237,7 +232,7 @@ export class AgentManager {
       const next = this.queue.shift()!;
       const record = this.agents.get(next.id);
       if (!record || record.status !== "queued") continue;
-      this.startAgent(next.id, record, next.args);
+      this.startAgent({ id: next.id, record, args: next.args });
     }
   }
 
@@ -246,13 +241,15 @@ export class AgentManager {
    * Foreground agents bypass the concurrency queue.
    */
   async spawnAndWait(
-    pi: ExtensionAPI,
-    ctx: ExtensionContext,
-    type: SubagentType,
-    prompt: string,
-    options: Omit<SpawnOptions, "isBackground">,
+    { pi, ctx, type, prompt, options }: {
+      pi: ExtensionAPI;
+      ctx: ExtensionContext;
+      type: SubagentType;
+      prompt: string;
+      options: Omit<SpawnOptions, "isBackground">;
+    },
   ): Promise<AgentRecord> {
-    const id = this.spawn(pi, ctx, type, prompt, { ...options, isBackground: false });
+    const id = this.spawn({ pi, ctx, type, prompt, options: { ...options, isBackground: false } });
     const record = this.agents.get(id)!;
     await record.promise;
     return record;
@@ -261,11 +258,11 @@ export class AgentManager {
   /**
    * Resume an existing agent session with a new prompt.
    */
-  async resume(
-    id: string,
-    prompt: string,
-    signal?: AbortSignal,
-  ): Promise<AgentRecord | undefined> {
+  async resume({ id, prompt, signal }: {
+    id: string;
+    prompt: string;
+    signal?: AbortSignal | undefined;
+  }): Promise<AgentRecord | undefined> {
     const record = this.agents.get(id);
     if (!record?.session) return undefined;
 
@@ -276,11 +273,15 @@ export class AgentManager {
     record.error = undefined;
 
     try {
-      const responseText = await resumeAgent(record.session, prompt, {
-        onToolActivity: (activity) => {
-          if (activity.type === "end") record.toolUses++;
+      const responseText = await resumeAgent({
+        session: record.session,
+        prompt,
+        options: {
+          onToolActivity: (activity) => {
+            if (activity.type === "end") record.toolUses++;
+          },
+          ...(signal ? { signal } : {}),
         },
-        ...(signal ? { signal } : {}),
       });
       record.status = "completed";
       record.result = responseText;

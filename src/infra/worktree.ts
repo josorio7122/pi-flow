@@ -64,11 +64,11 @@ export function createWorktree(cwd: string, agentId: string): WorktreeInfo | und
  * - If no changes: remove worktree entirely.
  * - If changes exist: create a branch, commit changes, return branch info.
  */
-export function cleanupWorktree(
-  cwd: string,
-  worktree: WorktreeInfo,
-  agentDescription: string,
-): WorktreeCleanupResult {
+export function cleanupWorktree({ cwd, worktree, agentDescription }: {
+  cwd: string;
+  worktree: WorktreeInfo;
+  agentDescription: string;
+}): WorktreeCleanupResult {
   if (!existsSync(worktree.path)) {
     return { hasChanges: false };
   }

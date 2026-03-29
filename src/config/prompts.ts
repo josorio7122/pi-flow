@@ -22,13 +22,13 @@ export interface PromptExtras {
  * @param parentSystemPrompt  The parent agent's effective system prompt (for append mode).
  * @param extras  Optional extra sections to inject (memory, preloaded skills).
  */
-export function buildAgentPrompt(
-  config: AgentConfig,
-  cwd: string,
-  env: EnvInfo,
-  parentSystemPrompt?: string,
-  extras?: PromptExtras,
-): string {
+export function buildAgentPrompt({ config, cwd, env, parentSystemPrompt, extras }: {
+  config: AgentConfig;
+  cwd: string;
+  env: EnvInfo;
+  parentSystemPrompt?: string | undefined;
+  extras?: PromptExtras | undefined;
+}): string {
   const envBlock = `# Environment
 Working directory: ${cwd}
 ${env.isGitRepo ? `Git repository: yes\nBranch: ${env.branch}` : "Not a git repository"}

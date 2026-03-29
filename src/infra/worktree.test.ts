@@ -85,7 +85,7 @@ describe("worktree", () => {
       const wt = createWorktree(repoDir, "clean-1")!;
       expect(wt).toBeDefined();
 
-      const result = cleanupWorktree(repoDir, wt, "test cleanup");
+      const result = cleanupWorktree({ cwd: repoDir, worktree: wt, agentDescription: "test cleanup" });
       expect(result.hasChanges).toBe(false);
       expect(result.branch).toBeUndefined();
     });
@@ -97,7 +97,7 @@ describe("worktree", () => {
       // Make a change in the worktree
       writeFileSync(join(wt.path, "new-file.txt"), "agent wrote this");
 
-      const result = cleanupWorktree(repoDir, wt, "added new file");
+      const result = cleanupWorktree({ cwd: repoDir, worktree: wt, agentDescription: "added new file" });
       expect(result.hasChanges).toBe(true);
       expect(result.branch).toBeDefined();
       expect(result.branch).toContain("pi-agent-dirty-1");
@@ -122,13 +122,13 @@ describe("worktree", () => {
       // Create first worktree, make changes, cleanup → creates branch
       const wt1 = createWorktree(repoDir, "conflict-1")!;
       writeFileSync(join(wt1.path, "file1.txt"), "first run");
-      const result1 = cleanupWorktree(repoDir, wt1, "first");
+      const result1 = cleanupWorktree({ cwd: repoDir, worktree: wt1, agentDescription: "first" });
       expect(result1.branch).toBe("pi-agent-conflict-1");
 
       // Create second worktree with same agent ID, make changes
       const wt2 = createWorktree(repoDir, "conflict-1")!;
       writeFileSync(join(wt2.path, "file2.txt"), "second run");
-      const result2 = cleanupWorktree(repoDir, wt2, "second");
+      const result2 = cleanupWorktree({ cwd: repoDir, worktree: wt2, agentDescription: "second" });
 
       // Should use a different branch name (timestamp suffix)
       expect(result2.hasChanges).toBe(true);
@@ -153,7 +153,7 @@ describe("worktree", () => {
       // Manually delete the worktree directory
       rmSync(wt.path, { recursive: true, force: true });
 
-      const result = cleanupWorktree(repoDir, wt, "already gone");
+      const result = cleanupWorktree({ cwd: repoDir, worktree: wt, agentDescription: "already gone" });
       expect(result.hasChanges).toBe(false);
     });
 
@@ -161,7 +161,7 @@ describe("worktree", () => {
       const wt = createWorktree(repoDir, "long-msg")!;
       writeFileSync(join(wt.path, "change.txt"), "something");
       const longDesc = "x".repeat(300);
-      const result = cleanupWorktree(repoDir, wt, longDesc);
+      const result = cleanupWorktree({ cwd: repoDir, worktree: wt, agentDescription: longDesc });
       expect(result.hasChanges).toBe(true);
 
       const log = execFileSync("git", ["log", "--oneline", "-1", result.branch!], {

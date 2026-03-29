@@ -78,9 +78,9 @@ describe("cross-extension RPC", () => {
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
       expect(reply).toHaveBeenCalledWith({ success: true, data: { id: "agent-42" } });
-      expect(manager.spawn).toHaveBeenCalledWith(
-        deps.pi, ctx, "general-purpose", "do stuff", {},
-      );
+      expect(manager.spawn).toHaveBeenCalledWith({
+        pi: deps.pi, ctx, type: "general-purpose", prompt: "do stuff", options: {},
+      });
     });
 
     it("passes options through to manager.spawn", async () => {
@@ -93,10 +93,10 @@ describe("cross-extension RPC", () => {
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
-      expect(manager.spawn).toHaveBeenCalledWith(
-        deps.pi, ctx, "Explore", "find it",
-        { description: "search", isBackground: true },
-      );
+      expect(manager.spawn).toHaveBeenCalledWith({
+        pi: deps.pi, ctx, type: "Explore", prompt: "find it",
+        options: { description: "search", isBackground: true },
+      });
     });
 
     it("returns error when no active session", async () => {
