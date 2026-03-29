@@ -46,9 +46,13 @@ function run(name: string, model: string, timeout: number) {}
 function run(params: { name: string; model: string; timeout: number }) {}
 ```
 
-### File size limit: 200 lines max
-- Split when a file exceeds 200 lines — no exceptions
-- Extract helpers, types, or sub-modules
+### Code splitting
+- 200 lines max per file — split when exceeded, no exceptions
+- Split by cohesion: related functions stay together, unrelated concepts get their own file
+- Feature folders over layer folders — group by domain (`agents/`, `dispatch/`), not by role (`utils/`, `services/`)
+- No barrel files (`index.ts` re-exports) — they break tree-shaking, hide circular deps, and slow builds. Use direct imports
+- Export only what other modules consume — internal helpers stay unexported
+- Split triggers: file > 200 lines, 2+ unrelated concepts, or a function reused from another module
 
 ### Strict tsconfig is non-negotiable
 - `strict: true` — always
@@ -78,16 +82,23 @@ function run(params: { name: string; model: string; timeout: number }) {}
 3. Commit test + implementation together
 
 ### Test quality rules
-- Test behavior, not implementation details
+- Test behavior, not implementation details — tests must survive refactors that don't change behavior
 - Every test must catch a real bug if it fails — if deleting it changes nothing, delete it
-- No testing framework behavior (e.g., "field exists on type")
-- Minimal mocking — prefer real objects, fakes, or pure function extraction
-- Mock only at I/O boundaries (network, filesystem, time)
+- No testing trivial code: getters, setters, type existence, enum member counts
+- No snapshot abuse — snapshots hide regressions instead of catching them
 - No `class TestXxx` — use plain `describe`/`it` with vitest
 - No over-documentation in tests — rename the test if it needs explanation
+
+### Mocking rules
+- Pure function extraction is the #1 testing strategy — extract logic into pure functions, test them directly, no mocks needed
+- Prefer `vi.spyOn` over `vi.mock` — spy on specific functions, don't replace entire modules
+- `vi.mock` is a last resort — only for modules that are entirely I/O (fs, network, DB)
+- Prefer fakes and real objects over mocks — a fake in-memory store beats a mocked repository
+- Never mock what you own — if you control the code, make it testable by design (dependency injection, pure functions)
+- If a test needs more than 2 mocks, the code under test has too many dependencies — refactor first
 
 ## Conventions
 - ESM-only (`type: "module"`, `.js` extensions in imports)
 - Colocate tests: `foo.ts` → `foo.test.ts` in same directory
-- Types live next to the code that uses them, not in a monolithic `types.ts` — except shared project-wide types
+- Types live next to the code that uses them — except shared project-wide types
 - Unused code is deleted, not commented out

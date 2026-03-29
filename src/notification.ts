@@ -66,6 +66,9 @@ export interface NotificationDetails {
   description: string;
   status: string;
   toolUses: number;
+  turnCount: number;
+  maxTurns?: number;
+  totalTokens: number;
   durationMs: number;
   outputFile?: string;
   error?: string;
@@ -83,6 +86,9 @@ export function buildNotificationDetails(
     description: record.description,
     status: record.status,
     toolUses: record.toolUses ?? 0,
+    turnCount: 0,
+    maxTurns: undefined,
+    totalTokens: 0,
     durationMs: record.completedAt ? record.completedAt - record.startedAt : 0,
     outputFile: record.outputFile,
     error: record.error,

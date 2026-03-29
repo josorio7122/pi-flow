@@ -4,6 +4,7 @@
  * Displays a live-updating view of an agent's messages, tool calls, and results.
  * Subscribes to session events for real-time streaming.
  * Uses pi-tui primitives for proper ANSI-aware rendering.
+ * Full parity with tintinweb/pi-subagents' ConversationViewer.
  */
 
 import {
@@ -17,7 +18,14 @@ import {
 import type { BackgroundRecord } from '../background.js';
 import { extractText } from '../context.js';
 import type { AgentActivity, Theme } from './agent-widget.js';
-import { describeActivity, formatDuration } from './agent-widget.js';
+import {
+  describeActivity,
+  formatDuration,
+  formatTokens,
+  formatTurns,
+  getDisplayName,
+  getPromptModeLabel,
+} from './agent-widget.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -105,21 +113,39 @@ export class FlowConversationViewer implements Component {
 
     // Header
     lines.push(hrTop);
+    const name = getDisplayName(this.record.agent);
+    const modeLabel = getPromptModeLabel(this.record.agent);
+    const modeTag = modeLabel ? ` ${th.fg('dim', `(${modeLabel})`)}` : '';
     const statusIcon =
       this.record.status === 'running'
         ? th.fg('accent', '●')
         : this.record.status === 'completed'
           ? th.fg('success', '✓')
-          : this.record.status === 'error'
-            ? th.fg('error', '✗')
-            : th.fg('dim', '○');
+          : this.record.status === 'steered'
+            ? th.fg('warning', '✓')
+            : this.record.status === 'error'
+              ? th.fg('error', '✗')
+              : th.fg('dim', '○');
     const duration = formatDuration(this.record.startedAt, this.record.completedAt);
+
     const headerParts: string[] = [duration];
     const toolUses = this.activity?.toolUses ?? this.record.toolUses ?? 0;
     if (toolUses > 0) headerParts.unshift(`${toolUses} tool${toolUses === 1 ? '' : 's'}`);
+    if (this.activity?.session) {
+      try {
+        const tokens = this.activity.session.getSessionStats().tokens.total;
+        if (tokens > 0) headerParts.push(formatTokens(tokens));
+      } catch {
+        /* session stats unavailable */
+      }
+    }
+    if (this.activity) {
+      headerParts.unshift(formatTurns(this.activity.turnCount, this.activity.maxTurns));
+    }
+
     lines.push(
       row(
-        `${statusIcon} ${th.bold(this.record.agent.name)}  ${th.fg('muted', this.record.description)} ${th.fg('dim', '·')} ${th.fg('dim', headerParts.join(' · '))}`,
+        `${statusIcon} ${th.bold(name)}${modeTag}  ${th.fg('muted', this.record.description)} ${th.fg('dim', '·')} ${th.fg('dim', headerParts.join(' · '))}`,
       ),
     );
     lines.push(hrMid);
@@ -211,7 +237,6 @@ export class FlowConversationViewer implements Component {
           lines.push(th.fg('dim', line));
         }
       } else if ((msg as Record<string, unknown>).role === 'bashExecution') {
-        // Gap 9: bash execution messages shown distinctly
         const bash = msg as Record<string, unknown>;
         if (needsSeparator) lines.push(th.fg('dim', '───'));
         lines.push(truncateToWidth(th.fg('muted', `  $ ${(bash.command as string) ?? ''}`), width));

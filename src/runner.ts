@@ -36,6 +36,12 @@ import { preloadSkills } from './skill-loader.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+/** Fallback base prompt when parent system prompt is unavailable in append mode. */
+const GENERIC_BASE = `# Role
+You are a general-purpose coding agent for complex, multi-step tasks.
+You have full access to read, write, edit files, and execute commands.
+Do what has been asked; nothing more, nothing less.`;
+
 /** Additional turns allowed after the soft steer message before hard abort. */
 let graceTurns = 5;
 
@@ -191,22 +197,29 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
   let systemPrompt: string;
 
   if (agent.promptMode === 'append') {
-    // Append mode: env + parent prompt + sub-agent context + agent instructions
-    const parentPrompt = ''; // TODO: add parent context forking in Phase 6
+    // Append mode: env + inherited parent prompt + sub-agent context + agent instructions
+    const parentPrompt = ctx.getSystemPrompt?.() ?? '';
+    const identity = parentPrompt || GENERIC_BASE;
+    const customSection = agent.systemPrompt?.trim()
+      ? '\n\n<agent_instructions>\n' +
+        injectVariables(agent.systemPrompt, variableMap, agent.variables) +
+        '\n</agent_instructions>'
+      : '';
     systemPrompt =
       envBlock +
-      (parentPrompt
-        ? '\n\n<inherited_system_prompt>\n' + parentPrompt + '\n</inherited_system_prompt>'
-        : '') +
-      '\n\n' +
+      '\n\n<inherited_system_prompt>\n' +
+      identity +
+      '\n</inherited_system_prompt>\n\n' +
       SUB_AGENT_CONTEXT +
-      '\n\n<agent_instructions>\n' +
-      injectVariables(agent.systemPrompt, variableMap, agent.variables) +
-      '\n</agent_instructions>';
+      customSection;
   } else {
-    // Replace mode (default): env + agent prompt
+    // Replace mode (default): env + replace header + agent prompt
     systemPrompt =
-      envBlock + '\n\n' + injectVariables(agent.systemPrompt, variableMap, agent.variables);
+      'You are a pi coding agent sub-agent.\n' +
+      'You have been invoked to handle a specific task autonomously.\n\n' +
+      envBlock +
+      '\n\n' +
+      injectVariables(agent.systemPrompt, variableMap, agent.variables);
   }
 
   // 1b. Inject per-agent memory block if configured
@@ -289,7 +302,21 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
     session.setActiveToolsByName(activeTools);
   }
 
-  // 6b. Notify caller that session is ready (for pending steer flush, etc.)
+  // 6b. Bind extensions so session_start fires and extensions can initialize
+  // (e.g. loading credentials, setting up state). Placed after tool filtering
+  // so extension-provided skills/prompts respect the active tool set.
+  if (!noExtensions) {
+    await session.bindExtensions({
+      onError: (err: { extensionPath?: string }) => {
+        callbacks?.onToolActivity?.({
+          type: 'end',
+          toolName: `extension-error:${err.extensionPath ?? 'unknown'}`,
+        });
+      },
+    });
+  }
+
+  // 6c. Notify caller that session is ready (for pending steer flush, etc.)
   callbacks?.onSessionCreated?.(session);
 
   // 7. Turn tracking state

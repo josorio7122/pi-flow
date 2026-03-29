@@ -1,8 +1,9 @@
 /**
  * agent-widget.ts — Persistent widget showing running/completed agents above the editor.
  *
- * Displays running agents with animated spinners, live stats, and activity descriptions.
+ * Displays a tree of agents with animated spinners, live stats, and activity descriptions.
  * Uses the callback form of setWidget for themed rendering.
+ * Full parity with tintinweb/pi-subagents' AgentWidget.
  */
 
 import { truncateToWidth } from '@mariozechner/pi-tui';
@@ -14,7 +15,7 @@ const MAX_WIDGET_LINES = 12;
 
 export const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
-const ERROR_STATUSES = new Set(['error', 'aborted']);
+export const ERROR_STATUSES = new Set(['error', 'aborted', 'steered', 'stopped']);
 
 const TOOL_DISPLAY: Record<string, string> = {
   read: 'reading',
@@ -40,7 +41,8 @@ export interface UICtx {
     content:
       | undefined
       | ((
-          tui: { terminal: { columns: number; rows: number }; requestRender(): void },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TUI interface varies
+          tui: any,
           theme: Theme,
         ) => { render(): string[]; invalidate(): void }),
     options?: { placement?: 'aboveEditor' | 'belowEditor' },
@@ -50,17 +52,47 @@ export interface UICtx {
 export interface AgentActivity {
   activeTools: Map<string, string>;
   toolUses: number;
+  tokens: string;
   responseText: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- session stats interface
+  session?: { getSessionStats(): { tokens: { total: number } } };
   turnCount: number;
   maxTurns?: number;
+}
+
+/** Metadata attached to dispatch_flow tool results for custom rendering. */
+export interface AgentDetails {
+  displayName: string;
+  description: string;
+  agentType: string;
+  toolUses: number;
+  tokens: string;
+  durationMs: number;
+  status:
+    | 'queued'
+    | 'running'
+    | 'completed'
+    | 'steered'
+    | 'aborted'
+    | 'stopped'
+    | 'error'
+    | 'background';
+  activity?: string;
+  spinnerFrame?: number;
+  modelName?: string;
+  tags?: string[];
+  turnCount?: number;
+  maxTurns?: number;
+  agentId?: string;
+  error?: string;
 }
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
 
 export function formatTokens(count: number): string {
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}k`;
-  return `${count}`;
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M token`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}k token`;
+  return `${count} token`;
 }
 
 export function formatTurns(turnCount: number, maxTurns?: number | null): string {
@@ -76,6 +108,28 @@ export function formatDuration(startedAt: number, completedAt?: number): string 
   return `${formatMs(Date.now() - startedAt)} (running)`;
 }
 
+/** Safe token formatting — wraps session.getSessionStats() in try-catch. */
+export function safeFormatTokens(
+  session: { getSessionStats(): { tokens: { total: number } } } | undefined,
+): string {
+  if (!session) return '';
+  try {
+    return formatTokens(session.getSessionStats().tokens.total);
+  } catch {
+    return '';
+  }
+}
+
+/** Get the display name for an agent. Uses label if available, falls back to name. */
+export function getDisplayName(agent: { label?: string; name: string }): string {
+  return agent.label || agent.name;
+}
+
+/** Short label for prompt mode: "twin" for append, nothing for replace. */
+export function getPromptModeLabel(agent: { promptMode?: string }): string | undefined {
+  return agent.promptMode === 'append' ? 'twin' : undefined;
+}
+
 export function describeActivity(activeTools: Map<string, string>, responseText?: string): string {
   if (activeTools.size > 0) {
     const groups = new Map<string, number>();
@@ -85,7 +139,11 @@ export function describeActivity(activeTools: Map<string, string>, responseText?
     }
     const parts: string[] = [];
     for (const [action, count] of groups) {
-      parts.push(count > 1 ? `${action} ${count} files` : action);
+      if (count > 1) {
+        parts.push(`${action} ${count} ${action === 'searching' ? 'patterns' : 'files'}`);
+      } else {
+        parts.push(action);
+      }
     }
     return parts.join(', ') + '…';
   }
@@ -107,6 +165,7 @@ export class FlowAgentWidget {
   private widgetFrame = 0;
   private widgetInterval: ReturnType<typeof setInterval> | undefined;
   private finishedTurnAge = new Map<string, number>();
+  private static readonly ERROR_LINGER_TURNS = 2;
   private widgetRegistered = false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TUI reference
   private tui: any;
@@ -147,7 +206,7 @@ export class FlowAgentWidget {
 
   private shouldShowFinished(agentId: string, status: string): boolean {
     const age = this.finishedTurnAge.get(agentId) ?? 0;
-    const maxAge = ERROR_STATUSES.has(status) ? 2 : 1;
+    const maxAge = ERROR_STATUSES.has(status) ? FlowAgentWidget.ERROR_LINGER_TURNS : 1;
     return age < maxAge;
   }
 
@@ -179,6 +238,10 @@ export class FlowAgentWidget {
         clearInterval(this.widgetInterval);
         this.widgetInterval = undefined;
       }
+      // Clean up stale entries
+      for (const [id] of this.finishedTurnAge) {
+        if (!allAgents.some((a) => a.id === id)) this.finishedTurnAge.delete(id);
+      }
       return;
     }
 
@@ -204,7 +267,7 @@ export class FlowAgentWidget {
         (tui, theme) => {
           this.tui = tui;
           return {
-            render: () => this.renderWidget(tui, theme, allAgents),
+            render: () => this.renderWidget(tui, theme),
             invalidate: () => {
               this.widgetRegistered = false;
               this.tui = undefined;
@@ -219,13 +282,42 @@ export class FlowAgentWidget {
     }
   }
 
-  private renderWidget(
-    tui: { terminal: { columns: number } },
-    theme: Theme,
-    _allAgents: BackgroundRecord[],
-  ): string[] {
-    const w = tui.terminal.columns;
-    const truncate = (line: string) => truncateToWidth(line, w);
+  private renderFinishedLine(a: BackgroundRecord, theme: Theme): string {
+    const name = getDisplayName(a.agent);
+    const modeLabel = getPromptModeLabel(a.agent);
+    const modeTag = modeLabel ? ` ${theme.fg('dim', `(${modeLabel})`)}` : '';
+    const duration = formatMs((a.completedAt ?? Date.now()) - a.startedAt);
+
+    let icon: string;
+    let statusText = '';
+    if (a.status === 'completed') {
+      icon = theme.fg('success', '✓');
+    } else if (a.status === 'steered') {
+      icon = theme.fg('warning', '✓');
+      statusText = theme.fg('warning', ' (turn limit)');
+    } else if (a.status === 'error') {
+      icon = theme.fg('error', '✗');
+      const errMsg = a.error ? `: ${a.error.slice(0, 60)}` : '';
+      statusText = theme.fg('error', ` error${errMsg}`);
+    } else if (a.status === 'aborted') {
+      icon = theme.fg('error', '✗');
+      statusText = theme.fg('warning', ' aborted');
+    } else {
+      icon = theme.fg('dim', '■');
+      statusText = theme.fg('dim', ` ${a.status}`);
+    }
+
+    const parts: string[] = [];
+    const activity = this.activityMap.get(a.id);
+    if (activity) parts.push(formatTurns(activity.turnCount, activity.maxTurns));
+    if ((a.toolUses ?? 0) > 0) parts.push(`${a.toolUses} tool use${a.toolUses === 1 ? '' : 's'}`);
+    parts.push(duration);
+
+    return `${icon} ${theme.fg('dim', name)}${modeTag}  ${theme.fg('dim', a.description)} ${theme.fg('dim', '·')} ${theme.fg('dim', parts.join(' · '))}${statusText}`;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TUI interface
+  private renderWidget(tui: any, theme: Theme): string[] {
     const allAgents = this.manager.listAgents();
     const running = allAgents.filter((a) => a.status === 'running');
     const queued = allAgents.filter((a) => a.status === 'queued');
@@ -237,75 +329,124 @@ export class FlowAgentWidget {
         this.shouldShowFinished(a.id, a.status),
     );
 
-    if (running.length === 0 && queued.length === 0 && finished.length === 0) return [];
-
     const hasActive = running.length > 0 || queued.length > 0;
+    const hasFinished = finished.length > 0;
+    if (!hasActive && !hasFinished) return [];
+
+    const w = tui.terminal.columns;
+    const truncate = (line: string) => truncateToWidth(line, w);
     const headingColor = hasActive ? 'accent' : 'dim';
     const headingIcon = hasActive ? '●' : '○';
     const frame = SPINNER[this.widgetFrame % SPINNER.length];
 
-    const lines: string[] = [
-      theme.fg(headingColor, headingIcon) + ' ' + theme.fg(headingColor, 'Agents'),
-    ];
+    // Build sections separately for overflow-aware assembly
+    const finishedLines: string[] = [];
+    for (const a of finished) {
+      finishedLines.push(truncate(theme.fg('dim', '├─') + ' ' + this.renderFinishedLine(a, theme)));
+    }
 
-    let budget = MAX_WIDGET_LINES - 1;
-
-    // Running agents (2 lines each)
+    const runningLines: string[][] = []; // [header, activity] pairs
     for (const a of running) {
-      if (budget < 2) break;
+      const name = getDisplayName(a.agent);
+      const modeLabel = getPromptModeLabel(a.agent);
+      const modeTag = modeLabel ? ` ${theme.fg('dim', `(${modeLabel})`)}` : '';
       const elapsed = formatMs(Date.now() - a.startedAt);
-      const activity = this.activityMap.get(a.id);
+
+      const bg = this.activityMap.get(a.id);
+      const toolUses = bg?.toolUses ?? a.toolUses ?? 0;
+      let tokenText = '';
+      if (bg?.session) {
+        tokenText = safeFormatTokens(bg.session);
+      }
+
       const parts: string[] = [];
-      if (activity) parts.push(formatTurns(activity.turnCount, activity.maxTurns));
-      if (a.toolUses) parts.push(`${a.toolUses} tools`);
+      if (bg) parts.push(formatTurns(bg.turnCount, bg.maxTurns));
+      if (toolUses > 0) parts.push(`${toolUses} tool use${toolUses === 1 ? '' : 's'}`);
+      if (tokenText) parts.push(tokenText);
       parts.push(elapsed);
 
-      lines.push(
+      const act = bg ? describeActivity(bg.activeTools, bg.responseText) : 'thinking…';
+
+      runningLines.push([
         truncate(
           theme.fg('dim', '├─') +
-            ` ${theme.fg('accent', frame)} ${theme.bold(a.agent.name)}  ${theme.fg('muted', a.description)} ${theme.fg('dim', '·')} ${theme.fg('dim', parts.join(' · '))}`,
+            ` ${theme.fg('accent', frame)} ${theme.bold(name)}${modeTag}  ${theme.fg('muted', a.description)} ${theme.fg('dim', '·')} ${theme.fg('dim', parts.join(' · '))}`,
         ),
-      );
-      const act = activity
-        ? describeActivity(activity.activeTools, activity.responseText)
-        : 'thinking…';
-      lines.push(truncate(theme.fg('dim', '│  ') + theme.fg('dim', `  ⎿  ${act}`)));
-      budget -= 2;
+        truncate(theme.fg('dim', '│  ') + theme.fg('dim', `  ⎿  ${act}`)),
+      ]);
     }
 
-    // Queued
-    if (queued.length > 0 && budget >= 1) {
+    const queuedLine =
+      queued.length > 0
+        ? truncate(
+            theme.fg('dim', '├─') +
+              ` ${theme.fg('muted', '◦')} ${theme.fg('dim', `${queued.length} queued`)}`,
+          )
+        : undefined;
+
+    // Assemble with overflow cap
+    const maxBody = MAX_WIDGET_LINES - 1;
+    const totalBody = finishedLines.length + runningLines.length * 2 + (queuedLine ? 1 : 0);
+
+    const lines: string[] = [
+      truncate(theme.fg(headingColor, headingIcon) + ' ' + theme.fg(headingColor, 'Agents')),
+    ];
+
+    if (totalBody <= maxBody) {
+      // Everything fits
+      lines.push(...finishedLines);
+      for (const pair of runningLines) lines.push(...pair);
+      if (queuedLine) lines.push(queuedLine);
+
+      // Fix last connector
+      if (lines.length > 1) {
+        const last = lines.length - 1;
+        lines[last] = lines[last].replace('├─', '└─');
+        // If last item is a running agent activity line, fix its indent
+        if (runningLines.length > 0 && !queuedLine) {
+          if (last >= 2) {
+            lines[last - 1] = lines[last - 1].replace('├─', '└─');
+            lines[last] = lines[last].replace('│  ', '   ');
+          }
+        }
+      }
+    } else {
+      // Overflow — prioritize: running > queued > finished
+      let budget = maxBody - 1; // reserve 1 for overflow indicator
+      let hiddenRunning = 0;
+      let hiddenFinished = 0;
+
+      for (const pair of runningLines) {
+        if (budget >= 2) {
+          lines.push(...pair);
+          budget -= 2;
+        } else {
+          hiddenRunning++;
+        }
+      }
+      if (queuedLine && budget >= 1) {
+        lines.push(queuedLine);
+        budget--;
+      }
+      for (const fl of finishedLines) {
+        if (budget >= 1) {
+          lines.push(fl);
+          budget--;
+        } else {
+          hiddenFinished++;
+        }
+      }
+
+      const overflowParts: string[] = [];
+      if (hiddenRunning > 0) overflowParts.push(`${hiddenRunning} running`);
+      if (hiddenFinished > 0) overflowParts.push(`${hiddenFinished} finished`);
+      const overflowText = overflowParts.join(', ');
       lines.push(
         truncate(
-          theme.fg('dim', '├─') +
-            ` ${theme.fg('muted', '◦')} ${theme.fg('dim', `${queued.length} queued`)}`,
+          theme.fg('dim', '└─') +
+            ` ${theme.fg('dim', `+${hiddenRunning + hiddenFinished} more (${overflowText})`)}`,
         ),
       );
-      budget--;
-    }
-
-    // Finished
-    for (const a of finished) {
-      if (budget < 1) break;
-      const icon =
-        a.status === 'completed'
-          ? theme.fg('success', '✓')
-          : a.status === 'error' || a.status === 'aborted'
-            ? theme.fg('error', '✗')
-            : theme.fg('dim', '■');
-      const dur = formatMs((a.completedAt ?? Date.now()) - a.startedAt);
-      lines.push(
-        truncate(
-          theme.fg('dim', '├─') +
-            ` ${icon} ${theme.fg('dim', a.agent.name)}  ${theme.fg('dim', a.description)} ${theme.fg('dim', '·')} ${theme.fg('dim', dur)}`,
-        ),
-      );
-      budget--;
-    }
-
-    // Fix last connector
-    if (lines.length > 1) {
-      lines[lines.length - 1] = lines[lines.length - 1].replace('├─', '└─');
     }
 
     return lines;
