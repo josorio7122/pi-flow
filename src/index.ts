@@ -13,6 +13,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { createBatchSystem } from "./agents/batch.js";
 import { loadCustomAgents } from "./agents/custom.js";
+import { createGroupJoinCallback, createOnComplete } from "./agents/lifecycle.js";
 import { createAgentManager } from "./agents/manager.js";
 import { createNotificationSystem, registerMessageRenderer } from "./agents/notification.js";
 import { createRegistry } from "./agents/registry.js";
@@ -22,9 +23,7 @@ import { registerResultTool } from "./agents/tools/result-tool.js";
 import { registerSteerTool } from "./agents/tools/steer-tool.js";
 import { registerAgentsCommand } from "./extension/command/command.js";
 import { createGroupJoinManager } from "./extension/group-join.js";
-import { buildNotificationDetails, formatTaskNotification } from "./extension/helpers.js";
 import { registerRpcHandlers } from "./extension/rpc.js";
-import { type AgentRecord, type NotificationDetails } from "./types.js";
 import { type AgentActivity } from "./ui/formatters.js";
 import { AgentWidget } from "./ui/widget.js";
 import { registerWorkflowExtension } from "./workflow/integration.js";
@@ -51,137 +50,29 @@ export default function (pi: ExtensionAPI) {
   // Use a late-bound wrapper so the closure captures the variable, not the initial value.
   let notifications: ReturnType<typeof createNotificationSystem>;
 
-  // ---- Group join manager ----
-  const groupJoin = createGroupJoinManager((records, partial) => {
-    for (const r of records) {
-      agentActivity.delete(r.id);
-      widget.markFinished(r.id);
-    }
+  // ---- Group join + manager ----
+  // Late-bound: groupJoin callback and onComplete reference `notifications` and `batch`
+  // which are created after `widget` (which needs `manager`). Use getters to break the cycle.
+  const groupJoinCb = createGroupJoinCallback({
+    pi,
+    agentActivity,
+    getWidget: () => widget,
+    getNotifications: () => notifications,
+  });
+  const groupJoin = createGroupJoinManager(groupJoinCb, 30_000);
+  const onComplete = createOnComplete({
+    pi,
+    agentActivity,
+    getWidget: () => widget,
+    getBatch: () => batch,
+    groupJoin,
+    getNotifications: () => notifications,
+  });
 
-    const groupKey = `group:${records.map((r) => r.id).join(",")}`;
-    notifications.scheduleNudge(groupKey, () => {
-      // Re-check at send time
-      const unconsumed = records.filter((r) => !r.resultConsumed);
-      if (unconsumed.length === 0) {
-        widget.update();
-        return;
-      }
-
-      const notifications = unconsumed.map((r) => formatTaskNotification(r, 300)).join("\n\n");
-      const label = partial
-        ? `${unconsumed.length} agent(s) finished (partial — others still running)`
-        : `${unconsumed.length} agent(s) finished`;
-
-      const [first, ...rest] = unconsumed;
-      if (!first) return;
-      const details = buildNotificationDetails({
-        record: first,
-        resultMaxLen: 300,
-        activity: agentActivity.get(first.id),
-      });
-      if (rest.length > 0) {
-        details.others = rest.map((r) =>
-          buildNotificationDetails({ record: r, resultMaxLen: 300, activity: agentActivity.get(r.id) }),
-        );
-      }
-
-      pi.sendMessage<NotificationDetails>(
-        {
-          customType: "subagent-notification",
-          content: `Background agent group completed: ${label}\n\n${notifications}\n\nUse get_subagent_result for full output.`,
-          display: true,
-          details,
-        },
-        { deliverAs: "followUp", triggerTurn: true },
-      );
-    });
-    widget.update();
-  }, 30_000);
-
-  /** Helper: build event data for lifecycle events from an AgentRecord. */
-  function buildEventData(record: AgentRecord) {
-    const durationMs = record.completedAt ? record.completedAt - record.startedAt : Date.now() - record.startedAt;
-    let tokens: { input: number; output: number; total: number } | undefined;
-    try {
-      if (record.session) {
-        const stats = record.session.getSessionStats();
-        tokens = {
-          input: stats.tokens?.input ?? 0,
-          output: stats.tokens?.output ?? 0,
-          total: stats.tokens?.total ?? 0,
-        };
-      }
-    } catch {
-      /* session stats unavailable */
-    }
-    return {
-      id: record.id,
-      type: record.type,
-      description: record.description,
-      result: record.result,
-      error: record.error,
-      status: record.status,
-      toolUses: record.toolUses,
-      durationMs,
-      tokens,
-    };
-  }
-
-  // Background completion: route through group join or send individual nudge
   const manager = createAgentManager({
-    onComplete: (record) => {
-      // Emit lifecycle event based on terminal status
-      const isError = record.status === "error" || record.status === "stopped" || record.status === "aborted";
-      const eventData = buildEventData(record);
-      if (isError) {
-        pi.events.emit("subagents:failed", eventData);
-      } else {
-        pi.events.emit("subagents:completed", eventData);
-      }
-
-      // Persist final record for cross-extension history reconstruction
-      pi.appendEntry("subagents:record", {
-        id: record.id,
-        type: record.type,
-        description: record.description,
-        status: record.status,
-        result: record.result,
-        error: record.error,
-        startedAt: record.startedAt,
-        completedAt: record.completedAt,
-      });
-
-      // Skip notification if result was already consumed via get_subagent_result
-      if (record.resultConsumed) {
-        agentActivity.delete(record.id);
-        widget.markFinished(record.id);
-        widget.update();
-        return;
-      }
-
-      // If this agent is pending batch finalization (debounce window still open),
-      // don't send an individual nudge — batch will pick it up retroactively.
-      if (batch.isInBatch(record.id)) {
-        widget.update();
-        return;
-      }
-
-      const result = groupJoin.onAgentComplete(record);
-      if (result === "pass") {
-        notifications.sendIndividualNudge(record);
-      }
-      // 'held' → do nothing, group will fire later
-      // 'delivered' → group callback already fired
-      widget.update();
-    },
-    onStart: (record) => {
-      // Emit started event when agent transitions to running (including from queue)
-      pi.events.emit("subagents:started", {
-        id: record.id,
-        type: record.type,
-        description: record.description,
-      });
-    },
+    onComplete,
+    onStart: (record) =>
+      pi.events.emit("subagents:started", { id: record.id, type: record.type, description: record.description }),
   });
   manager.setRunnerSettings(runnerSettings);
   manager.setRegistry(registry);
