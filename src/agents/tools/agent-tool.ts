@@ -193,6 +193,7 @@ Usage:
         const joinMode = resolveJoinMode(batch.getDefaultJoinMode(), true);
         const record = manager.getRecord(id);
         if (record && joinMode) {
+          record.isBackground = true;
           record.joinMode = joinMode;
           record.toolCallId = toolCallId;
           record.outputFile = createOutputFilePath({

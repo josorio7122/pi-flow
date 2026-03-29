@@ -40,12 +40,14 @@ export function renderFinishedLine({
     startedAt: number;
     completedAt?: number | undefined;
     error?: string | undefined;
+    isBackground?: boolean | undefined;
   };
   theme: Theme;
   activity?: AgentActivity | undefined;
   config?: { displayName: string } | undefined;
 }) {
   const name = getDisplayName(agent.type, config?.displayName);
+  const bgTag = agent.isBackground ? ` ${theme.fg("dim", "bg")}` : "";
   const duration = formatMs((agent.completedAt ?? Date.now()) - agent.startedAt);
 
   const display = STATUS_DISPLAY[agent.status] ?? STATUS_DISPLAY.aborted!;
@@ -63,7 +65,7 @@ export function renderFinishedLine({
     duration,
   ];
 
-  return `${icon} ${theme.fg("dim", name)}  ${theme.fg("dim", agent.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusSuffix}`;
+  return `${icon} ${theme.fg("dim", name)}${bgTag}  ${theme.fg("dim", agent.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusSuffix}`;
 }
 
 export function renderRunningLine({
@@ -80,6 +82,7 @@ export function renderRunningLine({
   frame: string;
 }) {
   const name = getDisplayName(agent.type, config.displayName);
+  const bgTag = agent.isBackground ? ` ${theme.fg("dim", "bg")}` : "";
   const elapsed = formatMs(Date.now() - agent.startedAt);
 
   const toolUses = activity?.toolUses ?? agent.toolUses;
@@ -101,7 +104,7 @@ export function renderRunningLine({
   const activityText = activity ? describeActivity(activity.activeTools, activity.responseText) : "thinking…";
 
   return {
-    header: `${theme.fg("dim", "├─")} ${theme.fg("accent", frame)} ${theme.bold(name)}  ${theme.fg("muted", agent.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}`,
+    header: `${theme.fg("dim", "├─")} ${theme.fg("accent", frame)} ${theme.bold(name)}${bgTag}  ${theme.fg("muted", agent.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}`,
     activity: `${theme.fg("dim", "│  ")}${theme.fg("dim", `  ⎿  ${activityText}`)}`,
   };
 }

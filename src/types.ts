@@ -67,6 +67,8 @@ export interface AgentRecord {
   promise?: Promise<string> | undefined;
   groupId?: string | undefined;
   joinMode?: JoinMode | undefined;
+  /** Whether this agent was spawned in background mode. */
+  isBackground?: boolean | undefined;
   /** Set when result was already consumed via get_subagent_result — suppresses completion notification. */
   resultConsumed?: boolean | undefined;
   /** Steering messages queued before the session was ready. */
