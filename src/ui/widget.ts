@@ -15,7 +15,8 @@ export class AgentWidget {
   private widgetFrame = 0;
   private widgetInterval: ReturnType<typeof setInterval> | undefined;
   private finishedTurnAge = new Map<string, number>();
-  private static readonly ERROR_LINGER_TURNS = 2;
+  private static readonly NORMAL_LINGER_TURNS = 3;
+  private static readonly ERROR_LINGER_TURNS = 5;
   private widgetRegistered = false;
   private tui: TUI | undefined;
   private lastStatusText: string | undefined;
@@ -58,7 +59,7 @@ export class AgentWidget {
 
   private shouldShowFinished(agentId: string, status: string) {
     const age = this.finishedTurnAge.get(agentId) ?? 0;
-    const maxAge = ERROR_STATUSES.has(status) ? AgentWidget.ERROR_LINGER_TURNS : 1;
+    const maxAge = ERROR_STATUSES.has(status) ? AgentWidget.ERROR_LINGER_TURNS : AgentWidget.NORMAL_LINGER_TURNS;
     return age < maxAge;
   }
 

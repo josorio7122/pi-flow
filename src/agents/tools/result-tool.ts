@@ -60,7 +60,14 @@ export function registerResultTool({
       } else if (record.status === "error") {
         output += `Error: ${record.error}`;
       } else {
-        output += record.result?.trim() || "No output.";
+        const full = record.result?.trim() || "No output.";
+        const lines = full.split("\n");
+        if (lines.length > 30) {
+          output += lines.slice(0, 30).join("\n");
+          output += `\n\n... (${lines.length - 30} more lines — use verbose: true for full conversation)`;
+        } else {
+          output += full;
+        }
       }
 
       if (record.status !== "running" && record.status !== "queued") {
