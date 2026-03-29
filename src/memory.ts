@@ -18,7 +18,7 @@ import { join } from 'node:path';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-export type MemoryScope = 'project' | 'global';
+export type MemoryScope = 'project' | 'global' | 'local';
 
 /** Maximum lines to read from MEMORY.md before truncation. */
 export const MAX_MEMORY_LINES = 200;
@@ -75,6 +75,8 @@ export function resolveMemoryDir(agentName: string, scope: MemoryScope, cwd: str
       return join(cwd, '.flow', 'agent-memory', agentName);
     case 'global':
       return join(homedir(), '.pi', 'flow-memory', agentName);
+    case 'local':
+      return join(cwd, '.flow', 'agent-memory-local', agentName);
   }
 }
 

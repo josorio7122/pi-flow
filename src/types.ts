@@ -15,9 +15,25 @@ export interface FlowAgentConfig {
   source: 'builtin' | 'custom';
   filePath: string;
   /** Persistent memory scope — agents with memory get a MEMORY.md directory */
-  memory?: 'project' | 'global';
+  memory?: 'project' | 'global' | 'local';
   /** Isolation mode — "worktree" runs the agent in a temporary git worktree */
   isolation?: 'worktree';
+  /** Whether this agent is enabled (disabled agents are hidden from dispatch) */
+  enabled?: boolean;
+  /** Tool denylist — these tools are removed even if the agent's tools list includes them */
+  disallowedTools?: string[];
+  /** Default: fork parent conversation context into agent */
+  inheritContext?: boolean;
+  /** Default: run in background */
+  runInBackground?: boolean;
+  /** Default: no extension tools */
+  isolated?: boolean;
+  /** Extension inheritance: true = all, string[] = listed, false = none */
+  extensions?: true | string[] | false;
+  /** Skill inheritance: true = all, string[] = listed, false = none */
+  skills?: true | string[] | false;
+  /** Prompt mode: replace (standalone) or append (inherit parent identity) */
+  promptMode?: 'replace' | 'append';
 }
 
 // ─── Skill config parsed from .md frontmatter ────────────────────────────────

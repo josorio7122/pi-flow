@@ -177,6 +177,23 @@ function toStringArray(val: unknown): string[] {
   return [];
 }
 
+// ─── parseInheritField ────────────────────────────────────────────────────────
+
+/**
+ * Parses an inheritance field (extensions, skills) from frontmatter.
+ * - undefined/true → undefined (inherit default behavior)
+ * - false/"none"/"false" → false
+ * - comma-separated string → string[]
+ * - array → string[]
+ */
+function parseInheritField(val: unknown): true | string[] | false | undefined {
+  if (val === undefined || val === null) return undefined;
+  if (val === true) return true;
+  if (val === false || val === 'none' || val === 'false') return false;
+  const items = toStringArray(val);
+  return items.length > 0 ? items : false;
+}
+
 // ─── extractSection ───────────────────────────────────────────────────────────
 
 /**
@@ -224,9 +241,17 @@ export function parseAgentFile(filePath: string, source: 'builtin' | 'custom'): 
 
   const limitsRaw = fm.limits as Record<string, unknown> | undefined;
   const memoryRaw = fm.memory as string | undefined;
-  const memory = memoryRaw === 'project' || memoryRaw === 'global' ? memoryRaw : undefined;
+  const memory =
+    memoryRaw === 'project' || memoryRaw === 'global' || memoryRaw === 'local'
+      ? memoryRaw
+      : undefined;
   const isolationRaw = fm.isolation as string | undefined;
   const isolation = isolationRaw === 'worktree' ? ('worktree' as const) : undefined;
+  const disallowedTools = toStringArray(fm.disallowed_tools ?? fm.disallowedTools);
+  const promptModeRaw = fm.prompt_mode ?? fm.promptMode;
+  const promptMode = promptModeRaw === 'append' ? ('append' as const) : ('replace' as const);
+  const extensions = parseInheritField(fm.extensions);
+  const skills = parseInheritField(fm.skills);
 
   return {
     name: String(fm.name ?? ''),
@@ -247,6 +272,14 @@ export function parseAgentFile(filePath: string, source: 'builtin' | 'custom'): 
     filePath,
     memory,
     isolation,
+    enabled: fm.enabled !== false,
+    disallowedTools: disallowedTools.length > 0 ? disallowedTools : undefined,
+    inheritContext: fm.inherit_context === true ? true : undefined,
+    runInBackground: fm.run_in_background === true ? true : undefined,
+    isolated: fm.isolated === true ? true : undefined,
+    extensions,
+    skills,
+    promptMode,
   };
 }
 
@@ -313,15 +346,33 @@ export function discoverAgents(extensionDir: string, cwd: string): FlowAgentConf
   const builtinDir = path.join(extensionDir, 'agents');
   const builtins = loadAgentsFromDir(builtinDir, 'builtin');
 
+  // Global agents (~/.pi/flow-agents/*.md) — lower priority than project
+  const globalDir = path.join(os.homedir(), '.pi', 'flow-agents');
+  const globals = loadAgentsFromDir(globalDir, 'custom');
+
+  // Project agents (.flow/agents/custom/*.md) — highest priority
   const customDir = findCustomAgentsDir(cwd);
   const customs = customDir ? loadAgentsFromDir(customDir, 'custom') : [];
 
-  // Custom overrides built-in by name (last write wins)
+  // Merge: builtin < global < project (last write wins, case-insensitive)
   const agentMap = new Map<string, FlowAgentConfig>();
-  for (const a of builtins) agentMap.set(a.name, a);
-  for (const a of customs) agentMap.set(a.name, a);
+  for (const a of builtins) agentMap.set(a.name.toLowerCase(), a);
+  for (const a of globals) agentMap.set(a.name.toLowerCase(), a);
+  for (const a of customs) agentMap.set(a.name.toLowerCase(), a);
 
-  return Array.from(agentMap.values());
+  // Filter out disabled agents
+  return Array.from(agentMap.values()).filter((a) => a.enabled !== false);
+}
+
+/**
+ * Find an agent by name (case-insensitive).
+ */
+export function findAgentByName(
+  agents: FlowAgentConfig[],
+  name: string,
+): FlowAgentConfig | undefined {
+  const lower = name.toLowerCase();
+  return agents.find((a) => a.name.toLowerCase() === lower);
 }
 
 function loadAgentsFromDir(dir: string, source: 'builtin' | 'custom'): FlowAgentConfig[] {

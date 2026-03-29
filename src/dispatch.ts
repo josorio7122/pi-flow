@@ -9,7 +9,7 @@ import type {
   DispatchResult,
 } from './types.js';
 import { loadConfig } from './config.js';
-import { discoverAgents, buildVariableMap } from './agents.js';
+import { discoverAgents, buildVariableMap, findAgentByName } from './agents.js';
 import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
 import { runAgent } from './runner.js';
 import { mapWithConcurrencyLimit, getFinalOutput, emptyResult } from './result-utils.js';
@@ -52,7 +52,7 @@ export function requiresFeature(agentName: string): boolean {
 // ─── Pure helpers (exported for testing) ──────────────────────────────────────
 
 export function findAgent(agents: FlowAgentConfig[], name: string): FlowAgentConfig | null {
-  return agents.find((a) => a.name === name) ?? null;
+  return findAgentByName(agents, name) ?? null;
 }
 
 export function resolveAgentTasks(
