@@ -199,14 +199,14 @@ export async function runAgent(
       // Read-write memory: add any missing memory tools (read/write/edit)
       const memTools = getMemoryTools(effectiveCwd, existingNames);
       if (memTools.length > 0) tools = [...tools, ...memTools];
-      extras.memoryBlock = buildMemoryBlock(agentConfig.name, agentConfig.memory, effectiveCwd);
+      extras.memoryBlock = buildMemoryBlock({ agentName: agentConfig.name, scope: agentConfig.memory, cwd: effectiveCwd });
     } else {
       // Read-only memory: only add read tool, use read-only prompt
       if (!existingNames.has("read")) {
         const readTools = getReadOnlyMemoryTools(effectiveCwd, existingNames);
         if (readTools.length > 0) tools = [...tools, ...readTools];
       }
-      extras.memoryBlock = buildReadOnlyMemoryBlock(agentConfig.name, agentConfig.memory, effectiveCwd);
+      extras.memoryBlock = buildReadOnlyMemoryBlock({ agentName: agentConfig.name, scope: agentConfig.memory, cwd: effectiveCwd });
     }
   }
 

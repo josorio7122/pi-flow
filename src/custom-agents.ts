@@ -23,13 +23,13 @@ export function loadCustomAgents(cwd: string): Map<string, AgentConfig> {
   const projectDir = join(cwd, ".pi", "agents");
 
   const agents = new Map<string, AgentConfig>();
-  loadFromDir(globalDir, agents, "global");   // lower priority
-  loadFromDir(projectDir, agents, "project");  // higher priority (overwrites)
+  loadFromDir({ dir: globalDir, agents, source: "global" });   // lower priority
+  loadFromDir({ dir: projectDir, agents, source: "project" });  // higher priority (overwrites)
   return agents;
 }
 
 /** Load agent configs from a directory into the map. */
-function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source: "project" | "global"): void {
+function loadFromDir({ dir, agents, source }: { dir: string; agents: Map<string, AgentConfig>; source: "project" | "global" }): void {
   if (!existsSync(dir)) return;
 
   let files: string[];

@@ -12,7 +12,7 @@ import type { AgentSession, AgentSessionEvent } from "@mariozechner/pi-coding-ag
 
 /** Create the output file path, ensuring the directory exists.
  *  Mirrors Claude Code's layout: /tmp/{prefix}-{uid}/{encoded-cwd}/{sessionId}/tasks/{agentId}.output */
-export function createOutputFilePath(cwd: string, agentId: string, sessionId: string): string {
+export function createOutputFilePath({ cwd, agentId, sessionId }: { cwd: string; agentId: string; sessionId: string }): string {
   const encoded = cwd.replace(/\//g, "-").replace(/^-/, "");
   const root = join(tmpdir(), `pi-flow-${process.getuid?.() ?? 0}`);
   mkdirSync(root, { recursive: true, mode: 0o700 });
@@ -23,7 +23,7 @@ export function createOutputFilePath(cwd: string, agentId: string, sessionId: st
 }
 
 /** Write the initial user prompt entry. */
-export function writeInitialEntry(path: string, agentId: string, prompt: string, cwd: string): void {
+export function writeInitialEntry({ path, agentId, prompt, cwd }: { path: string; agentId: string; prompt: string; cwd: string }): void {
   const entry = {
     isSidechain: true,
     agentId,
@@ -39,12 +39,7 @@ export function writeInitialEntry(path: string, agentId: string, prompt: string,
  * Subscribe to session events and flush new messages to the output file on each turn_end.
  * Returns a cleanup function that does a final flush and unsubscribes.
  */
-export function streamToOutputFile(
-  session: AgentSession,
-  path: string,
-  agentId: string,
-  cwd: string,
-): () => void {
+export function streamToOutputFile({ session, path, agentId, cwd }: { session: AgentSession; path: string; agentId: string; cwd: string }): () => void {
   let writtenCount = 1; // initial user prompt already written
 
   const flush = () => {

@@ -813,7 +813,7 @@ Guidelines:
           origBgOnSession(session);
           const rec = manager.getRecord(id);
           if (rec?.outputFile) {
-            rec.outputCleanup = streamToOutputFile(session, rec.outputFile, id, ctx.cwd);
+            rec.outputCleanup = streamToOutputFile({ session: session as AgentSession, path: rec.outputFile, agentId: id, cwd: ctx.cwd });
           }
         };
 
@@ -836,8 +836,8 @@ Guidelines:
         if (record && joinMode) {
           record.joinMode = joinMode;
           record.toolCallId = toolCallId;
-          record.outputFile = createOutputFilePath(ctx.cwd, id, ctx.sessionManager.getSessionId());
-          writeInitialEntry(record.outputFile, id, params.prompt, ctx.cwd);
+          record.outputFile = createOutputFilePath({ cwd: ctx.cwd, agentId: id, sessionId: ctx.sessionManager.getSessionId() });
+          writeInitialEntry({ path: record.outputFile, agentId: id, prompt: params.prompt, cwd: ctx.cwd });
         }
 
         if (joinMode == null || joinMode === 'async') {

@@ -53,7 +53,7 @@ export function safeReadFile(filePath: string): string | undefined {
  * Resolve the memory directory path for a given agent + scope + cwd.
  * Throws if agentName contains path traversal characters.
  */
-export function resolveMemoryDir(agentName: string, scope: MemoryScope, cwd: string): string {
+export function resolveMemoryDir({ agentName, scope, cwd }: { agentName: string; scope: MemoryScope; cwd: string }): string {
   if (isUnsafeName(agentName)) {
     throw new Error(`Unsafe agent name for memory directory: "${agentName}"`);
   }
@@ -106,8 +106,8 @@ export function readMemoryIndex(memoryDir: string): string | undefined {
  * Build the memory block to inject into the agent's system prompt.
  * Also ensures the memory directory exists (creates it if needed).
  */
-export function buildMemoryBlock(agentName: string, scope: MemoryScope, cwd: string): string {
-  const memoryDir = resolveMemoryDir(agentName, scope, cwd);
+export function buildMemoryBlock({ agentName, scope, cwd }: { agentName: string; scope: MemoryScope; cwd: string }): string {
+  const memoryDir = resolveMemoryDir({ agentName, scope, cwd });
   // Create the memory directory so the agent can immediately write to it
   ensureMemoryDir(memoryDir);
 
@@ -148,8 +148,8 @@ This memory persists across sessions. Use it to build up knowledge over time.`;
  * Build a read-only memory block for agents that lack write/edit tools.
  * Does NOT create the memory directory — agents can only consume existing memory.
  */
-export function buildReadOnlyMemoryBlock(agentName: string, scope: MemoryScope, cwd: string): string {
-  const memoryDir = resolveMemoryDir(agentName, scope, cwd);
+export function buildReadOnlyMemoryBlock({ agentName, scope, cwd }: { agentName: string; scope: MemoryScope; cwd: string }): string {
+  const memoryDir = resolveMemoryDir({ agentName, scope, cwd });
   const existingMemory = readMemoryIndex(memoryDir);
 
   const header = `# Agent Memory (read-only)
