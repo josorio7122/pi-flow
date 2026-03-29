@@ -1,9 +1,9 @@
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { AgentConfig, IsolationMode, JoinMode } from "../types.js";
 
-const VALID_THINKING = new Set<string>(["off", "minimal", "low", "medium", "high", "xhigh"]);
+export const VALID_THINKING = new Set<string>(["off", "minimal", "low", "medium", "high", "xhigh"]);
 
-function parseThinking(val: string | undefined) {
+export function parseThinking(val: string | undefined) {
   if (!val) return undefined;
   return VALID_THINKING.has(val) ? (val as ThinkingLevel) : undefined;
 }

@@ -1,4 +1,4 @@
-import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
+import { parseThinking } from "../config/invocation.js";
 /**
  * custom.ts — Load user-defined agents from project (.pi/agents/) and global (~/.pi/agent/agents/) locations.
  */
@@ -70,7 +70,7 @@ function loadFromDir({
       extensions: inheritField(fm.extensions ?? fm.inherit_extensions),
       skills: inheritField(fm.skills ?? fm.inherit_skills),
       model: str(fm.model),
-      thinking: str(fm.thinking) as ThinkingLevel | undefined,
+      thinking: parseThinking(str(fm.thinking)),
       maxTurns: nonNegativeInt(fm.max_turns),
       systemPrompt: body.trim(),
       promptMode: fm.prompt_mode === "append" ? "append" : "replace",

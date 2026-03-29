@@ -169,7 +169,7 @@ Custom tools.`,
     expect(result.get("custom-tools")!.builtinToolNames).toEqual(["read", "my_custom_tool", "grep"]);
   });
 
-  it("passes through thinking level as-is (no validation)", () => {
+  it("rejects invalid thinking level", () => {
     writeAgent(
       "anythink",
       `---
@@ -180,8 +180,21 @@ Any thinking.`,
     );
 
     const result = loadCustomAgents(tmpDir);
-    // Pi validates at session creation — we just pass through
-    expect(result.get("anythink")!.thinking).toBe("turbo");
+    expect(result.get("anythink")!.thinking).toBeUndefined();
+  });
+
+  it("accepts valid thinking levels", () => {
+    writeAgent(
+      "validthink",
+      `---
+thinking: medium
+---
+
+Valid thinking.`,
+    );
+
+    const result = loadCustomAgents(tmpDir);
+    expect(result.get("validthink")!.thinking).toBe("medium");
   });
 
   it("accepts max_turns: 0 as unlimited", () => {
