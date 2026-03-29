@@ -71,9 +71,14 @@ const TOOL_MAP: Record<string, { name: string }> = {
 /**
  * Maps agent tool name strings to pi built-in tool objects.
  * Unknown names are silently filtered out.
+ * Applies denylist filtering when provided.
  */
-export function resolveTools(toolNames: string[]): { name: string }[] {
-  return toolNames.map((name) => TOOL_MAP[name]).filter((t): t is { name: string } => t != null);
+export function resolveTools(toolNames: string[], disallowedTools?: string[]): { name: string }[] {
+  const denied = disallowedTools ? new Set(disallowedTools) : undefined;
+  return toolNames
+    .filter((name) => !denied?.has(name))
+    .map((name) => TOOL_MAP[name])
+    .filter((t): t is { name: string } => t != null);
 }
 
 // ─── Model resolution ─────────────────────────────────────────────────────────
@@ -200,8 +205,8 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Model<any> from pi SDK
   const model = resolveModel(ctx.modelRegistry, agent.model, ctx.model) as any;
 
-  // 4. Resolve tools
-  const tools = resolveTools(agent.tools);
+  // 4. Resolve tools (with denylist)
+  const tools = resolveTools(agent.tools, agent.disallowedTools);
 
   // 5. Create session
   const { session } = await createAgentSession({
@@ -217,8 +222,10 @@ export async function runAgent(options: RunAgentOptions): Promise<SingleAgentRes
     thinkingLevel: agent.thinking as any,
   });
 
-  // 6. Enforce exact tool set
-  session.setActiveToolsByName(agent.tools);
+  // 6. Enforce exact tool set (minus denylist)
+  const denied = agent.disallowedTools ? new Set(agent.disallowedTools) : undefined;
+  const activeTools = agent.tools.filter((t) => !denied?.has(t));
+  session.setActiveToolsByName(activeTools);
 
   // 6b. Notify caller that session is ready (for pending steer flush, etc.)
   callbacks?.onSessionCreated?.(session);

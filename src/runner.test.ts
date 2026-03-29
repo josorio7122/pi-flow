@@ -170,7 +170,17 @@ function textDeltaEvent(delta: string, fullText: string) {
 
 // ─── Import under test (after mock) ──────────────────────────────────────────
 
-import { runAgent, resolveModel, resolveTools, GRACE_TURNS } from './runner.js';
+import {
+  runAgent,
+  resolveModel,
+  resolveTools,
+  GRACE_TURNS,
+  getGraceTurns,
+  setGraceTurns,
+  getDefaultMaxTurns,
+  setDefaultMaxTurns,
+  normalizeMaxTurns,
+} from './runner.js';
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
@@ -252,9 +262,54 @@ describe('resolveTools', () => {
   it('returns empty array for empty input', () => {
     expect(resolveTools([])).toEqual([]);
   });
+
+  it('filters out disallowed tools', () => {
+    const tools = resolveTools(['read', 'bash', 'write'], ['bash', 'write']);
+    expect(tools).toHaveLength(1);
+    expect(tools[0].name).toBe('read');
+  });
+
+  it('denylist does not affect tools not in the list', () => {
+    const tools = resolveTools(['read', 'grep'], ['bash']);
+    expect(tools).toHaveLength(2);
+  });
 });
 
 // ── GRACE_TURNS ───────────────────────────────────────────────────────────────
+
+describe('normalizeMaxTurns', () => {
+  it('returns undefined for undefined', () => {
+    expect(normalizeMaxTurns(undefined)).toBeUndefined();
+  });
+  it('returns undefined for 0 (unlimited)', () => {
+    expect(normalizeMaxTurns(0)).toBeUndefined();
+  });
+  it('returns the value for positive numbers', () => {
+    expect(normalizeMaxTurns(10)).toBe(10);
+  });
+  it('enforces minimum of 1', () => {
+    expect(normalizeMaxTurns(-5)).toBe(1);
+  });
+});
+
+describe('configurable limits', () => {
+  it('grace turns defaults to 5', () => {
+    expect(getGraceTurns()).toBe(5);
+  });
+  it('set/getGraceTurns works', () => {
+    setGraceTurns(10);
+    expect(getGraceTurns()).toBe(10);
+    setGraceTurns(5); // reset
+  });
+  it('default max turns defaults to undefined', () => {
+    expect(getDefaultMaxTurns()).toBeUndefined();
+  });
+  it('set/getDefaultMaxTurns works', () => {
+    setDefaultMaxTurns(50);
+    expect(getDefaultMaxTurns()).toBe(50);
+    setDefaultMaxTurns(undefined); // reset
+  });
+});
 
 describe('GRACE_TURNS', () => {
   it('is 5', () => {
