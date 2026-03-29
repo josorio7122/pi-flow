@@ -45,8 +45,7 @@ function run(params: { name: string; model: string; timeout: number }) {}
 ```
 
 ### Code splitting
-- 200 lines max per file — split when exceeded
-- Legacy sub-agent files (index.ts, manager.ts, runner.ts, command.ts, widget.ts, viewer.ts) exceed this limit — they were adopted from tintinweb/pi-subagents and are not refactored unless actively modified. New code must comply.
+- 200 lines max per file — split when exceeded, no exceptions
 - Split by cohesion: related functions stay together, unrelated concepts get their own file
 - Feature folders over layer folders — group by domain (`agents/`, `dispatch/`), not by role (`utils/`, `services/`)
 - No barrel files (`index.ts` re-exports) — they break tree-shaking, hide circular deps, and slow builds. Use direct imports
