@@ -1,8 +1,8 @@
 # Design: Full Feature Parity with tintinweb/pi-subagents
 
-**Status**: In Progress  
+**Status**: In Progress — 58/93 gaps addressed  
 **Branch**: `feature/parity`  
-**Gaps**: 93 identified, organized into 11 phases  
+**Gaps**: 93 identified, 58 addressed, 35 remaining  
 
 ## Principles
 
