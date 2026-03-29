@@ -36,7 +36,7 @@ export class ConversationViewer implements Component {
     });
   }
 
-  handleInput(data: string): void {
+  handleInput(data: string) {
     if (matchesKey(data, "escape") || matchesKey(data, "q")) {
       this.closed = true;
       this.done(undefined);
@@ -68,7 +68,7 @@ export class ConversationViewer implements Component {
     }
   }
 
-  render(width: number): string[] {
+  render(width: number) {
     if (width < 6) return []; // too narrow for any meaningful rendering
     const th = this.theme;
     const innerW = width - 4; // border + padding
@@ -144,9 +144,9 @@ export class ConversationViewer implements Component {
     return lines;
   }
 
-  invalidate(): void { /* no cached state to clear */ }
+  invalidate() { /* no cached state to clear */ }
 
-  dispose(): void {
+  dispose() {
     this.closed = true;
     if (this.unsubscribe) {
       this.unsubscribe();
@@ -156,11 +156,11 @@ export class ConversationViewer implements Component {
 
   // ---- Private ----
 
-  private viewportHeight(): number {
+  private viewportHeight() {
     return Math.max(MIN_VIEWPORT, this.tui.terminal.rows - CHROME_LINES);
   }
 
-  private buildContentLines(width: number): string[] {
+  private buildContentLines(width: number) {
     if (width <= 0) return [];
 
     const th = this.theme;

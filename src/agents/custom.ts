@@ -19,7 +19,7 @@ import { BUILTIN_TOOL_NAMES } from "./registry.js";
  * Project-level agents override global ones with the same name.
  * Any name is allowed — names matching defaults (e.g. "Explore") override them.
  */
-export function loadCustomAgents(cwd: string): Map<string, AgentConfig> {
+export function loadCustomAgents(cwd: string) {
   const globalDir = join(homedir(), ".pi", "agent", "agents");
   const projectDir = join(cwd, ".pi", "agents");
 
@@ -30,7 +30,7 @@ export function loadCustomAgents(cwd: string): Map<string, AgentConfig> {
 }
 
 /** Load agent configs from a directory into the map. */
-function loadFromDir({ dir, agents, source }: { dir: string; agents: Map<string, AgentConfig>; source: "project" | "global" }): void {
+function loadFromDir({ dir, agents, source }: { dir: string; agents: Map<string, AgentConfig>; source: "project" | "global" }) {
   if (!existsSync(dir)) return;
 
   let files: string[];
@@ -80,19 +80,19 @@ function loadFromDir({ dir, agents, source }: { dir: string; agents: Map<string,
 // All follow the same convention: omitted → default, "none"/empty → nothing, value → exact.
 
 /** Extract a string or undefined. */
-function str(val: unknown): string | undefined {
+function str(val: unknown) {
   return typeof val === "string" ? val : undefined;
 }
 
 /** Extract a non-negative integer or undefined. 0 means unlimited for max_turns. */
-function nonNegativeInt(val: unknown): number | undefined {
+function nonNegativeInt(val: unknown) {
   return typeof val === "number" && val >= 0 ? val : undefined;
 }
 
 /**
  * Parse a raw CSV field value into items, or undefined if absent/empty/"none".
  */
-function parseCsvField(val: unknown): string[] | undefined {
+function parseCsvField(val: unknown) {
   if (val === undefined || val === null) return undefined;
   const s = String(val).trim();
   if (!s || s === "none") return undefined;
@@ -104,7 +104,7 @@ function parseCsvField(val: unknown): string[] | undefined {
  * Parse a comma-separated list field with defaults.
  * omitted → defaults; "none"/empty → []; csv → listed items.
  */
-function csvList(val: unknown, defaults: string[]): string[] {
+function csvList(val: unknown, defaults: string[]) {
   if (val === undefined || val === null) return defaults;
   return parseCsvField(val) ?? [];
 }
@@ -113,7 +113,7 @@ function csvList(val: unknown, defaults: string[]): string[] {
  * Parse an optional comma-separated list field.
  * omitted → undefined; "none"/empty → undefined; csv → listed items.
  */
-function csvListOptional(val: unknown): string[] | undefined {
+function csvListOptional(val: unknown) {
   return parseCsvField(val);
 }
 
@@ -121,7 +121,7 @@ function csvListOptional(val: unknown): string[] | undefined {
  * Parse a memory scope field.
  * omitted → undefined; "user"/"project"/"local" → MemoryScope.
  */
-function parseMemory(val: unknown): MemoryScope | undefined {
+function parseMemory(val: unknown) {
   if (val === "user" || val === "project" || val === "local") return val;
   return undefined;
 }
@@ -130,7 +130,7 @@ function parseMemory(val: unknown): MemoryScope | undefined {
  * Parse an inherit field (extensions, skills).
  * omitted/true → true (inherit all); false/"none"/empty → false; csv → listed names.
  */
-function inheritField(val: unknown): true | string[] | false {
+function inheritField(val: unknown) {
   if (val === undefined || val === null || val === true) return true;
   if (val === false || val === "none") return false;
   const items = csvList(val, []);

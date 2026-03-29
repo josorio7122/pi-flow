@@ -77,7 +77,7 @@ export class AgentManager {
     this.drainQueue();
   }
 
-  getMaxConcurrent(): number {
+  getMaxConcurrent() {
     return this.maxConcurrent;
   }
 
@@ -85,7 +85,7 @@ export class AgentManager {
    * Spawn an agent and return its ID immediately (for background use).
    * If the concurrency limit is reached, the agent is queued.
    */
-  spawn({ pi, ctx, type, prompt, options }: SpawnArgs): string {
+  spawn({ pi, ctx, type, prompt, options }: SpawnArgs) {
     const id = randomUUID().slice(0, 17);
     const abortController = new AbortController();
     const record: AgentRecord = {
@@ -249,7 +249,7 @@ export class AgentManager {
       prompt: string;
       options: Omit<SpawnOptions, "isBackground">;
     },
-  ): Promise<AgentRecord> {
+  ) {
     const id = this.spawn({ pi, ctx, type, prompt, options: { ...options, isBackground: false } });
     const record = this.agents.get(id)!;
     await record.promise;
@@ -263,7 +263,7 @@ export class AgentManager {
     id: string;
     prompt: string;
     signal?: AbortSignal | undefined;
-  }): Promise<AgentRecord | undefined> {
+  }) {
     const record = this.agents.get(id);
     if (!record?.session) return undefined;
 
@@ -296,17 +296,17 @@ export class AgentManager {
     return record;
   }
 
-  getRecord(id: string): AgentRecord | undefined {
+  getRecord(id: string) {
     return this.agents.get(id);
   }
 
-  listAgents(): AgentRecord[] {
+  listAgents() {
     return [...this.agents.values()].sort(
       (a, b) => b.startedAt - a.startedAt,
     );
   }
 
-  abort(id: string): boolean {
+  abort(id: string) {
     const record = this.agents.get(id);
     if (!record) return false;
 
@@ -326,7 +326,7 @@ export class AgentManager {
   }
 
   /** Dispose a record's session and remove it from the map. */
-  private removeRecord(id: string, record: AgentRecord): void {
+  private removeRecord(id: string, record: AgentRecord) {
     record.session?.dispose?.();
     record.session = undefined;
     this.agents.delete(id);
@@ -345,7 +345,7 @@ export class AgentManager {
    * Remove all completed/stopped/errored records immediately.
    * Called on session start/switch so tasks from a prior session don't persist.
    */
-  clearCompleted(): void {
+  clearCompleted() {
     for (const [id, record] of this.agents) {
       if (record.status === "running" || record.status === "queued") continue;
       this.removeRecord(id, record);
@@ -353,14 +353,14 @@ export class AgentManager {
   }
 
   /** Whether any agents are still running or queued. */
-  hasRunning(): boolean {
+  hasRunning() {
     return [...this.agents.values()].some(
       r => r.status === "running" || r.status === "queued",
     );
   }
 
   /** Abort all running and queued agents immediately. */
-  abortAll(): number {
+  abortAll() {
     let count = 0;
     // Clear queued agents first
     for (const queued of this.queue) {
@@ -385,7 +385,7 @@ export class AgentManager {
   }
 
   /** Wait for all running and queued agents to complete (including queued ones). */
-  async waitForAll(): Promise<void> {
+  async waitForAll() {
     // Loop because drainQueue respects the concurrency limit — as running
     // agents finish they start queued ones, which need awaiting too.
     while (true) {

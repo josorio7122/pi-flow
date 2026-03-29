@@ -32,7 +32,7 @@ export interface WorktreeCleanupResult {
  * Create a temporary git worktree for an agent.
  * Returns the worktree path, or undefined if not in a git repo.
  */
-export function createWorktree(cwd: string, agentId: string): WorktreeInfo | undefined {
+export function createWorktree(cwd: string, agentId: string) {
   // Verify we're in a git repo with at least one commit (HEAD must exist)
   try {
     execFileSync("git", ["rev-parse", "--is-inside-work-tree"], { cwd, stdio: "pipe", timeout: 5000 });
@@ -68,7 +68,7 @@ export function cleanupWorktree({ cwd, worktree, agentDescription }: {
   cwd: string;
   worktree: WorktreeInfo;
   agentDescription: string;
-}): WorktreeCleanupResult {
+}) {
   if (!existsSync(worktree.path)) {
     return { hasChanges: false };
   }
@@ -137,7 +137,7 @@ export function cleanupWorktree({ cwd, worktree, agentDescription }: {
 /**
  * Force-remove a worktree.
  */
-function removeWorktree(cwd: string, worktreePath: string): void {
+function removeWorktree(cwd: string, worktreePath: string) {
   try {
     execFileSync("git", ["worktree", "remove", "--force", worktreePath], {
       cwd,
@@ -155,7 +155,7 @@ function removeWorktree(cwd: string, worktreePath: string): void {
 /**
  * Prune any orphaned worktrees (crash recovery).
  */
-export function pruneWorktrees(cwd: string): void {
+export function pruneWorktrees(cwd: string) {
   try {
     execFileSync("git", ["worktree", "prune"], { cwd, stdio: "pipe", timeout: 5000 });
   } catch { /* ignore */ }

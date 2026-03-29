@@ -42,7 +42,7 @@ const agents = new Map<string, AgentConfig>();
  * Starts with DEFAULT_AGENTS, then overlays user agents (overrides defaults with same name).
  * Disabled agents (enabled === false) are kept in the registry but excluded from spawning.
  */
-export function registerAgents(userAgents: Map<string, AgentConfig>): void {
+export function registerAgents(userAgents: Map<string, AgentConfig>) {
   agents.clear();
 
   // Start with defaults
@@ -57,7 +57,7 @@ export function registerAgents(userAgents: Map<string, AgentConfig>): void {
 }
 
 /** Case-insensitive key resolution. */
-function resolveKey(name: string): string | undefined {
+function resolveKey(name: string) {
   if (agents.has(name)) return name;
   const lower = name.toLowerCase();
   for (const key of agents.keys()) {
@@ -67,44 +67,44 @@ function resolveKey(name: string): string | undefined {
 }
 
 /** Resolve a type name case-insensitively. Returns the canonical key or undefined. */
-export function resolveType(name: string): string | undefined {
+export function resolveType(name: string) {
   return resolveKey(name);
 }
 
 /** Get the agent config for a type (case-insensitive). */
-export function getAgentConfig(name: string): AgentConfig | undefined {
+export function getAgentConfig(name: string) {
   const key = resolveKey(name);
   return key ? agents.get(key) : undefined;
 }
 
 /** Get all enabled type names (for spawning and tool descriptions). */
-export function getAvailableTypes(): string[] {
+export function getAvailableTypes() {
   return [...agents.entries()]
     .filter(([_, config]) => config.enabled !== false)
     .map(([name]) => name);
 }
 
 /** Get all type names including disabled (for UI listing). */
-export function getAllTypes(): string[] {
+export function getAllTypes() {
   return [...agents.keys()];
 }
 
 /** Get names of default agents currently in the registry. */
-export function getDefaultAgentNames(): string[] {
+export function getDefaultAgentNames() {
   return [...agents.entries()]
     .filter(([_, config]) => config.isDefault === true)
     .map(([name]) => name);
 }
 
 /** Get names of user-defined agents (non-defaults) currently in the registry. */
-export function getUserAgentNames(): string[] {
+export function getUserAgentNames() {
   return [...agents.entries()]
     .filter(([_, config]) => config.isDefault !== true)
     .map(([name]) => name);
 }
 
 /** Check if a type is valid and enabled (case-insensitive). */
-export function isValidType(type: string): boolean {
+export function isValidType(type: string) {
   const key = resolveKey(type);
   if (!key) return false;
   return agents.get(key)?.enabled !== false;
@@ -118,7 +118,7 @@ const MEMORY_TOOL_NAMES = ["read", "write", "edit"];
  * Only returns tools that are NOT already in the provided set.
  */
 // biome-ignore lint/suspicious/noExplicitAny: heterogeneous tool array requires any
-export function getMemoryTools(cwd: string, existingToolNames: Set<string>): AgentTool<any>[] {
+export function getMemoryTools(cwd: string, existingToolNames: Set<string>) {
   return MEMORY_TOOL_NAMES
     .filter(n => !existingToolNames.has(n) && n in TOOL_FACTORIES)
     .map(n => TOOL_FACTORIES[n]!(cwd));
@@ -132,7 +132,7 @@ const READONLY_MEMORY_TOOL_NAMES = ["read"];
  * Only returns tools that are NOT already in the provided set.
  */
 // biome-ignore lint/suspicious/noExplicitAny: heterogeneous tool array requires any
-export function getReadOnlyMemoryTools(cwd: string, existingToolNames: Set<string>): AgentTool<any>[] {
+export function getReadOnlyMemoryTools(cwd: string, existingToolNames: Set<string>) {
   return READONLY_MEMORY_TOOL_NAMES
     .filter(n => !existingToolNames.has(n) && n in TOOL_FACTORIES)
     .map(n => TOOL_FACTORIES[n]!(cwd));
@@ -140,7 +140,7 @@ export function getReadOnlyMemoryTools(cwd: string, existingToolNames: Set<strin
 
 /** Get built-in tools for a type (case-insensitive). */
 // biome-ignore lint/suspicious/noExplicitAny: heterogeneous tool array requires any
-export function getToolsForType(type: string, cwd: string): AgentTool<any>[] {
+export function getToolsForType(type: string, cwd: string) {
   const key = resolveKey(type);
   const raw = key ? agents.get(key) : undefined;
   const config = raw?.enabled !== false ? raw : undefined;

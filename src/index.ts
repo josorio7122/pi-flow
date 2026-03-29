@@ -50,7 +50,7 @@ export default function (pi: ExtensionAPI) {
       const d = message.details;
       if (!d) return undefined;
 
-      function renderOne(d: NotificationDetails): string {
+      function renderOne(d: NotificationDetails) {
         const isError = d.status === "error" || d.status === "stopped" || d.status === "aborted";
         const icon = isError ? theme.fg("error", "✗") : theme.fg("success", "✓");
         const statusText = isError ? d.status
@@ -310,7 +310,7 @@ export default function (pi: ExtensionAPI) {
 
   // ---- Join mode configuration ----
   let defaultJoinMode: JoinMode = 'smart';
-  function getDefaultJoinMode(): JoinMode { return defaultJoinMode; }
+  function getDefaultJoinMode() { return defaultJoinMode; }
   function setDefaultJoinMode(mode: JoinMode) { defaultJoinMode = mode; }
 
   // ---- Batch tracking for smart join mode ----
@@ -388,7 +388,7 @@ export default function (pi: ExtensionAPI) {
   };
 
   /** Derive a short model label from a model string. */
-  function getModelLabelFromConfig(model: string): string {
+  function getModelLabelFromConfig(model: string) {
     // Strip provider prefix (e.g. "anthropic/claude-sonnet-4-6" → "claude-sonnet-4-6")
     const name = model.includes("/") ? model.split("/").pop()! : model;
     // Strip trailing date suffix (e.g. "claude-haiku-4-5-20251001" → "claude-haiku-4-5")

@@ -56,43 +56,43 @@ export interface AgentDetails {
 }
 
 /** Format a token count compactly: "33.8k token", "1.2M token". */
-export function formatTokens(count: number): string {
+export function formatTokens(count: number) {
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M token`;
   if (count >= 1_000) return `${(count / 1_000).toFixed(1)}k token`;
   return `${count} token`;
 }
 
 /** Format turn count with optional max limit: "⟳5≤30" or "⟳5". */
-export function formatTurns(turnCount: number, maxTurns?: number | null): string {
+export function formatTurns(turnCount: number, maxTurns?: number | null) {
   return maxTurns ? `⟳${turnCount}≤${maxTurns}` : `⟳${turnCount}`;
 }
 
 /** Format elapsed time compactly: "3.2s", "1:23". */
-export function formatMs(ms: number): string {
+export function formatMs(ms: number) {
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60_000)}:${String(Math.floor((ms % 60_000) / 1000)).padStart(2, "0")}`;
 }
 
 /** Format duration from start to completion (or now). */
-export function formatDuration(startedAt: number, completedAt?: number): string {
+export function formatDuration(startedAt: number, completedAt?: number) {
   return formatMs((completedAt ?? Date.now()) - startedAt);
 }
 
 /** Get display name for any agent type (built-in or custom). */
-export function getDisplayName(type: SubagentType): string {
+export function getDisplayName(type: SubagentType) {
   const config = getConfig(type);
   return config?.displayName ?? type;
 }
 
 /** Get the prompt mode label for an agent type (undefined if "replace"). */
-export function getPromptModeLabel(type: SubagentType): string | undefined {
+export function getPromptModeLabel(type: SubagentType) {
   const config = getConfig(type);
   if (!config) return undefined;
   return config.promptMode === "append" ? "append" : undefined;
 }
 
 /** Build a human-readable activity description from active tools and response text. */
-export function describeActivity(activeTools: Map<string, string>, responseText?: string): string {
+export function describeActivity(activeTools: Map<string, string>, responseText?: string) {
   if (activeTools.size > 0) {
     const names = [...activeTools.values()];
     const unique = [...new Set(names)];

@@ -36,6 +36,6 @@ export function resolveAgentInvocationConfig(
   };
 }
 
-export function resolveJoinMode(defaultJoinMode: JoinMode, runInBackground: boolean): JoinMode | undefined {
+export function resolveJoinMode(defaultJoinMode: JoinMode, runInBackground: boolean) {
   return runInBackground ? defaultJoinMode : undefined;
 }

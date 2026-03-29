@@ -19,7 +19,7 @@ const MAX_MEMORY_LINES = 200;
  * Returns true if a name contains characters not allowed in agent/skill names.
  * Uses a whitelist: only alphanumeric, hyphens, underscores, and dots (no leading dot).
  */
-export function isUnsafeName(name: string): boolean {
+export function isUnsafeName(name: string) {
   if (!name || name.length > 128) return true;
   return !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name);
 }
@@ -27,7 +27,7 @@ export function isUnsafeName(name: string): boolean {
 /**
  * Returns true if the given path is a symlink (defense against symlink attacks).
  */
-export function isSymlink(filePath: string): boolean {
+export function isSymlink(filePath: string) {
   try {
     return lstatSync(filePath).isSymbolicLink();
   } catch {
@@ -39,7 +39,7 @@ export function isSymlink(filePath: string): boolean {
  * Safely read a file, rejecting symlinks.
  * Returns undefined if the file doesn't exist, is a symlink, or can't be read.
  */
-export function safeReadFile(filePath: string): string | undefined {
+export function safeReadFile(filePath: string) {
   if (!existsSync(filePath)) return undefined;
   if (isSymlink(filePath)) return undefined;
   try {
@@ -53,7 +53,7 @@ export function safeReadFile(filePath: string): string | undefined {
  * Resolve the memory directory path for a given agent + scope + cwd.
  * Throws if agentName contains path traversal characters.
  */
-export function resolveMemoryDir({ agentName, scope, cwd }: { agentName: string; scope: MemoryScope; cwd: string }): string {
+export function resolveMemoryDir({ agentName, scope, cwd }: { agentName: string; scope: MemoryScope; cwd: string }) {
   if (isUnsafeName(agentName)) {
     throw new Error(`Unsafe agent name for memory directory: "${agentName}"`);
   }
@@ -72,7 +72,7 @@ export function resolveMemoryDir({ agentName, scope, cwd }: { agentName: string;
  * Refuses to create directories if any component in the path is a symlink
  * to prevent symlink-based directory traversal attacks.
  */
-export function ensureMemoryDir(memoryDir: string): void {
+export function ensureMemoryDir(memoryDir: string) {
   // If the directory already exists, verify it's not a symlink
   if (existsSync(memoryDir)) {
     if (isSymlink(memoryDir)) {
@@ -87,7 +87,7 @@ export function ensureMemoryDir(memoryDir: string): void {
  * Read the first N lines of MEMORY.md from the memory directory, if it exists.
  * Returns undefined if no MEMORY.md exists or if the path is a symlink.
  */
-export function readMemoryIndex(memoryDir: string): string | undefined {
+export function readMemoryIndex(memoryDir: string) {
   // Reject symlinked memory directories
   if (isSymlink(memoryDir)) return undefined;
 
@@ -106,7 +106,7 @@ export function readMemoryIndex(memoryDir: string): string | undefined {
  * Build the memory block to inject into the agent's system prompt.
  * Also ensures the memory directory exists (creates it if needed).
  */
-export function buildMemoryBlock({ agentName, scope, cwd }: { agentName: string; scope: MemoryScope; cwd: string }): string {
+export function buildMemoryBlock({ agentName, scope, cwd }: { agentName: string; scope: MemoryScope; cwd: string }) {
   const memoryDir = resolveMemoryDir({ agentName, scope, cwd });
   // Create the memory directory so the agent can immediately write to it
   ensureMemoryDir(memoryDir);
@@ -148,7 +148,7 @@ This memory persists across sessions. Use it to build up knowledge over time.`;
  * Build a read-only memory block for agents that lack write/edit tools.
  * Does NOT create the memory directory — agents can only consume existing memory.
  */
-export function buildReadOnlyMemoryBlock({ agentName, scope, cwd }: { agentName: string; scope: MemoryScope; cwd: string }): string {
+export function buildReadOnlyMemoryBlock({ agentName, scope, cwd }: { agentName: string; scope: MemoryScope; cwd: string }) {
   const memoryDir = resolveMemoryDir({ agentName, scope, cwd });
   const existingMemory = readMemoryIndex(memoryDir);
 

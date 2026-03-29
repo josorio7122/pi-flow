@@ -29,23 +29,23 @@ const EXCLUDED_TOOL_NAMES = ["Agent", "get_subagent_result", "steer_subagent"];
 let defaultMaxTurns: number | undefined;
 
 /** Normalize max turns. undefined or 0 = unlimited, otherwise minimum 1. */
-export function normalizeMaxTurns(n: number | undefined): number | undefined {
+export function normalizeMaxTurns(n: number | undefined) {
   if (n == null || n === 0) return undefined;
   return Math.max(1, n);
 }
 
 /** Get the default max turns value. undefined = unlimited. */
-export function getDefaultMaxTurns(): number | undefined { return defaultMaxTurns; }
+export function getDefaultMaxTurns() { return defaultMaxTurns; }
 /** Set the default max turns value. undefined or 0 = unlimited, otherwise minimum 1. */
-export function setDefaultMaxTurns(n: number | undefined): void { defaultMaxTurns = normalizeMaxTurns(n); }
+export function setDefaultMaxTurns(n: number | undefined) { defaultMaxTurns = normalizeMaxTurns(n); }
 
 /** Additional turns allowed after the soft limit steer message. */
 let graceTurns = 5;
 
 /** Get the grace turns value. */
-export function getGraceTurns(): number { return graceTurns; }
+export function getGraceTurns() { return graceTurns; }
 /** Set the grace turns value (minimum 1). */
-export function setGraceTurns(n: number): void { graceTurns = Math.max(1, n); }
+export function setGraceTurns(n: number) { graceTurns = Math.max(1, n); }
 
 /**
  * Try to find the right model for an agent type.
@@ -55,7 +55,7 @@ function resolveDefaultModel({ parentModel, registry, configModel }: {
   parentModel: Model<Api> | undefined;
   registry: ModelRegistry;
   configModel?: string | undefined;
-}): Model<Api> | undefined {
+}) {
   if (configModel) {
     const slashIdx = configModel.indexOf("/");
     if (slashIdx !== -1) {
@@ -131,7 +131,7 @@ function collectResponseText(session: AgentSession) {
 }
 
 /** Get the last assistant text from the completed session history. */
-function getLastAssistantText(session: AgentSession): string {
+function getLastAssistantText(session: AgentSession) {
   for (let i = session.messages.length - 1; i >= 0; i--) {
     const msg = session.messages[i];
     if (!msg || msg.role !== "assistant") continue;
@@ -157,7 +157,7 @@ export async function runAgent({ ctx, type, prompt, options }: {
   type: SubagentType;
   prompt: string;
   options: RunOptions;
-}): Promise<RunResult> {
+}) {
   const config = getConfig(type);
   const agentConfig = getAgentConfig(type);
 
@@ -381,7 +381,7 @@ export async function resumeAgent({ session, prompt, options = {} }: {
   session: AgentSession;
   prompt: string;
   options?: { onToolActivity?: (activity: ToolActivity) => void; signal?: AbortSignal };
-}): Promise<string> {
+}) {
   const collector = collectResponseText(session);
   const cleanupAbort = forwardAbortSignal(session, options.signal);
 
@@ -410,14 +410,14 @@ export async function resumeAgent({ session, prompt, options = {} }: {
 export async function steerAgent(
   session: AgentSession,
   message: string,
-): Promise<void> {
+) {
   await session.steer(message);
 }
 
 /**
  * Get the subagent's conversation messages as formatted text.
  */
-export function getAgentConversation(session: AgentSession): string {
+export function getAgentConversation(session: AgentSession) {
   const parts: string[] = [];
 
   for (const msg of session.messages) {

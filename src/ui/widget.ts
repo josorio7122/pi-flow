@@ -81,7 +81,7 @@ export class AgentWidget {
   }
 
   /** Check if a finished agent should still be shown in the widget. */
-  private shouldShowFinished(agentId: string, status: string): boolean {
+  private shouldShowFinished(agentId: string, status: string) {
     const age = this.finishedTurnAge.get(agentId) ?? 0;
     const maxAge = ERROR_STATUSES.has(status) ? AgentWidget.ERROR_LINGER_TURNS : 1;
     return age < maxAge;
@@ -95,7 +95,7 @@ export class AgentWidget {
   }
 
   /** Render a finished agent line. */
-  private renderFinishedLine(a: { id: string; type: SubagentType; status: string; description: string; toolUses: number; startedAt: number; completedAt?: number | undefined; error?: string | undefined }, theme: Theme): string {
+  private renderFinishedLine(a: { id: string; type: SubagentType; status: string; description: string; toolUses: number; startedAt: number; completedAt?: number | undefined; error?: string | undefined }, theme: Theme) {
     const name = getDisplayName(a.type);
     const modeLabel = getPromptModeLabel(a.type);
     const duration = formatMs((a.completedAt ?? Date.now()) - a.startedAt);
@@ -135,7 +135,7 @@ export class AgentWidget {
    * Render the widget content. Called from the registered widget's render() callback,
    * reading live state each time instead of capturing it in a closure.
    */
-  private renderWidget(tui: TUI, theme: Theme): string[] {
+  private renderWidget(tui: TUI, theme: Theme) {
     const allAgents = this.manager.listAgents();
     const running = allAgents.filter(a => a.status === "running");
     const queued = allAgents.filter(a => a.status === "queued");

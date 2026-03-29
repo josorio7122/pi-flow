@@ -12,7 +12,7 @@ export function textResult(msg: string, details?: AgentDetails | undefined) {
 }
 
 /** Safe token formatting — wraps session.getSessionStats() in try-catch. */
-export function safeFormatTokens(session: { getSessionStats(): { tokens: { total: number } } } | undefined): string {
+export function safeFormatTokens(session: { getSessionStats(): { tokens: { total: number } } } | undefined) {
   if (!session) return "";
   try { return formatTokens(session.getSessionStats().tokens.total); } catch { return ""; }
 }
@@ -54,7 +54,7 @@ export function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => 
 }
 
 /** Human-readable status label for agent completion. */
-export function getStatusLabel(status: string, error?: string): string {
+export function getStatusLabel(status: string, error?: string) {
   switch (status) {
     case "error": return `Error: ${error ?? "unknown"}`;
     case "aborted": return "Aborted (max turns exceeded)";
@@ -65,7 +65,7 @@ export function getStatusLabel(status: string, error?: string): string {
 }
 
 /** Parenthetical status note for completed agent result text. */
-export function getStatusNote(status: string): string {
+export function getStatusNote(status: string) {
   switch (status) {
     case "aborted": return " (aborted — max turns exceeded, output may be incomplete)";
     case "steered": return " (wrapped up — reached turn limit)";
@@ -75,12 +75,12 @@ export function getStatusNote(status: string): string {
 }
 
 /** Escape XML special characters to prevent injection in structured notifications. */
-export function escapeXml(s: string): string {
+export function escapeXml(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /** Format a structured task notification matching Claude Code's <task-notification> XML. */
-export function formatTaskNotification(record: AgentRecord, resultMaxLen: number): string {
+export function formatTaskNotification(record: AgentRecord, resultMaxLen: number) {
   const status = getStatusLabel(record.status, record.error);
   const durationMs = record.completedAt ? record.completedAt - record.startedAt : 0;
   let totalTokens = 0;
@@ -116,7 +116,7 @@ export function buildDetails({ base, record, activity, overrides }: {
   record: { toolUses: number; startedAt: number; completedAt?: number | undefined; status: string; error?: string | undefined; id?: string | undefined; session?: { getSessionStats(): { tokens: { total: number } } } | undefined };
   activity?: AgentActivity | undefined;
   overrides?: Partial<AgentDetails> | undefined;
-}): AgentDetails {
+}) {
   return {
     ...base,
     toolUses: record.toolUses,

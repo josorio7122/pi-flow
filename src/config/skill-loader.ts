@@ -22,7 +22,7 @@ export interface PreloadedSkill {
  * @param cwd         Working directory for project-level skills.
  * @returns Array of loaded skills (missing skills are skipped with a warning comment).
  */
-export function preloadSkills(skillNames: string[], cwd: string): PreloadedSkill[] {
+export function preloadSkills(skillNames: string[], cwd: string) {
   const results: PreloadedSkill[] = [];
 
   for (const name of skillNames) {
@@ -48,7 +48,7 @@ export function preloadSkills(skillNames: string[], cwd: string): PreloadedSkill
  * Search for a skill file in project and global directories.
  * Project-level takes priority over global.
  */
-function findAndReadSkill(name: string, cwd: string): string | undefined {
+function findAndReadSkill(name: string, cwd: string) {
   const projectDir = join(cwd, ".pi", "skills");
   const globalDir = join(homedir(), ".pi", "skills");
 
@@ -65,7 +65,7 @@ function findAndReadSkill(name: string, cwd: string): string | undefined {
  * Try to read a skill file from a directory.
  * Tries extensions in order: .md, .txt, (no extension)
  */
-function tryReadSkillFile(dir: string, name: string): string | undefined {
+function tryReadSkillFile(dir: string, name: string) {
   const extensions = [".md", ".txt", ""];
 
   for (const ext of extensions) {

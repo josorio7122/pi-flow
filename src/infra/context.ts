@@ -5,7 +5,7 @@
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 
 /** Extract text from a message content block array. */
-export function extractText(content: unknown[]): string {
+export function extractText(content: unknown[]) {
   return content
     .filter((c): c is { type: "text"; text: string } => typeof c === "object" && c !== null && "type" in c && c.type === "text")
     .map((c) => c.text ?? "")
@@ -17,7 +17,7 @@ export function extractText(content: unknown[]): string {
  * Used when inherit_context is true to give the subagent visibility
  * into what has been discussed/done so far.
  */
-export function buildParentContext(ctx: ExtensionContext): string {
+export function buildParentContext(ctx: ExtensionContext) {
   const entries = ctx.sessionManager.getBranch();
   if (!entries || entries.length === 0) return "";
 

@@ -66,7 +66,7 @@ function handleRpc<P extends { requestId: string }>(
  * Register ping, spawn, and stop RPC handlers on the event bus.
  * Returns unsub functions for cleanup.
  */
-export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
+export function registerRpcHandlers(deps: RpcDeps) {
   const { events, pi, getCtx, manager } = deps;
 
   const unsubPing = handleRpc(events, "subagents:rpc:ping", () => {

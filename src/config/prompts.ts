@@ -28,7 +28,7 @@ export function buildAgentPrompt({ config, cwd, env, parentSystemPrompt, extras 
   env: EnvInfo;
   parentSystemPrompt?: string | undefined;
   extras?: PromptExtras | undefined;
-}): string {
+}) {
   const envBlock = `# Environment
 Working directory: ${cwd}
 ${env.isGitRepo ? `Git repository: yes\nBranch: ${env.branch}` : "Not a git repository"}

@@ -19,7 +19,7 @@ interface ModelEntry {
 export function resolveModel(
   input: string,
   registry: ModelRegistry,
-): Model<Api> | string {
+) {
   // Available models (those with auth configured)
   const all = (registry.getAvailable?.() ?? registry.getAll()) as ModelEntry[];
   const availableSet = new Set(all.map(m => `${m.provider}/${m.id}`.toLowerCase()));

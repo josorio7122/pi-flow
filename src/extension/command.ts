@@ -22,7 +22,7 @@ export interface AgentsCommandDeps {
   setDefaultJoinMode: (mode: JoinMode) => void;
 }
 
-function getModelLabelFromConfig(modelStr: string): string {
+function getModelLabelFromConfig(modelStr: string) {
   const parts = modelStr.split("/");
   const id = parts[parts.length - 1] ?? modelStr;
   if (id.includes("haiku")) return "haiku";
@@ -45,7 +45,7 @@ export function registerAgentsCommand(deps: AgentsCommandDeps) {
     return undefined;
   }
 
-  function getModelLabel(type: string, registry?: ModelRegistry): string {
+  function getModelLabel(type: string, registry?: ModelRegistry) {
     const cfg = getAgentConfig(type);
     if (!cfg?.model) return "inherit";
     if (registry) {

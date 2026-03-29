@@ -35,7 +35,7 @@ export class GroupJoinManager {
   ) {}
 
   /** Register a group of agent IDs that should be joined. */
-  registerGroup(groupId: string, agentIds: string[]): void {
+  registerGroup(groupId: string, agentIds: string[]) {
     const group: AgentGroup = {
       groupId,
       agentIds: new Set(agentIds),
@@ -82,7 +82,7 @@ export class GroupJoinManager {
     return 'held';
   }
 
-  private onTimeout(group: AgentGroup): void {
+  private onTimeout(group: AgentGroup) {
     if (group.delivered) return;
     group.timeoutHandle = undefined;
 
@@ -107,7 +107,7 @@ export class GroupJoinManager {
     // Timeout will be started when the next straggler completes
   }
 
-  private deliver(group: AgentGroup, partial: boolean): void {
+  private deliver(group: AgentGroup, partial: boolean) {
     if (group.timeoutHandle) {
       clearTimeout(group.timeoutHandle);
       group.timeoutHandle = undefined;
@@ -117,7 +117,7 @@ export class GroupJoinManager {
     this.cleanupGroup(group.groupId);
   }
 
-  private cleanupGroup(groupId: string): void {
+  private cleanupGroup(groupId: string) {
     const group = this.groups.get(groupId);
     if (!group) return;
     for (const id of group.agentIds) {
@@ -127,11 +127,11 @@ export class GroupJoinManager {
   }
 
   /** Check if an agent is in a group. */
-  isGrouped(agentId: string): boolean {
+  isGrouped(agentId: string) {
     return this.agentToGroup.has(agentId);
   }
 
-  dispose(): void {
+  dispose() {
     for (const group of this.groups.values()) {
       if (group.timeoutHandle) clearTimeout(group.timeoutHandle);
     }
