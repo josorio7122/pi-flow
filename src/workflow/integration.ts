@@ -80,6 +80,12 @@ export function registerWorkflowExtension(
   pi.registerTool({
     name: "Workflow",
     label: "Workflow",
+    promptSnippet:
+      "Workflow — Run multi-phase agent pipelines: fix (scout→approve→build→review), feature (plan→test→build→review), explore (scout→plan), research (scout)",
+    promptGuidelines: [
+      '"find/scout X then fix/clean/refactor" → Workflow with workflow_type: "fix". "build/implement feature X" → "feature". "explore/understand then plan" → "explore". "research/map/trace X" → "research".',
+      "Prefer Workflow over manually spawning agents when the task involves exploration followed by action, or multiple phases. Workflows use cheaper models for scouting and reserve expensive models for planning and building.",
+    ],
     description: buildToolDescription(),
     parameters: Type.Object({
       action: Type.String({ description: '"start", "continue", or "status"' }),

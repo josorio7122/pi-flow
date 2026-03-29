@@ -67,15 +67,20 @@ export function registerAgentTool(deps: AgentToolDeps) {
   pi.registerTool({
     name: "Agent",
     label: "Agent",
-    description: `Launch a new agent to handle complex, multi-step tasks autonomously.
+    promptSnippet:
+      "Agent — Spawn a specialized agent (scout, builder, reviewer, planner, test-writer) for a single focused task",
+    promptGuidelines: [
+      "Use Agent for single-phase tasks: just a scout, just a review, just a build. For multi-phase tasks (explore→fix, plan→build→review), prefer the Workflow tool instead.",
+      "Delegate codebase exploration and analysis to a scout agent — scouts are read-only and use a cheaper model, freeing you to orchestrate.",
+      "Use run_in_background: true to run multiple agents in parallel for independent subtasks. Foreground calls block until the agent completes.",
+    ],
+    description: `Launch a specialized agent to handle a focused task autonomously.
 
 Available agent types:
 ${typeListText}
 
-Guidelines:
-- For parallel work, use run_in_background: true. Foreground calls run sequentially.
+Usage:
 - Provide clear, detailed prompts so the agent can work autonomously.
-- Use run_in_background for work you don't need immediately.
 - Use steer_subagent to send mid-run messages to a running background agent.
 - Use model for a different model, thinking for extended thinking, inherit_context for parent history.
 - Use isolation: "worktree" for safe parallel file modifications.`,

@@ -9,14 +9,16 @@ import initExtension from "./index.js";
 
 function createMockPi() {
   const tools: string[] = [];
+  const toolDefs: Record<string, { promptSnippet?: string | undefined; promptGuidelines?: string[] | undefined }> = {};
   const commands: string[] = [];
   const eventHandlers = new Map<string, Array<(data: unknown) => void>>();
   const renderers: string[] = [];
   const emitted: string[] = [];
 
   const pi: ExtensionAPI = {
-    registerTool: vi.fn((tool: { name: string }) => {
+    registerTool: vi.fn((tool: { name: string; promptSnippet?: string; promptGuidelines?: string[] }) => {
       tools.push(tool.name);
+      toolDefs[tool.name] = { promptSnippet: tool.promptSnippet, promptGuidelines: tool.promptGuidelines };
     }),
     registerCommand: vi.fn((name: string) => {
       commands.push(name);
@@ -57,7 +59,7 @@ function createMockPi() {
     unregisterProvider: vi.fn(),
   } as unknown as ExtensionAPI;
 
-  return { pi, tools, commands, eventHandlers, renderers, emitted };
+  return { pi, tools, toolDefs, commands, eventHandlers, renderers, emitted };
 }
 
 describe("extension entry point", () => {
@@ -116,6 +118,19 @@ describe("extension entry point", () => {
     expect(onCalls).toContain("subagents:rpc:ping");
     expect(onCalls).toContain("subagents:rpc:spawn");
     expect(onCalls).toContain("subagents:rpc:stop");
+  });
+
+  it("Agent and Workflow tools include promptSnippet and promptGuidelines", () => {
+    const { pi, toolDefs } = createMockPi();
+    initExtension(pi);
+
+    expect(toolDefs.Agent?.promptSnippet).toBeDefined();
+    expect(toolDefs.Agent?.promptGuidelines).toBeDefined();
+    expect(toolDefs.Agent!.promptGuidelines!.length).toBeGreaterThan(0);
+
+    expect(toolDefs.Workflow?.promptSnippet).toBeDefined();
+    expect(toolDefs.Workflow?.promptGuidelines).toBeDefined();
+    expect(toolDefs.Workflow!.promptGuidelines!.length).toBeGreaterThan(0);
   });
 
   it("exposes manager on globalThis via Symbol.for", () => {
