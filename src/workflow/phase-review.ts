@@ -75,9 +75,6 @@ export async function executeReviewLoop({
     const review = parseVerdict(reviewRecord.result ?? "");
     const reviewDuration = (reviewRecord.completedAt ?? Date.now()) - reviewRecord.startedAt;
 
-    // Track reviewer completion
-    state.activeAgents = state.activeAgents.filter((a) => a.agentId !== `review-${cycle}`);
-
     const reviewHandoff: AgentHandoff = {
       agentId: reviewRecord.id,
       role: reviewerRole,
@@ -99,7 +96,21 @@ export async function executeReviewLoop({
       timestamp: Date.now(),
     };
 
-    writeHandoff(cwd, workflowId, reviewHandoff);
+    const reviewHandoffFile = writeHandoff(cwd, workflowId, reviewHandoff);
+    trackAgentComplete({
+      state,
+      agentId: reviewRecord.id,
+      role: reviewerRole,
+      phase: phase.name,
+      handoffFile: reviewHandoffFile,
+      duration: reviewDuration,
+      exitStatus: reviewRecord.status === "error" ? "error" : "completed",
+      error: reviewRecord.error,
+    });
+    // Remove placeholder
+    state.activeAgents = state.activeAgents.filter((a) => a.agentId !== `review-${cycle}`);
+    writeState(cwd, workflowId, state);
+
     emitEvent({
       type: "review_verdict",
       verdict: review.verdict,
