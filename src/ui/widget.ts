@@ -28,6 +28,46 @@ import {
 /** Maximum number of rendered lines before overflow collapse kicks in. */
 const MAX_WIDGET_LINES = 12;
 
+/** Pure — render a single finished agent line. */
+export function renderFinishedLine(
+  a: { id: string; type: SubagentType; status: string; description: string; toolUses: number; startedAt: number; completedAt?: number | undefined; error?: string | undefined },
+  theme: Theme,
+  activity?: AgentActivity,
+) {
+  const cfg = getConfig(a.type);
+  const name = getDisplayName(a.type, cfg.displayName);
+  const modeLabel = getPromptModeLabel(cfg.promptMode);
+  const duration = formatMs((a.completedAt ?? Date.now()) - a.startedAt);
+
+  let icon: string;
+  let statusText: string;
+  if (a.status === "completed") {
+    icon = theme.fg("success", "✓");
+    statusText = "";
+  } else if (a.status === "steered") {
+    icon = theme.fg("warning", "✓");
+    statusText = theme.fg("warning", " (turn limit)");
+  } else if (a.status === "stopped") {
+    icon = theme.fg("dim", "■");
+    statusText = theme.fg("dim", " stopped");
+  } else if (a.status === "error") {
+    icon = theme.fg("error", "✗");
+    const errMsg = a.error ? `: ${a.error.slice(0, 60)}` : "";
+    statusText = theme.fg("error", ` error${errMsg}`);
+  } else {
+    icon = theme.fg("error", "✗");
+    statusText = theme.fg("warning", " aborted");
+  }
+
+  const parts: string[] = [];
+  if (activity) parts.push(formatTurns(activity.turnCount, activity.maxTurns));
+  if (a.toolUses > 0) parts.push(`${a.toolUses} tool use${a.toolUses === 1 ? "" : "s"}`);
+  parts.push(duration);
+
+  const modeTag = modeLabel ? ` ${theme.fg("dim", `(${modeLabel})`)}` : "";
+  return `${icon} ${theme.fg("dim", name)}${modeTag}  ${theme.fg("dim", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusText}`;
+}
+
 export class AgentWidget {
   private uiCtx: ExtensionUIContext | undefined;
   private widgetFrame = 0;
@@ -95,42 +135,9 @@ export class AgentWidget {
     }
   }
 
-  /** Render a finished agent line. */
+  /** Render a finished agent line — delegates to pure function. */
   private renderFinishedLine(a: { id: string; type: SubagentType; status: string; description: string; toolUses: number; startedAt: number; completedAt?: number | undefined; error?: string | undefined }, theme: Theme) {
-    const cfg = getConfig(a.type);
-    const name = getDisplayName(a.type, cfg.displayName);
-    const modeLabel = getPromptModeLabel(cfg.promptMode);
-    const duration = formatMs((a.completedAt ?? Date.now()) - a.startedAt);
-
-    let icon: string;
-    let statusText: string;
-    if (a.status === "completed") {
-      icon = theme.fg("success", "✓");
-      statusText = "";
-    } else if (a.status === "steered") {
-      icon = theme.fg("warning", "✓");
-      statusText = theme.fg("warning", " (turn limit)");
-    } else if (a.status === "stopped") {
-      icon = theme.fg("dim", "■");
-      statusText = theme.fg("dim", " stopped");
-    } else if (a.status === "error") {
-      icon = theme.fg("error", "✗");
-      const errMsg = a.error ? `: ${a.error.slice(0, 60)}` : "";
-      statusText = theme.fg("error", ` error${errMsg}`);
-    } else {
-      // aborted
-      icon = theme.fg("error", "✗");
-      statusText = theme.fg("warning", " aborted");
-    }
-
-    const parts: string[] = [];
-    const activity = this.agentActivity.get(a.id);
-    if (activity) parts.push(formatTurns(activity.turnCount, activity.maxTurns));
-    if (a.toolUses > 0) parts.push(`${a.toolUses} tool use${a.toolUses === 1 ? "" : "s"}`);
-    parts.push(duration);
-
-    const modeTag = modeLabel ? ` ${theme.fg("dim", `(${modeLabel})`)}` : "";
-    return `${icon} ${theme.fg("dim", name)}${modeTag}  ${theme.fg("dim", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusText}`;
+    return renderFinishedLine(a, theme, this.agentActivity.get(a.id));
   }
 
   /**
