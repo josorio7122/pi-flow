@@ -208,12 +208,19 @@ export function registerWorkflowExtension(
       return textResult(summary);
     }
     if (outcome.type === "gate-waiting") {
+      const handoffs = listHandoffs({ cwd: ctx.cwd, workflowId: activeWorkflowId });
+      const findings = handoffs.map((h) => `## ${h.role} (${h.phase} phase)\n${h.findings}`).join("\n\n");
       return textResult(
-        `Workflow paused at approval gate: "${state.currentPhase}". Review the results above and use Workflow({ action: "continue" }) to proceed.`,
+        `Workflow paused at approval gate: "${state.currentPhase}".\n\n${findings}\n\nReview the findings above and use Workflow({ action: "continue" }) to proceed, or ask for changes.`,
       );
     }
     if (outcome.type === "error") {
-      return textResult(`Workflow error: ${outcome.error}`, true);
+      const handoffs = listHandoffs({ cwd: ctx.cwd, workflowId: activeWorkflowId });
+      const findings =
+        handoffs.length > 0
+          ? `\n\n${handoffs.map((h) => `## ${h.role} (${h.phase} phase)\n${h.findings}`).join("\n\n")}`
+          : "";
+      return textResult(`Workflow error: ${outcome.error}${findings}`, true);
     }
     if (outcome.type === "stuck") {
       return textResult(`Workflow stuck: ${outcome.reason}. Consider manual intervention.`, true);
