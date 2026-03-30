@@ -37,7 +37,7 @@ export function formatTokens(tokens: number) {
 
 // ── Widget Lines ─────────────────────────────────────────────────────
 
-function formatAgentLine(agent: AgentRecord, activity?: AgentActivity | undefined) {
+function formatAgentStats(agent: AgentRecord, activity?: AgentActivity | undefined) {
   const elapsed = formatDuration(Date.now() - agent.startedAt);
   const parts: string[] = [];
   const turns = activity?.turnCount ?? agent.turnCount;
@@ -52,9 +52,37 @@ function formatAgentLine(agent: AgentRecord, activity?: AgentActivity | undefine
     /* */
   }
   parts.push(elapsed);
-  const activityText = activity ? describeActivity(activity.activeTools, activity.responseText) : undefined;
-  const activityLine = activityText ? `\n      ⎿ ${activityText}` : "";
-  return `    ${agent.type} · ${parts.join(" · ")}${activityLine}`;
+  return parts.join(" · ");
+}
+
+function formatAgentActivity(activity?: AgentActivity | undefined) {
+  if (!activity) return undefined;
+  return describeActivity(activity.activeTools, activity.responseText);
+}
+
+function appendRunningPhase({
+  lines,
+  icon,
+  phaseName,
+  agents,
+  activityMap,
+}: {
+  lines: string[];
+  icon: string;
+  phaseName: string;
+  agents: readonly AgentRecord[];
+  activityMap?: Map<string, AgentActivity> | undefined;
+}) {
+  const first = agents[0];
+  const stats = first ? formatAgentStats(first, activityMap?.get(first.id)) : "";
+  lines.push(`  ${icon} ${phaseName} · ${stats}`);
+  const actText = first ? formatAgentActivity(activityMap?.get(first.id)) : undefined;
+  if (actText) lines.push(`    ⎿ ${actText}`);
+  for (const a of agents.slice(1)) {
+    lines.push(`    ${a.type} · ${formatAgentStats(a, activityMap?.get(a.id))}`);
+    const act = formatAgentActivity(activityMap?.get(a.id));
+    if (act) lines.push(`      ⎿ ${act}`);
+  }
 }
 
 export function buildProgressLines({
@@ -76,13 +104,14 @@ export function buildProgressLines({
     const result = state.phases[p.name];
     const status: PhaseStatus = result?.status ?? "pending";
     const icon = getStatusIcon(status);
-    const duration = result?.completedAt
-      ? ` (${formatDuration(result.completedAt - (result.startedAt ?? state.startedAt))})`
-      : "";
-    lines.push(`  ${icon} ${p.name}${duration}`);
 
-    if (status === "running" && runningAgents) {
-      for (const agent of runningAgents) lines.push(formatAgentLine(agent, agentActivity?.get(agent.id)));
+    if (status === "running" && runningAgents && runningAgents.length > 0) {
+      appendRunningPhase({ lines, icon, phaseName: p.name, agents: runningAgents, activityMap: agentActivity });
+    } else {
+      const duration = result?.completedAt
+        ? ` (${formatDuration(result.completedAt - (result.startedAt ?? state.startedAt))})`
+        : "";
+      lines.push(`  ${icon} ${p.name}${duration}`);
     }
   }
 
