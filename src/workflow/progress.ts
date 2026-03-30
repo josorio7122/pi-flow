@@ -55,9 +55,18 @@ function formatAgentStats(agent: AgentRecord, activity?: AgentActivity | undefin
   return parts.join(" · ");
 }
 
-function formatAgentActivity(activity?: AgentActivity | undefined) {
-  if (!activity) return undefined;
-  return describeActivity(activity.activeTools, activity.responseText);
+function formatAgentActivityLines(activity?: AgentActivity | undefined) {
+  if (!activity) return [];
+  const lines: string[] = [];
+  const actionText = describeActivity(activity.activeTools);
+  if (actionText !== "thinking…" || !activity.responseText) {
+    lines.push(actionText);
+  }
+  if (activity.responseText) {
+    const tail = activity.responseText.trim().split("\n").slice(-3);
+    for (const l of tail) lines.push(l);
+  }
+  return lines.slice(-3);
 }
 
 function appendRunningPhase({
@@ -76,12 +85,16 @@ function appendRunningPhase({
   const first = agents[0];
   const stats = first ? formatAgentStats(first, activityMap?.get(first.id)) : "";
   lines.push(`  ${icon} ${phaseName} · ${stats}`);
-  const actText = first ? formatAgentActivity(activityMap?.get(first.id)) : undefined;
-  if (actText) lines.push(`    ⎿ ${actText}`);
+  if (first) {
+    for (const l of formatAgentActivityLines(activityMap?.get(first.id))) {
+      lines.push(`    ${l}`);
+    }
+  }
   for (const a of agents.slice(1)) {
     lines.push(`    ${a.type} · ${formatAgentStats(a, activityMap?.get(a.id))}`);
-    const act = formatAgentActivity(activityMap?.get(a.id));
-    if (act) lines.push(`      ⎿ ${act}`);
+    for (const l of formatAgentActivityLines(activityMap?.get(a.id))) {
+      lines.push(`      ${l}`);
+    }
   }
 }
 
