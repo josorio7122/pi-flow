@@ -289,6 +289,19 @@ export function registerWorkflowExtension(
     doRefreshWidget(ctx);
   });
 
+  pi.on("before_agent_start", async (event) => {
+    const defs = Array.from(workflows.values());
+    if (defs.length === 0) return;
+    const listing = defs.map((w) => `${w.name}: ${w.description}`).join("; ");
+    return {
+      systemPrompt:
+        `${event.systemPrompt}\n\n## Workflow-First Rule\n` +
+        `Always use the Workflow tool for any task. Available workflows: ${listing}. ` +
+        `Do not use read, bash, edit, or write directly for tasks that match a workflow. ` +
+        `Call Workflow({ action: "start", workflow_type: "<type>", description: "<task>" }) instead.`,
+    };
+  });
+
   pi.on("turn_end", async (_, ctx) => {
     if (activeWorkflowId) doRefreshWidget(ctx);
   });
