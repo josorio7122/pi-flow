@@ -35,6 +35,25 @@ export function requestWorkflowWidgetRender() {
   widgetTui?.requestRender();
 }
 
+function wordWrap(text: string, width: number) {
+  const result: string[] = [];
+  for (const line of text.split("\n")) {
+    if (line.length <= width) {
+      result.push(line);
+    } else {
+      let remaining = line;
+      while (remaining.length > width) {
+        const breakAt = remaining.lastIndexOf(" ", width);
+        const splitAt = breakAt > 0 ? breakAt : width;
+        result.push(remaining.slice(0, splitAt));
+        remaining = remaining.slice(splitAt).trimStart();
+      }
+      if (remaining) result.push(remaining);
+    }
+  }
+  return result;
+}
+
 function renderAgentInWorkflow({
   lines,
   agent,
@@ -53,10 +72,10 @@ function renderAgentInWorkflow({
   if (activity?.activeTools.size) {
     lines.push(pair.activity);
   } else if (activity?.responseText) {
-    const tail = activity.responseText.trim().split("\n").slice(-5);
+    const wrapped = wordWrap(activity.responseText.trim(), 90);
+    const tail = wrapped.slice(-5);
     for (const l of tail) {
-      const truncated = l.length > 100 ? `${l.slice(0, 97)}…` : l;
-      lines.push(`${theme.fg("dim", "│")}     ${theme.fg("dim", truncated)}`);
+      lines.push(`${theme.fg("dim", "│")}     ${theme.fg("dim", l)}`);
     }
   } else {
     lines.push(pair.activity);

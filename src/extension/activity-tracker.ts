@@ -31,7 +31,7 @@ function shortenPath(p: string) {
 
 function applyToolActivity(
   state: AgentActivity,
-  activity: { type: "start" | "end"; toolName: string; args?: Record<string, unknown> },
+  activity: { type: "start" | "end"; toolName: string; args?: Record<string, unknown> | undefined },
 ) {
   if (activity.type === "start") {
     const key = activity.toolName + "_" + Date.now();
@@ -63,7 +63,11 @@ export function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => 
   };
 
   const callbacks = {
-    onToolActivity: (activity: { type: "start" | "end"; toolName: string }) => {
+    onToolActivity: (activity: {
+      type: "start" | "end";
+      toolName: string;
+      args?: Record<string, unknown> | undefined;
+    }) => {
       applyToolActivity(state, activity);
       state.tokens = safeFormatTokens(state.session);
       onStreamUpdate?.();
