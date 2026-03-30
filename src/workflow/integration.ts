@@ -190,8 +190,8 @@ export function registerWorkflowExtension(
       ? startProgressTimer({ cwd: ctx.cwd, workflowId: activeWorkflowId, onUpdate })
       : undefined;
 
-    // Live-refresh the workflow widget every second while agents run
-    const widgetTimer = setInterval(() => doRefreshWidget(ctx), 200);
+    // Ensure widget is live before execution starts
+    doRefreshWidget(ctx);
 
     let outcome: Awaited<ReturnType<typeof executeCurrentPhase>>;
     try {
@@ -207,7 +207,6 @@ export function registerWorkflowExtension(
         agentActivity: deps.agentActivity,
       });
     } finally {
-      clearInterval(widgetTimer);
       stopProgress?.();
     }
 

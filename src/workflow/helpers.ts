@@ -3,6 +3,7 @@
  */
 
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { TUI } from "@mariozechner/pi-tui";
 import type { AgentManager } from "../agents/manager.js";
 import type { AgentActivity } from "../ui/formatters.js";
 import { buildProgressLines, buildStatusText, formatDuration } from "./progress.js";
@@ -12,6 +13,10 @@ import type { WorkflowDefinition } from "./types.js";
 export const ENTRY_TYPE = "pi-flow:active";
 const WIDGET_KEY = "pi-flow";
 export const STALLED_TIMEOUT_MS = 5 * 60 * 1000;
+
+let widgetTui: TUI | undefined;
+let widgetRegistered = false;
+let widgetInterval: ReturnType<typeof setInterval> | undefined;
 
 export interface ActiveWorkflowBookmark {
   workflowId: string;
@@ -41,20 +46,52 @@ export function refreshWidget({
   agentActivity?: Map<string, AgentActivity> | undefined;
 }) {
   if (!activeWorkflowId || !activeDefinition) {
-    ctx.ui.setWidget(WIDGET_KEY, undefined);
+    if (widgetRegistered) {
+      ctx.ui.setWidget(WIDGET_KEY, undefined);
+      widgetRegistered = false;
+      widgetTui = undefined;
+    }
+    if (widgetInterval) {
+      clearInterval(widgetInterval);
+      widgetInterval = undefined;
+    }
     ctx.ui.setStatus(WIDGET_KEY, undefined);
     return;
   }
-  const state = readState({ cwd: ctx.cwd, workflowId: activeWorkflowId });
-  if (!state) {
-    ctx.ui.setWidget(WIDGET_KEY, undefined);
-    ctx.ui.setStatus(WIDGET_KEY, undefined);
-    return;
+
+  // Render function called by pi on each frame
+  const renderLines = () => {
+    const state = readState({ cwd: ctx.cwd, workflowId: activeWorkflowId });
+    if (!state) return [];
+    const runningAgents = manager?.listAgents().filter((a) => a.status === "running");
+    ctx.ui.setStatus(WIDGET_KEY, buildStatusText(state));
+    return buildProgressLines({ state, definition: activeDefinition, runningAgents, agentActivity });
+  };
+
+  if (!widgetRegistered) {
+    ctx.ui.setWidget(
+      WIDGET_KEY,
+      (tui) => {
+        widgetTui = tui;
+        return {
+          render: renderLines,
+          invalidate: () => {
+            widgetRegistered = false;
+            widgetTui = undefined;
+          },
+        };
+      },
+      { placement: "aboveEditor" },
+    );
+    widgetRegistered = true;
+
+    // Start polling timer for smooth updates
+    if (!widgetInterval) {
+      widgetInterval = setInterval(() => widgetTui?.requestRender(), 80);
+    }
+  } else {
+    widgetTui?.requestRender();
   }
-  const runningAgents = manager?.listAgents().filter((a) => a.status === "running");
-  const lines = buildProgressLines({ state, definition: activeDefinition, runningAgents, agentActivity });
-  ctx.ui.setWidget(WIDGET_KEY, lines);
-  ctx.ui.setStatus(WIDGET_KEY, buildStatusText(state));
 }
 
 export function buildWorkflowStatusText({
