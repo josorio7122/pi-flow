@@ -11,6 +11,8 @@ export interface ToolActivity {
   type: "start" | "end";
   toolName: string;
   args?: Record<string, unknown> | undefined;
+  /** Tool result text (only on type: "end"). */
+  result?: string | undefined;
 }
 
 export interface RunnerSettings {

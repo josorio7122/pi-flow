@@ -95,7 +95,12 @@ export async function runAgent({
     }
     if (event.type === "tool_execution_start")
       options.onToolActivity?.({ type: "start", toolName: event.toolName, args: event.args });
-    if (event.type === "tool_execution_end") options.onToolActivity?.({ type: "end", toolName: event.toolName });
+    if (event.type === "tool_execution_end")
+      options.onToolActivity?.({
+        type: "end",
+        toolName: event.toolName,
+        result: extractToolResultText(event.result),
+      });
   });
 
   const collector = collectResponseText(session);
@@ -140,7 +145,12 @@ export async function resumeAgent({
     }
     if (event.type === "tool_execution_start")
       callbacks?.onToolActivity?.({ type: "start", toolName: event.toolName, args: event.args });
-    if (event.type === "tool_execution_end") callbacks?.onToolActivity?.({ type: "end", toolName: event.toolName });
+    if (event.type === "tool_execution_end")
+      callbacks?.onToolActivity?.({
+        type: "end",
+        toolName: event.toolName,
+        result: extractToolResultText(event.result),
+      });
   });
   const collector = collectResponseText(session);
   const cleanupAbort = forwardAbortSignal(session, signal);
@@ -153,6 +163,23 @@ export async function resumeAgent({
     cleanupAbort();
   }
   return collector.getText().trim() || getLastAssistantText(session);
+}
+
+function extractToolResultText(result: unknown) {
+  if (typeof result === "string") return result;
+  if (result && typeof result === "object" && "content" in result) {
+    const content = (result as { content: unknown[] }).content;
+    if (Array.isArray(content)) {
+      return content
+        .filter(
+          (c): c is { type: "text"; text: string } =>
+            typeof c === "object" && c !== null && (c as { type: string }).type === "text",
+        )
+        .map((c) => c.text)
+        .join("\n");
+    }
+  }
+  return undefined;
 }
 
 export async function steerAgent(session: AgentSession, message: string) {
