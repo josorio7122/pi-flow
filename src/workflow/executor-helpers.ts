@@ -7,7 +7,7 @@ import type { AgentManager } from "../agents/manager.js";
 import { createActivityTracker } from "../extension/activity-tracker.js";
 import type { AgentRecord } from "../types.js";
 import type { AgentActivity } from "../ui/formatters.js";
-import { requestWorkflowWidgetRender } from "./helpers.js";
+
 import { buildContinuationPrompt } from "./recovery.js";
 import { listHandoffs } from "./store.js";
 import type { AgentHandoff, PhaseDefinition, WorkflowState } from "./types.js";
@@ -167,7 +167,7 @@ export async function spawnWithAbort({
 }): Promise<AgentRecord> {
   if (signal?.aborted) throw new WorkflowAbortError();
 
-  const tracker = agentActivity ? createActivityTracker(undefined, requestWorkflowWidgetRender) : undefined;
+  const tracker = agentActivity ? createActivityTracker() : undefined;
 
   const id = manager.spawn({
     pi,

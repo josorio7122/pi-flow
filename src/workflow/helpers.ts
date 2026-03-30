@@ -30,11 +30,6 @@ let renderRegistry: Registry | undefined;
 let renderTheme: Theme | undefined;
 let widgetFrame = 0;
 
-/** Trigger a widget re-render (called from activity tracker callbacks). */
-export function requestWorkflowWidgetRender() {
-  widgetTui?.requestRender();
-}
-
 function wordWrap(text: string, width: number) {
   const result: string[] = [];
   for (const line of text.split("\n")) {
