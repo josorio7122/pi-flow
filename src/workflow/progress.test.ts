@@ -51,7 +51,7 @@ describe("buildStatusText", () => {
     const state = createWorkflowState({ definition: testDef, description: "test", workflowId: "f-1" });
     state.currentPhase = "build";
     state.tokens.total = 15_000;
-    const text = buildStatusText(state);
+    const text = buildStatusText({ state });
     expect(text).toContain("build");
     expect(text).toContain("15.0K");
   });

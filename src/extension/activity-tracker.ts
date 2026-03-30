@@ -75,7 +75,6 @@ export function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => 
         const label = activity.toolName === "bash" ? "running" : activity.toolName;
         state.responseText += `→ ${arg ? `${label}: ${arg}` : label}\n`;
       } else if (activity.result) {
-        // Show first 3 lines of tool result
         const resultLines = activity.result
           .split("\n")
           .filter((l: string) => l.trim())

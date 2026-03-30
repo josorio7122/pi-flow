@@ -49,7 +49,7 @@ function wordWrap(text: string, width: number) {
   return result;
 }
 
-const MAX_ACTIVITY_LINES = 8;
+const MAX_ACTIVITY_LINES = 3;
 
 function renderAgentInWorkflow({
   lines,
@@ -64,7 +64,9 @@ function renderAgentInWorkflow({
 }) {
   const activity = renderActivity?.get(agent.id);
   const config = renderRegistry?.getConfig(agent.type) ?? { displayName: agent.type };
-  const pair = renderRunningLine({ agent, theme, activity, config, frame });
+  const truncAgent =
+    agent.description.length > 60 ? { ...agent, description: `${agent.description.slice(0, 57)}...` } : agent;
+  const pair = renderRunningLine({ agent: truncAgent, theme, activity, config, frame });
   lines.push(pair.header);
 
   if (!activity?.responseText) {
@@ -107,7 +109,9 @@ function renderCompletedPhase({ p, status, theme }: { p: { name: string }; statu
 function renderWorkflowWidget(tui: TUI) {
   if (!renderState || !renderDefinition || !renderTheme) return [];
   const theme = renderTheme;
-  const running = renderManager?.listAgents().filter((a) => a.status === "running") ?? [];
+  const allAgents = renderManager?.listAgents() ?? [];
+  const running = allAgents.filter((a) => a.status === "running");
+  const completed = allAgents.filter((a) => a.status !== "running" && a.status !== "queued" && a.completedAt);
   const frame = SPINNER[widgetFrame++ % SPINNER.length] ?? "⠋";
   const desc =
     renderState.description.length > 60 ? `${renderState.description.slice(0, 57)}...` : renderState.description;
@@ -118,7 +122,16 @@ function renderWorkflowWidget(tui: TUI) {
 
   for (const p of renderDefinition.phases) {
     const status = renderState.phases[p.name]?.status ?? "pending";
-    if (status === "running" && running.length > 0) {
+    if (status === "running") {
+      // Show completed agents for this phase with ✓
+      for (const agent of completed) {
+        const truncDesc = agent.description.length > 60 ? `${agent.description.slice(0, 57)}...` : agent.description;
+        const dur = formatDuration((agent.completedAt ?? Date.now()) - agent.startedAt);
+        lines.push(
+          `${theme.fg("dim", "├─")} ${theme.fg("success", "✓")} ${theme.fg("dim", `${agent.type}  ${truncDesc} · ${dur}`)}`,
+        );
+      }
+      // Show running agents with live activity
       for (const agent of running) renderAgentInWorkflow({ lines, agent, theme, frame });
     } else {
       lines.push(renderCompletedPhase({ p, status, theme }));
@@ -198,7 +211,13 @@ export function refreshWidget({
       }
     }
   }
-  ctx.ui.setStatus(WIDGET_KEY, buildStatusText(activeState, liveTokens));
+  const runningCount = manager?.listAgents().filter((a) => a.status === "running").length ?? 0;
+  const doneCount =
+    manager?.listAgents().filter((a) => a.status !== "running" && a.status !== "queued" && a.completedAt).length ?? 0;
+  ctx.ui.setStatus(
+    WIDGET_KEY,
+    buildStatusText({ state: activeState, liveTokens, agentCount: runningCount + doneCount, doneCount }),
+  );
 
   if (!widgetRegistered) {
     ctx.ui.setWidget(

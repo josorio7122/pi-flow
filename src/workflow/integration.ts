@@ -316,6 +316,24 @@ export function registerWorkflowExtension(
     return handoffs.map((h) => `\n## ${h.role} (${h.phase})\n${h.findings}`).join("\n");
   }
 
+  function computeLiveStats(mgr: AgentManager | undefined) {
+    if (!mgr) return { liveTokens: 0, agentCount: 0, doneCount: 0 };
+    const agents = mgr.listAgents();
+    let liveTokens = 0;
+    let doneCount = 0;
+    for (const a of agents) {
+      if (a.session) {
+        try {
+          liveTokens += a.session.getSessionStats().tokens.total;
+        } catch {
+          /* */
+        }
+      }
+      if (a.status !== "running" && a.status !== "queued") doneCount++;
+    }
+    return { liveTokens, agentCount: agents.length, doneCount };
+  }
+
   function startProgressTimer({
     getState,
     getManager,
@@ -328,20 +346,17 @@ export function registerWorkflowExtension(
     const timer = setInterval(() => {
       const state = getState();
       if (!state) return;
-      let liveTokens = state.tokens.total;
-      const mgr = getManager();
-      if (mgr) {
-        for (const a of mgr.listAgents()) {
-          if (a.status === "running" && a.session) {
-            try {
-              liveTokens += a.session.getSessionStats().tokens.total;
-            } catch {
-              /* */
-            }
-          }
-        }
-      }
-      onUpdate({ content: [{ type: "text", text: buildStatusText(state, liveTokens) }], details: {} });
+      const stats = computeLiveStats(getManager());
+      const liveTokens = state.tokens.total + stats.liveTokens;
+      onUpdate({
+        content: [
+          {
+            type: "text",
+            text: buildStatusText({ state, liveTokens, agentCount: stats.agentCount, doneCount: stats.doneCount }),
+          },
+        ],
+        details: {},
+      });
     }, PROGRESS_INTERVAL_MS);
     return () => clearInterval(timer);
   }

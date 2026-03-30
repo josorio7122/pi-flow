@@ -35,11 +35,23 @@ export function formatTokens(tokens: number) {
 
 // ── Status Bar Text ──────────────────────────────────────────────────
 
-export function buildStatusText(state: WorkflowState, liveTokens?: number | undefined) {
+export function buildStatusText({
+  state,
+  liveTokens,
+  agentCount,
+  doneCount,
+}: {
+  state: WorkflowState;
+  liveTokens?: number | undefined;
+  agentCount?: number | undefined;
+  doneCount?: number | undefined;
+}) {
   const completed = Object.values(state.phases).filter((p) => p.status === "complete").length;
   const total = Object.keys(state.phases).length;
   const tokenCount = liveTokens ?? state.tokens.total;
   const tokens = formatTokens(tokenCount);
   const elapsed = formatDuration(Date.now() - state.startedAt);
-  return `[flow] ${state.currentPhase} ● ${completed}/${total} | ${tokens} tokens | ${elapsed}`;
+  const agents =
+    agentCount && agentCount > 0 ? ` | ${agentCount} agents${doneCount ? ` (${doneCount} done)` : ""}` : "";
+  return `[flow] ${state.currentPhase} ● ${completed}/${total}${agents} | ${tokens} tokens | ${elapsed}`;
 }
