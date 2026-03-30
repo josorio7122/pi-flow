@@ -21,15 +21,15 @@ import { createNotificationSystem, registerMessageRenderer } from "./agents/noti
 import { createRegistry } from "./agents/registry.js";
 import { createRunnerSettings } from "./agents/runner-types.js";
 // Agent tools not registered — Workflow is the only LLM-facing tool.
-// import { registerAgentTool } from "./agents/tools/agent-tool.js";
-// import { registerResultTool } from "./agents/tools/result-tool.js";
-// import { registerSteerTool } from "./agents/tools/steer-tool.js";
+import { registerAgentTool } from "./agents/tools/agent-tool.js";
+import { registerResultTool } from "./agents/tools/result-tool.js";
+import { registerSteerTool } from "./agents/tools/steer-tool.js";
 import { registerAgentsCommand } from "./extension/command/command.js";
 import { createGroupJoinManager } from "./extension/group-join.js";
 import { registerRpcHandlers } from "./extension/rpc.js";
 import type { AgentActivity } from "./ui/formatters.js";
 import { AgentWidget } from "./ui/widget.js";
-import { registerWorkflowExtension } from "./workflow/integration.js";
+// import { registerWorkflowExtension } from "./workflow/integration.js";
 
 export default function (pi: ExtensionAPI) {
   const extensionRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -159,18 +159,16 @@ export default function (pi: ExtensionAPI) {
     widget.setUICtx(ctx.ui);
   });
 
-  // ---- Workflow engine (registered first — primary tool) ----
-  registerWorkflowExtension(pi, {
-    builtinWorkflowsDir: join(extensionRoot, "workflows"),
-    deps: { manager, agentActivity, registry },
-  });
+  // ---- Workflow engine (commented out — agent tools are primary) ----
+  // registerWorkflowExtension(pi, {
+  //   builtinWorkflowsDir: join(extensionRoot, "workflows"),
+  //   deps: { manager, agentActivity, registry },
+  // });
 
-  // ---- Agent tools (not registered — Workflow is the only LLM-facing tool) ----
-  // Agent system still works internally: workflow engine, /agents command, RPC, widget.
-  // Uncomment to expose direct agent control to the LLM as a fallback.
-  // registerAgentTool({ pi, manager, registry, widget, agentActivity, runnerSettings, batch, reloadCustomAgents });
-  // registerResultTool({ pi, manager, registry, notifications });
-  // registerSteerTool({ pi, manager });
+  // ---- Agent tools ----
+  registerAgentTool({ pi, manager, registry, widget, agentActivity, runnerSettings, batch, reloadCustomAgents });
+  registerResultTool({ pi, manager, registry, notifications });
+  registerSteerTool({ pi, manager });
 
   // ---- /agents interactive menu ----
   registerAgentsCommand({

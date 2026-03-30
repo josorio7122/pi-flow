@@ -68,25 +68,24 @@ describe("extension entry point", () => {
     expect(() => initExtension(pi)).not.toThrow();
   });
 
-  it("does not register agent tools (Workflow only)", () => {
+  it("registers agent tools", () => {
     const { pi, tools } = createMockPi();
     initExtension(pi);
-    expect(tools).not.toContain("Agent");
-    expect(tools).not.toContain("get_subagent_result");
-    expect(tools).not.toContain("steer_subagent");
+    expect(tools).toContain("Agent");
+    expect(tools).toContain("get_subagent_result");
+    expect(tools).toContain("steer_subagent");
   });
 
-  it("registers the Workflow tool", () => {
+  it("does not register the Workflow tool (agent tools are primary)", () => {
     const { pi, tools } = createMockPi();
     initExtension(pi);
-    expect(tools).toContain("Workflow");
+    expect(tools).not.toContain("Workflow");
   });
 
-  it("registers /agents and /flow commands", () => {
+  it("registers /agents command", () => {
     const { pi, commands } = createMockPi();
     initExtension(pi);
     expect(commands).toContain("agents");
-    expect(commands).toContain("flow");
   });
 
   it("registers the notification message renderer", () => {
@@ -101,8 +100,6 @@ describe("extension entry point", () => {
     expect(eventHandlers.has("session_start")).toBe(true);
     expect(eventHandlers.has("session_switch")).toBe(true);
     expect(eventHandlers.has("session_shutdown")).toBe(true);
-    expect(eventHandlers.has("tool_execution_start")).toBe(true);
-    expect(eventHandlers.has("turn_end")).toBe(true);
   });
 
   it("emits subagents:ready on load", () => {
@@ -118,15 +115,6 @@ describe("extension entry point", () => {
     expect(onCalls).toContain("subagents:rpc:ping");
     expect(onCalls).toContain("subagents:rpc:spawn");
     expect(onCalls).toContain("subagents:rpc:stop");
-  });
-
-  it("Workflow tool includes promptSnippet and promptGuidelines", () => {
-    const { pi, toolDefs } = createMockPi();
-    initExtension(pi);
-
-    expect(toolDefs.Workflow?.promptSnippet).toBeDefined();
-    expect(toolDefs.Workflow?.promptGuidelines).toBeDefined();
-    expect(toolDefs.Workflow!.promptGuidelines!.length).toBeGreaterThan(0);
   });
 
   it("exposes manager on globalThis via Symbol.for", () => {
