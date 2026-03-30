@@ -82,7 +82,7 @@ export function registerWorkflowExtension(
     label: "Workflow",
     promptSnippet: "Workflow — Orchestrate multi-phase agent pipelines with approval gates and code review",
     promptGuidelines: [
-      'User asks to find/scout/explore something AND then fix/clean/refactor/remove it → always Workflow "fix". Build a feature → "feature". Explore then plan → "explore". Research/map/trace → "research".',
+      'User asks to find/scout/explore something AND then fix/clean/refactor/remove it → always Workflow "fix". Build/implement a feature → "feature". Explore then plan/recommend/design → "explore". Just research/map/trace with no follow-up action → "research".',
       "Never scout via Agent then do the fix yourself. Workflow provides approval gates and code review that manual execution skips.",
     ],
     description: buildToolDescription(),
