@@ -55,17 +55,9 @@ function formatAgentStats(agent: AgentRecord, activity?: AgentActivity | undefin
   return parts.join(" · ");
 }
 
-function formatAgentActivityLines(activity?: AgentActivity | undefined) {
-  if (!activity) return [];
-  const action = describeActivity(activity.activeTools);
-  // Tool is running — show what it's doing
-  if (activity.activeTools.size > 0) return [action];
-  // Agent is streaming text — show last 3 lines of response
-  if (activity.responseText) {
-    const tail = activity.responseText.trim().split("\n").slice(-3);
-    return tail.length > 0 ? tail : [action];
-  }
-  return [action];
+function formatAgentActivityLine(activity?: AgentActivity | undefined) {
+  if (!activity) return "thinking…";
+  return describeActivity(activity.activeTools, activity.responseText);
 }
 
 function appendRunningPhase({
@@ -85,15 +77,11 @@ function appendRunningPhase({
   const stats = first ? formatAgentStats(first, activityMap?.get(first.id)) : "";
   lines.push(`  ${icon} ${phaseName} · ${stats}`);
   if (first) {
-    for (const l of formatAgentActivityLines(activityMap?.get(first.id))) {
-      lines.push(`    ${l}`);
-    }
+    lines.push(`    ⎿ ${formatAgentActivityLine(activityMap?.get(first.id))}`);
   }
   for (const a of agents.slice(1)) {
     lines.push(`    ${a.type} · ${formatAgentStats(a, activityMap?.get(a.id))}`);
-    for (const l of formatAgentActivityLines(activityMap?.get(a.id))) {
-      lines.push(`      ${l}`);
-    }
+    lines.push(`      ⎿ ${formatAgentActivityLine(activityMap?.get(a.id))}`);
   }
 }
 
