@@ -67,9 +67,9 @@ function renderWorkflowWidget(tui: TUI) {
         const pair = renderRunningLine({ agent, theme, activity, config, frame });
         lines.push(pair.header);
         lines.push(pair.activity);
-        // Stream last 3 lines of agent response text
+        // Stream last 5 lines of agent response text
         if (activity?.responseText) {
-          const tail = activity.responseText.trim().split("\n").slice(-3);
+          const tail = activity.responseText.trim().split("\n").slice(-5);
           for (const l of tail) lines.push(`${theme.fg("dim", "│")}     ${theme.fg("dim", l)}`);
         }
       }
