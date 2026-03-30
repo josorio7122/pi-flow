@@ -158,7 +158,10 @@ export default function (pi: ExtensionAPI) {
     widget.setUICtx(ctx.ui);
   });
 
-  // ---- Tools ----
+  // ---- Workflow engine (registered first — primary tool) ----
+  registerWorkflowExtension(pi, { builtinWorkflowsDir: join(extensionRoot, "workflows"), deps: { manager } });
+
+  // ---- Agent tools (registered after — fallback for ad-hoc tasks) ----
   registerAgentTool({ pi, manager, registry, widget, agentActivity, runnerSettings, batch, reloadCustomAgents });
   registerResultTool({ pi, manager, registry, notifications });
   registerSteerTool({ pi, manager });
@@ -174,7 +177,4 @@ export default function (pi: ExtensionAPI) {
     runnerSettings,
     registry,
   });
-
-  // ---- Workflow engine ----
-  registerWorkflowExtension(pi, { builtinWorkflowsDir: join(extensionRoot, "workflows"), deps: { manager } });
 }
