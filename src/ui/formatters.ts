@@ -93,20 +93,13 @@ export function firstMeaningfulLine(text: string, maxLen = 80) {
   return undefined;
 }
 
-/** Build a human-readable activity description from active tools and response text. */
-export function describeActivity(activeTools: Map<string, string>, responseText?: string) {
+/** Build a human-readable activity description from active tools. */
+export function describeActivity(activeTools: Map<string, string>) {
   if (activeTools.size > 0) {
     const names = [...activeTools.values()];
     const unique = [...new Set(names)];
     const descriptions = unique.map((n) => TOOL_DISPLAY[n] ?? n);
     return descriptions.join(", ");
-  }
-  if (responseText) {
-    const trimmed = responseText.trim();
-    if (trimmed.length > 0) {
-      const lastLine = trimmed.split("\n").pop() ?? "";
-      return lastLine.length > 80 ? `${lastLine.slice(0, 77)}…` : lastLine;
-    }
   }
   return "thinking…";
 }

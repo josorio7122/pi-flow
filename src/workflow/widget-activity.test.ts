@@ -54,16 +54,14 @@ describe("activity tracker for workflow widget", () => {
     expect(state.activeTools.size).toBe(0);
   });
 
-  it("describeActivity returns tool action when active", async () => {
+  it("describeActivity returns tool action when active, thinking when idle", async () => {
     const { describeActivity } = await import("../ui/formatters.js");
     const tools = new Map<string, string>();
     tools.set("bash_123", "bash");
 
     expect(describeActivity(tools)).toBe("running command");
-    expect(describeActivity(tools, "stale text")).toBe("running command");
 
     tools.clear();
-    expect(describeActivity(tools, "last line of text")).toBe("last line of text");
     expect(describeActivity(tools)).toBe("thinking…");
   });
 
