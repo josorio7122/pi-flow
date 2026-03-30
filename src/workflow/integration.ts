@@ -101,9 +101,12 @@ export function registerWorkflowExtension(
     ],
     description: buildToolDescription(),
     // biome-ignore lint/complexity/useMaxParams: pi renderResult callback signature is fixed
-    renderResult: (result, _, theme) => {
+    renderResult: (result, { isPartial }, theme) => {
       const text = result.content[0]?.type === "text" ? result.content[0].text : "";
       if (!text) return new Text("", 0, 0);
+      // Partial = streaming progress update — show as-is
+      if (isPartial) return new Text(theme.fg("dim", text), 0, 0);
+      // Final = compact summary
       const lines = text.split("\n");
       const header = lines[0] ?? "";
       const lineCount = lines.length - 1;
@@ -203,8 +206,9 @@ export function registerWorkflowExtension(
       ? startProgressTimer({ cwd: ctx.cwd, workflowId: activeWorkflowId, onUpdate })
       : undefined;
 
-    // Ensure widget is live before execution starts
+    // Refresh widget cache every 500ms during execution
     doRefreshWidget(ctx);
+    const widgetTimer = setInterval(() => doRefreshWidget(ctx), 500);
 
     let outcome: Awaited<ReturnType<typeof executeCurrentPhase>>;
     try {
@@ -220,6 +224,7 @@ export function registerWorkflowExtension(
         agentActivity: deps.agentActivity,
       });
     } finally {
+      clearInterval(widgetTimer);
       stopProgress?.();
     }
 

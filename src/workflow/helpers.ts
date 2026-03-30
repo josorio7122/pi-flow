@@ -17,6 +17,7 @@ export const STALLED_TIMEOUT_MS = 5 * 60 * 1000;
 let widgetTui: TUI | undefined;
 let widgetRegistered = false;
 let widgetInterval: ReturnType<typeof setInterval> | undefined;
+let cachedLines: string[] = [];
 
 export interface ActiveWorkflowBookmark {
   workflowId: string;
@@ -55,18 +56,18 @@ export function refreshWidget({
       clearInterval(widgetInterval);
       widgetInterval = undefined;
     }
+    cachedLines = [];
     ctx.ui.setStatus(WIDGET_KEY, undefined);
     return;
   }
 
-  // Render function called by pi on each frame
-  const renderLines = () => {
-    const state = readState({ cwd: ctx.cwd, workflowId: activeWorkflowId });
-    if (!state) return [];
+  // Update cached data (called periodically, not on every render frame)
+  const state = readState({ cwd: ctx.cwd, workflowId: activeWorkflowId });
+  if (state) {
     const runningAgents = manager?.listAgents().filter((a) => a.status === "running");
+    cachedLines = buildProgressLines({ state, definition: activeDefinition, runningAgents, agentActivity });
     ctx.ui.setStatus(WIDGET_KEY, buildStatusText(state));
-    return buildProgressLines({ state, definition: activeDefinition, runningAgents, agentActivity });
-  };
+  }
 
   if (!widgetRegistered) {
     ctx.ui.setWidget(
@@ -74,7 +75,7 @@ export function refreshWidget({
       (tui) => {
         widgetTui = tui;
         return {
-          render: renderLines,
+          render: () => cachedLines,
           invalidate: () => {
             widgetRegistered = false;
             widgetTui = undefined;
@@ -84,11 +85,6 @@ export function refreshWidget({
       { placement: "aboveEditor" },
     );
     widgetRegistered = true;
-
-    // Start polling timer for smooth updates
-    if (!widgetInterval) {
-      widgetInterval = setInterval(() => widgetTui?.requestRender(), 80);
-    }
   } else {
     widgetTui?.requestRender();
   }
