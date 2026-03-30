@@ -20,9 +20,10 @@ import { createAgentManager } from "./agents/manager.js";
 import { createNotificationSystem, registerMessageRenderer } from "./agents/notification.js";
 import { createRegistry } from "./agents/registry.js";
 import { createRunnerSettings } from "./agents/runner-types.js";
-import { registerAgentTool } from "./agents/tools/agent-tool.js";
-import { registerResultTool } from "./agents/tools/result-tool.js";
-import { registerSteerTool } from "./agents/tools/steer-tool.js";
+// Agent tools not registered — Workflow is the only LLM-facing tool.
+// import { registerAgentTool } from "./agents/tools/agent-tool.js";
+// import { registerResultTool } from "./agents/tools/result-tool.js";
+// import { registerSteerTool } from "./agents/tools/steer-tool.js";
 import { registerAgentsCommand } from "./extension/command/command.js";
 import { createGroupJoinManager } from "./extension/group-join.js";
 import { registerRpcHandlers } from "./extension/rpc.js";
@@ -161,10 +162,12 @@ export default function (pi: ExtensionAPI) {
   // ---- Workflow engine (registered first — primary tool) ----
   registerWorkflowExtension(pi, { builtinWorkflowsDir: join(extensionRoot, "workflows"), deps: { manager } });
 
-  // ---- Agent tools (registered after — fallback for ad-hoc tasks) ----
-  registerAgentTool({ pi, manager, registry, widget, agentActivity, runnerSettings, batch, reloadCustomAgents });
-  registerResultTool({ pi, manager, registry, notifications });
-  registerSteerTool({ pi, manager });
+  // ---- Agent tools (not registered — Workflow is the only LLM-facing tool) ----
+  // Agent system still works internally: workflow engine, /agents command, RPC, widget.
+  // Uncomment to expose direct agent control to the LLM as a fallback.
+  // registerAgentTool({ pi, manager, registry, widget, agentActivity, runnerSettings, batch, reloadCustomAgents });
+  // registerResultTool({ pi, manager, registry, notifications });
+  // registerSteerTool({ pi, manager });
 
   // ---- /agents interactive menu ----
   registerAgentsCommand({

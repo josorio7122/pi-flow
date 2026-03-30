@@ -68,12 +68,12 @@ describe("extension entry point", () => {
     expect(() => initExtension(pi)).not.toThrow();
   });
 
-  it("registers all three agent tools", () => {
+  it("does not register agent tools (Workflow only)", () => {
     const { pi, tools } = createMockPi();
     initExtension(pi);
-    expect(tools).toContain("Agent");
-    expect(tools).toContain("get_subagent_result");
-    expect(tools).toContain("steer_subagent");
+    expect(tools).not.toContain("Agent");
+    expect(tools).not.toContain("get_subagent_result");
+    expect(tools).not.toContain("steer_subagent");
   });
 
   it("registers the Workflow tool", () => {
@@ -120,13 +120,9 @@ describe("extension entry point", () => {
     expect(onCalls).toContain("subagents:rpc:stop");
   });
 
-  it("Agent and Workflow tools include promptSnippet and promptGuidelines", () => {
+  it("Workflow tool includes promptSnippet and promptGuidelines", () => {
     const { pi, toolDefs } = createMockPi();
     initExtension(pi);
-
-    expect(toolDefs.Agent?.promptSnippet).toBeDefined();
-    expect(toolDefs.Agent?.promptGuidelines).toBeDefined();
-    expect(toolDefs.Agent!.promptGuidelines!.length).toBeGreaterThan(0);
 
     expect(toolDefs.Workflow?.promptSnippet).toBeDefined();
     expect(toolDefs.Workflow?.promptGuidelines).toBeDefined();
