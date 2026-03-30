@@ -210,9 +210,7 @@ export function registerWorkflowExtension(
       ? startProgressTimer({ cwd: ctx.cwd, workflowId: activeWorkflowId, onUpdate })
       : undefined;
 
-    // Refresh widget cache every 500ms during execution
     doRefreshWidget(ctx);
-    const widgetTimer = setInterval(() => doRefreshWidget(ctx), 500);
 
     let outcome: Awaited<ReturnType<typeof executeCurrentPhase>>;
     try {
@@ -228,7 +226,6 @@ export function registerWorkflowExtension(
         agentActivity: deps.agentActivity,
       });
     } finally {
-      clearInterval(widgetTimer);
       stopProgress?.();
     }
 

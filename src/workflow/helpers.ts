@@ -16,8 +16,17 @@ export const STALLED_TIMEOUT_MS = 5 * 60 * 1000;
 
 let widgetTui: TUI | undefined;
 let widgetRegistered = false;
-let widgetInterval: ReturnType<typeof setInterval> | undefined;
-let cachedLines: string[] = [];
+
+// Render deps — kept in module scope so render() reads live data without disk I/O
+let renderState: WorkflowState | undefined;
+let renderDefinition: WorkflowDefinition | undefined;
+let renderManager: AgentManager | undefined;
+let renderActivity: Map<string, AgentActivity> | undefined;
+
+/** Trigger a widget re-render (called from activity tracker callbacks). */
+export function requestWorkflowWidgetRender() {
+  widgetTui?.requestRender();
+}
 
 export interface ActiveWorkflowBookmark {
   workflowId: string;
@@ -52,18 +61,19 @@ export function refreshWidget({
       widgetRegistered = false;
       widgetTui = undefined;
     }
-    if (widgetInterval) {
-      clearInterval(widgetInterval);
-      widgetInterval = undefined;
-    }
-    cachedLines = [];
+    renderState = undefined;
+    renderDefinition = undefined;
+    renderManager = undefined;
+    renderActivity = undefined;
     ctx.ui.setStatus(WIDGET_KEY, undefined);
     return;
   }
 
-  // Update cached data from in-memory state (no disk I/O)
-  const runningAgents = manager?.listAgents().filter((a) => a.status === "running");
-  cachedLines = buildProgressLines({ state: activeState, definition: activeDefinition, runningAgents, agentActivity });
+  // Update render deps (all in-memory, no disk I/O)
+  renderState = activeState;
+  renderDefinition = activeDefinition;
+  renderManager = manager;
+  renderActivity = agentActivity;
   ctx.ui.setStatus(WIDGET_KEY, buildStatusText(activeState));
 
   if (!widgetRegistered) {
@@ -72,7 +82,16 @@ export function refreshWidget({
       (tui) => {
         widgetTui = tui;
         return {
-          render: () => cachedLines,
+          render: () => {
+            if (!renderState || !renderDefinition) return [];
+            const running = renderManager?.listAgents().filter((a) => a.status === "running");
+            return buildProgressLines({
+              state: renderState,
+              definition: renderDefinition,
+              runningAgents: running,
+              agentActivity: renderActivity,
+            });
+          },
           invalidate: () => {
             widgetRegistered = false;
             widgetTui = undefined;
