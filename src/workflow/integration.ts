@@ -191,7 +191,7 @@ export function registerWorkflowExtension(
       : undefined;
 
     // Live-refresh the workflow widget every second while agents run
-    const widgetTimer = setInterval(() => doRefreshWidget(ctx), 1000);
+    const widgetTimer = setInterval(() => doRefreshWidget(ctx), 200);
 
     let outcome: Awaited<ReturnType<typeof executeCurrentPhase>>;
     try {
