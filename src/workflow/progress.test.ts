@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createWorkflowState } from "./pipeline.js";
-import { buildProgressLines, buildStatusText, formatDuration, getStatusIcon } from "./progress.js";
+import { buildStatusText, formatDuration, getStatusIcon } from "./progress.js";
 import type { WorkflowDefinition } from "./types.js";
 
 describe("formatDuration", () => {
@@ -45,20 +45,6 @@ const testDef: WorkflowDefinition = {
   orchestratorInstructions: "",
   source: "builtin",
 };
-
-describe("buildProgressLines", () => {
-  it("shows phase pipeline with status icons", () => {
-    const state = createWorkflowState({ definition: testDef, description: "remove any", workflowId: "f-1" });
-    state.phases.scout = { phase: "scout", status: "complete", attempt: 1 };
-    state.phases.build = { phase: "build", status: "running", attempt: 1, startedAt: Date.now() };
-    const lines = buildProgressLines({ state, definition: testDef });
-    expect(lines.length).toBeGreaterThan(0);
-    const joined = lines.join("\n");
-    expect(joined).toContain("✓");
-    expect(joined).toContain("●");
-    expect(joined).toContain("○");
-  });
-});
 
 describe("buildStatusText", () => {
   it("shows phase and token count", () => {

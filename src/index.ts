@@ -162,7 +162,7 @@ export default function (pi: ExtensionAPI) {
   // ---- Workflow engine (registered first — primary tool) ----
   registerWorkflowExtension(pi, {
     builtinWorkflowsDir: join(extensionRoot, "workflows"),
-    deps: { manager, agentActivity },
+    deps: { manager, agentActivity, registry },
   });
 
   // ---- Agent tools (not registered — Workflow is the only LLM-facing tool) ----

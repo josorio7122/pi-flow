@@ -2,11 +2,14 @@
  * Shared helpers for workflow integration.
  */
 
-import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
-import type { TUI } from "@mariozechner/pi-tui";
+import type { ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
+import { type TUI, truncateToWidth } from "@mariozechner/pi-tui";
 import type { AgentManager } from "../agents/manager.js";
+import type { Registry } from "../agents/registry.js";
 import type { AgentActivity } from "../ui/formatters.js";
-import { buildProgressLines, buildStatusText, formatDuration } from "./progress.js";
+import { SPINNER } from "../ui/formatters.js";
+import { renderRunningLine } from "../ui/widget-render.js";
+import { buildStatusText, formatDuration, getStatusIcon } from "./progress.js";
 import { readState } from "./store.js";
 import type { WorkflowDefinition, WorkflowState } from "./types.js";
 
@@ -23,10 +26,57 @@ let renderState: WorkflowState | undefined;
 let renderDefinition: WorkflowDefinition | undefined;
 let renderManager: AgentManager | undefined;
 let renderActivity: Map<string, AgentActivity> | undefined;
+let renderRegistry: Registry | undefined;
+let renderTheme: Theme | undefined;
+let widgetFrame = 0;
 
 /** Trigger a widget re-render (called from activity tracker callbacks). */
 export function requestWorkflowWidgetRender() {
   widgetTui?.requestRender();
+}
+
+function renderCompletedPhase({ p, status, theme }: { p: { name: string }; status: string; theme: Theme }) {
+  if (!renderState) return "";
+  const result = renderState.phases[p.name];
+  const icon = getStatusIcon(status);
+  const duration = result?.completedAt
+    ? ` ${theme.fg("dim", `(${formatDuration(result.completedAt - (result.startedAt ?? renderState.startedAt))})`)}`
+    : "";
+  const color = status === "complete" ? "success" : status === "failed" ? "error" : "dim";
+  return `${theme.fg("dim", "├─")} ${theme.fg(color, icon)} ${theme.fg("dim", p.name)}${duration}`;
+}
+
+function renderWorkflowWidget(tui: TUI) {
+  if (!renderState || !renderDefinition || !renderTheme) return [];
+  const theme = renderTheme;
+  const running = renderManager?.listAgents().filter((a) => a.status === "running") ?? [];
+  const frame = SPINNER[widgetFrame++ % SPINNER.length] ?? "⠋";
+  const desc =
+    renderState.description.length > 60 ? `${renderState.description.slice(0, 57)}...` : renderState.description;
+
+  const lines: string[] = [
+    `${theme.fg("accent", "●")} ${theme.fg("accent", `Flow: ${renderState.type}`)} ${theme.fg("dim", "—")} ${theme.fg("dim", desc)}`,
+  ];
+
+  for (const p of renderDefinition.phases) {
+    const status = renderState.phases[p.name]?.status ?? "pending";
+    if (status === "running" && running.length > 0) {
+      for (const agent of running) {
+        const config = renderRegistry?.getConfig(agent.type) ?? { displayName: agent.type };
+        const pair = renderRunningLine({ agent, theme, activity: renderActivity?.get(agent.id), config, frame });
+        lines.push(pair.header);
+        lines.push(pair.activity);
+      }
+    } else {
+      lines.push(renderCompletedPhase({ p, status, theme }));
+    }
+  }
+
+  if (lines.length > 1) {
+    const last = lines.length - 1;
+    lines[last] = lines[last]!.replace("├─", "└─").replace("│  ", "   ");
+  }
+  return lines.map((l) => truncateToWidth(l, tui.terminal.columns));
 }
 
 export interface ActiveWorkflowBookmark {
@@ -49,12 +99,14 @@ export function refreshWidget({
   activeState,
   manager,
   agentActivity,
+  registry,
 }: {
   ctx: ExtensionContext;
   activeDefinition: WorkflowDefinition | undefined;
   activeState: WorkflowState | undefined;
   manager?: AgentManager | undefined;
   agentActivity?: Map<string, AgentActivity> | undefined;
+  registry?: Registry | undefined;
 }) {
   if (!activeState || !activeDefinition) {
     if (widgetRegistered) {
@@ -79,27 +131,21 @@ export function refreshWidget({
   renderDefinition = activeDefinition;
   renderManager = manager;
   renderActivity = agentActivity;
+  renderRegistry = registry;
   ctx.ui.setStatus(WIDGET_KEY, buildStatusText(activeState));
 
   if (!widgetRegistered) {
     ctx.ui.setWidget(
       WIDGET_KEY,
-      (tui) => {
+      (tui, theme) => {
         widgetTui = tui;
+        renderTheme = theme;
         return {
-          render: () => {
-            if (!renderState || !renderDefinition) return [];
-            const running = renderManager?.listAgents().filter((a) => a.status === "running");
-            return buildProgressLines({
-              state: renderState,
-              definition: renderDefinition,
-              runningAgents: running,
-              agentActivity: renderActivity,
-            });
-          },
+          render: () => renderWorkflowWidget(tui),
           invalidate: () => {
             widgetRegistered = false;
             widgetTui = undefined;
+            renderTheme = undefined;
           },
         };
       },

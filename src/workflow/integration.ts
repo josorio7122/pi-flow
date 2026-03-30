@@ -11,6 +11,7 @@ import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-age
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import type { AgentManager } from "../agents/manager.js";
+import type { Registry } from "../agents/registry.js";
 import type { AgentActivity } from "../ui/formatters.js";
 import { executeCurrentPhase } from "./executor.js";
 import { registerFlowCommand } from "./flow-command.js";
@@ -56,7 +57,7 @@ export function registerWorkflowExtension(
     deps,
   }: {
     builtinWorkflowsDir?: string;
-    deps?: { manager?: AgentManager; agentActivity?: Map<string, AgentActivity> };
+    deps?: { manager?: AgentManager; agentActivity?: Map<string, AgentActivity>; registry?: Registry };
   } = {},
 ) {
   let workflows = new Map<string, WorkflowDefinition>();
@@ -75,6 +76,7 @@ export function registerWorkflowExtension(
       activeState,
       manager: deps?.manager,
       agentActivity: deps?.agentActivity,
+      registry: deps?.registry,
     });
   }
 
