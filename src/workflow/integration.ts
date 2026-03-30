@@ -141,9 +141,18 @@ export function registerWorkflowExtension(
       const lineCount = lines.length - 1;
       const isError = header.includes("error") || header.includes("Error");
       const isStarted = header.includes("started");
+      const isPhaseComplete = header.includes("Phase completed");
       const icon = isError ? theme.fg("error", "✗") : isStarted ? theme.fg("accent", "▸") : theme.fg("success", "✓");
       let rendered = `${icon} ${theme.fg("dim", header)}`;
-      if (lineCount > 1 && !isStarted) rendered += `\n  ${theme.fg("dim", `${lineCount} lines delivered to agent`)}`;
+      if (isStarted) {
+        // Show the phase info so user sees what's happening
+        const phaseLines = lines.filter((l) => l.startsWith("  ") || l.startsWith("Current"));
+        for (const l of phaseLines.slice(0, 4)) rendered += `\n  ${theme.fg("dim", l.trim())}`;
+      } else if (isPhaseComplete && lineCount > 1) {
+        rendered += `\n  ${theme.fg("dim", `${lineCount} lines of findings delivered`)}`;
+      } else if (!isStarted && lineCount > 1) {
+        rendered += `\n  ${theme.fg("dim", `${lineCount} lines delivered`)}`;
+      }
       return new Text(rendered, 0, 0);
     },
     parameters: Type.Object({
