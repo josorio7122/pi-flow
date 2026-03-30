@@ -90,9 +90,12 @@ function renderCompletedAgent({ lines, agent, theme }: { lines: string[]; agent:
   const name = getDisplayName(agent.type, config.displayName);
   const truncDesc = agent.description.length > 50 ? `${agent.description.slice(0, 47)}...` : agent.description;
   const dur = formatMs((agent.completedAt ?? Date.now()) - agent.startedAt);
-  const tools = agent.toolUses > 0 ? `${agent.toolUses} tools · ` : "";
+  const parts: string[] = [];
+  if (agent.turnCount > 0) parts.push(formatTurns(agent.turnCount));
+  if (agent.toolUses > 0) parts.push(`${agent.toolUses} tools`);
+  parts.push(dur);
   lines.push(
-    `${theme.fg("dim", "├─")} ${theme.fg("success", "✓")} ${theme.fg("dim", `${name}  ${truncDesc} · ${tools}${dur}`)}`,
+    `${theme.fg("dim", "├─")} ${theme.fg("success", "✓")} ${theme.fg("dim", `${name}  ${truncDesc} · ${parts.join(" · ")}`)}`,
   );
 }
 
