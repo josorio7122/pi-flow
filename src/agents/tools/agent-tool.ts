@@ -238,7 +238,7 @@ Usage:
           maxTurns: fgState.maxTurns,
           durationMs: Date.now() - startedAt,
           status: "running",
-          activity: describeActivity(fgState.activeTools),
+          activity: describeActivity(fgState.activeTools, fgState.lastToolArgs),
           responseText: fgState.responseText,
           spinnerFrame: spinnerFrame % SPINNER.length,
         };

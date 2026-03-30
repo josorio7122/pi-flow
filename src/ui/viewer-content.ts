@@ -42,7 +42,7 @@ export function buildConversationLines({
   }
 
   if (status === "running" && activity) {
-    const act = describeActivity(activity.activeTools);
+    const act = describeActivity(activity.activeTools, activity.lastToolArgs);
     lines.push("");
     lines.push(truncateToWidth(th.fg("accent", "▍ ") + th.fg("dim", act), width));
   }

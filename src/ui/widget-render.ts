@@ -50,7 +50,7 @@ export function renderRunningLine({
   if (tokenText) parts.push(tokenText);
   parts.push(elapsed);
 
-  const activityText = activity ? describeActivity(activity.activeTools) : "thinking…";
+  const activityText = activity ? describeActivity(activity.activeTools, activity.lastToolArgs) : "thinking…";
 
   return {
     header: `${theme.fg("dim", "├─")} ${theme.fg("accent", frame)} ${theme.bold(name)}${bgTag}  ${theme.fg("muted", agent.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}`,

@@ -7,20 +7,22 @@ import type { SubagentType } from "../types.js";
 /** Braille spinner frames for animated running indicator. */
 export const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-/** Tool name → human-readable action for activity descriptions. */
-const TOOL_DISPLAY: Record<string, string> = {
+/** Tool name → human-readable action label. */
+const TOOL_LABELS: Record<string, string> = {
   read: "reading",
-  bash: "running command",
+  bash: "running",
   edit: "editing",
   write: "writing",
   grep: "searching",
-  find: "finding files",
+  find: "finding",
   ls: "listing",
 };
 
 /** Per-agent live activity state. */
 export interface AgentActivity {
   activeTools: Map<string, string>;
+  /** Last tool args for display (e.g. file path, command). */
+  lastToolArgs: Map<string, string>;
   toolUses: number;
   tokens: string;
   responseText: string;
@@ -94,12 +96,16 @@ export function firstMeaningfulLine(text: string, maxLen = 80) {
 }
 
 /** Build a human-readable activity description from active tools. */
-export function describeActivity(activeTools: Map<string, string>) {
+/** Build a human-readable activity description from active tools + args. */
+export function describeActivity(activeTools: Map<string, string>, toolArgs?: Map<string, string>) {
   if (activeTools.size > 0) {
-    const names = [...activeTools.values()];
-    const unique = [...new Set(names)];
-    const descriptions = unique.map((n) => TOOL_DISPLAY[n] ?? n);
-    return descriptions.join(", ");
+    const descriptions: string[] = [];
+    for (const [key, name] of activeTools) {
+      const label = TOOL_LABELS[name] ?? name;
+      const arg = toolArgs?.get(key);
+      descriptions.push(arg ? `${label} ${arg}` : label);
+    }
+    return [...new Set(descriptions)].join(", ");
   }
   return "thinking…";
 }

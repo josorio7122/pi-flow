@@ -59,7 +59,7 @@ describe("activity tracker for workflow widget", () => {
     const tools = new Map<string, string>();
     tools.set("bash_123", "bash");
 
-    expect(describeActivity(tools)).toBe("running command");
+    expect(describeActivity(tools)).toBe("running");
 
     tools.clear();
     expect(describeActivity(tools)).toBe("thinking…");

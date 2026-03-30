@@ -10,6 +10,7 @@ import type { Registry } from "./registry.js";
 export interface ToolActivity {
   type: "start" | "end";
   toolName: string;
+  args?: Record<string, unknown> | undefined;
 }
 
 export interface RunnerSettings {

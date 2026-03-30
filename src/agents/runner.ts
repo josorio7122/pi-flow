@@ -93,7 +93,8 @@ export async function runAgent({
       currentMessageText += event.assistantMessageEvent.delta;
       options.onTextDelta?.(event.assistantMessageEvent.delta, currentMessageText);
     }
-    if (event.type === "tool_execution_start") options.onToolActivity?.({ type: "start", toolName: event.toolName });
+    if (event.type === "tool_execution_start")
+      options.onToolActivity?.({ type: "start", toolName: event.toolName, args: event.args });
     if (event.type === "tool_execution_end") options.onToolActivity?.({ type: "end", toolName: event.toolName });
   });
 
@@ -137,7 +138,8 @@ export async function resumeAgent({
       turnCount++;
       callbacks?.onTurnEnd?.(turnCount);
     }
-    if (event.type === "tool_execution_start") callbacks?.onToolActivity?.({ type: "start", toolName: event.toolName });
+    if (event.type === "tool_execution_start")
+      callbacks?.onToolActivity?.({ type: "start", toolName: event.toolName, args: event.args });
     if (event.type === "tool_execution_end") callbacks?.onToolActivity?.({ type: "end", toolName: event.toolName });
   });
   const collector = collectResponseText(session);
