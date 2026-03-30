@@ -25,8 +25,8 @@ import { loadWorkflowDefinitions } from "./loader.js";
 import { createWorkflowState, updatePhaseStatus } from "./pipeline.js";
 import { buildStatusText } from "./progress.js";
 import { findStalled, formatStalledMessage } from "./recovery.js";
-import { appendEvent, initWorkflowDir, readState, writeState } from "./store.js";
-import type { WorkflowDefinition, WorkflowEvent } from "./types.js";
+import { appendEvent, initWorkflowDir, listHandoffs, readState, writeState } from "./store.js";
+import type { AgentHandoff, WorkflowDefinition, WorkflowEvent } from "./types.js";
 
 const PROGRESS_INTERVAL_MS = 3000;
 
@@ -104,6 +104,14 @@ export function registerWorkflowExtension(
       });
     },
   });
+
+  function buildCompletionSummary({ exitReason, handoffs }: { exitReason: string; handoffs: readonly AgentHandoff[] }) {
+    const sections: string[] = [`Workflow completed: ${exitReason}.`];
+    for (const h of handoffs) {
+      sections.push(`\n## ${h.role} (${h.phase} phase)\n${h.findings}`);
+    }
+    return sections.join("\n");
+  }
 
   function startWorkflow({
     typeName,
@@ -192,11 +200,12 @@ export function registerWorkflowExtension(
     doRefreshWidget(ctx);
 
     if (outcome.type === "workflow-complete") {
-      const result = `Workflow completed: ${outcome.exitReason}.`;
+      const handoffs = listHandoffs({ cwd: ctx.cwd, workflowId: activeWorkflowId });
+      const summary = buildCompletionSummary({ exitReason: outcome.exitReason, handoffs });
       activeWorkflowId = undefined;
       activeDefinition = undefined;
       doRefreshWidget(ctx);
-      return textResult(result);
+      return textResult(summary);
     }
     if (outcome.type === "gate-waiting") {
       return textResult(
