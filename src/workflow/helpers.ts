@@ -35,6 +35,34 @@ export function requestWorkflowWidgetRender() {
   widgetTui?.requestRender();
 }
 
+function renderAgentInWorkflow({
+  lines,
+  agent,
+  theme,
+  frame,
+}: {
+  lines: string[];
+  agent: import("../types.js").AgentRecord;
+  theme: Theme;
+  frame: string;
+}) {
+  const activity = renderActivity?.get(agent.id);
+  const config = renderRegistry?.getConfig(agent.type) ?? { displayName: agent.type };
+  const pair = renderRunningLine({ agent, theme, activity, config, frame });
+  lines.push(pair.header);
+  if (activity?.activeTools.size) {
+    lines.push(pair.activity);
+  } else if (activity?.responseText) {
+    const tail = activity.responseText.trim().split("\n").slice(-5);
+    for (const l of tail) {
+      const truncated = l.length > 100 ? `${l.slice(0, 97)}…` : l;
+      lines.push(`${theme.fg("dim", "│")}     ${theme.fg("dim", truncated)}`);
+    }
+  } else {
+    lines.push(pair.activity);
+  }
+}
+
 function renderCompletedPhase({ p, status, theme }: { p: { name: string }; status: string; theme: Theme }) {
   if (!renderState) return "";
   const result = renderState.phases[p.name];
@@ -61,18 +89,7 @@ function renderWorkflowWidget(tui: TUI) {
   for (const p of renderDefinition.phases) {
     const status = renderState.phases[p.name]?.status ?? "pending";
     if (status === "running" && running.length > 0) {
-      for (const agent of running) {
-        const activity = renderActivity?.get(agent.id);
-        const config = renderRegistry?.getConfig(agent.type) ?? { displayName: agent.type };
-        const pair = renderRunningLine({ agent, theme, activity, config, frame });
-        lines.push(pair.header);
-        lines.push(pair.activity);
-        // Stream last 5 lines of agent response text
-        if (activity?.responseText) {
-          const tail = activity.responseText.trim().split("\n").slice(-5);
-          for (const l of tail) lines.push(`${theme.fg("dim", "│")}     ${theme.fg("dim", l)}`);
-        }
-      }
+      for (const agent of running) renderAgentInWorkflow({ lines, agent, theme, frame });
     } else {
       lines.push(renderCompletedPhase({ p, status, theme }));
     }
