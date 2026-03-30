@@ -31,8 +31,6 @@ let widgetFrame = 0;
 
 // ── Agent Rendering ──────────────────────────────────────────────────
 
-const ACTIVITY_LINES = 4;
-
 function renderRunningAgent({
   lines,
   agent,
@@ -70,17 +68,17 @@ function renderRunningAgent({
     `${theme.fg("dim", "├─")} ${theme.fg("accent", frame)} ${theme.bold(name)}  ${theme.fg("muted", truncDesc)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}`,
   );
 
-  // Structured tool log — show last N lines with proper nesting
+  // Structured tool log — last 2 tools, last result line per tool
   if (activity?.toolLog.length) {
-    const structured: string[] = [];
-    for (const entry of activity.toolLog) {
-      structured.push(`${theme.fg("dim", "│")}    ${theme.fg("accent", `→ ${entry.tool}`)}`);
-      for (const r of entry.results) {
-        const t = r.length > 80 ? `${r.slice(0, 77)}...` : r;
-        structured.push(`${theme.fg("dim", "│")}      ${theme.fg("dim", t)}`);
+    const recentTools = activity.toolLog.slice(-2);
+    for (const entry of recentTools) {
+      lines.push(`${theme.fg("dim", "│")}    ${theme.fg("accent", `→ ${entry.tool}`)}`);
+      const lastResult = entry.results[entry.results.length - 1];
+      if (lastResult) {
+        const t = lastResult.length > 80 ? `${lastResult.slice(0, 77)}...` : lastResult;
+        lines.push(`${theme.fg("dim", "│")}      ${theme.fg("dim", t)}`);
       }
     }
-    for (const l of structured.slice(-ACTIVITY_LINES)) lines.push(l);
   } else {
     const actText = activity?.activeTools.size ? "working..." : "thinking…";
     lines.push(`${theme.fg("dim", "│")}    ${theme.fg("dim", actText)}`);
