@@ -57,16 +57,15 @@ function formatAgentStats(agent: AgentRecord, activity?: AgentActivity | undefin
 
 function formatAgentActivityLines(activity?: AgentActivity | undefined) {
   if (!activity) return [];
-  const lines: string[] = [];
-  const actionText = describeActivity(activity.activeTools);
-  if (actionText !== "thinking…" || !activity.responseText) {
-    lines.push(actionText);
-  }
+  const action = describeActivity(activity.activeTools);
+  // Tool is running — show what it's doing
+  if (activity.activeTools.size > 0) return [action];
+  // Agent is streaming text — show last 3 lines of response
   if (activity.responseText) {
     const tail = activity.responseText.trim().split("\n").slice(-3);
-    for (const l of tail) lines.push(l);
+    return tail.length > 0 ? tail : [action];
   }
-  return lines.slice(-3);
+  return [action];
 }
 
 function appendRunningPhase({
