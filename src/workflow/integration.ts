@@ -10,6 +10,7 @@ import type { AgentToolUpdateCallback } from "@mariozechner/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import type { AgentManager } from "../agents/manager.js";
+import type { AgentActivity } from "../ui/formatters.js";
 import { executeCurrentPhase } from "./executor.js";
 import { registerFlowCommand } from "./flow-command.js";
 import {
@@ -49,7 +50,13 @@ function startProgressTimer({
 
 export function registerWorkflowExtension(
   pi: ExtensionAPI,
-  { builtinWorkflowsDir, deps }: { builtinWorkflowsDir?: string; deps?: { manager?: AgentManager } } = {},
+  {
+    builtinWorkflowsDir,
+    deps,
+  }: {
+    builtinWorkflowsDir?: string;
+    deps?: { manager?: AgentManager; agentActivity?: Map<string, AgentActivity> };
+  } = {},
 ) {
   let workflows = new Map<string, WorkflowDefinition>();
   let activeWorkflowId: string | undefined;
@@ -60,7 +67,13 @@ export function registerWorkflowExtension(
   }
 
   function doRefreshWidget(ctx: ExtensionContext) {
-    refreshWidget({ ctx, activeWorkflowId, activeDefinition, manager: deps?.manager });
+    refreshWidget({
+      ctx,
+      activeWorkflowId,
+      activeDefinition,
+      manager: deps?.manager,
+      agentActivity: deps?.agentActivity,
+    });
   }
 
   // ── Workflow Tool ────────────────────────────────────────────────
@@ -191,6 +204,7 @@ export function registerWorkflowExtension(
         ctx,
         manager: deps.manager,
         signal,
+        agentActivity: deps.agentActivity,
       });
     } finally {
       clearInterval(widgetTimer);

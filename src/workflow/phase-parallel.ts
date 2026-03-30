@@ -4,6 +4,7 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
+import type { AgentActivity } from "../ui/formatters.js";
 import { spawnWithAbort, trackAgentComplete, trackAgentStart } from "./executor-helpers.js";
 import { buildPhasePrompt } from "./prompt-builder.js";
 import { writeHandoff, writeState } from "./store.js";
@@ -56,6 +57,7 @@ export async function executeParallelPhase({
   manager,
   emitEvent,
   signal,
+  agentActivity,
 }: {
   phase: PhaseDefinition;
   definition: WorkflowDefinition;
@@ -68,6 +70,7 @@ export async function executeParallelPhase({
   manager: AgentManager;
   emitEvent: (event: WorkflowEvent) => void;
   signal?: AbortSignal | undefined;
+  agentActivity?: Map<string, AgentActivity> | undefined;
 }) {
   const role = phase.role ?? "builder";
 
@@ -104,6 +107,7 @@ export async function executeParallelPhase({
         prompt: taskPrompt,
         description: `${definition.name}: ${task.title}`,
         signal,
+        agentActivity,
       });
 
       const duration = (record.completedAt ?? Date.now()) - record.startedAt;

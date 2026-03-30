@@ -4,6 +4,7 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
+import type { AgentActivity } from "../ui/formatters.js";
 import { spawnWithAbort, trackAgentComplete, trackAgentStart } from "./executor-helpers.js";
 import { detectStuckIssues } from "./pipeline.js";
 import { buildFixPrompt, buildReviewPrompt } from "./prompt-builder.js";
@@ -30,6 +31,7 @@ export async function executeReviewLoop({
   manager,
   emitEvent,
   signal,
+  agentActivity,
 }: {
   phase: PhaseDefinition;
   definition: WorkflowDefinition;
@@ -42,6 +44,7 @@ export async function executeReviewLoop({
   manager: AgentManager;
   emitEvent: (event: WorkflowEvent) => void;
   signal?: AbortSignal | undefined;
+  agentActivity?: Map<string, AgentActivity> | undefined;
 }) {
   const maxCycles = phase.maxCycles ?? 3;
   const reviewerRole = phase.role ?? "reviewer";
@@ -74,6 +77,7 @@ export async function executeReviewLoop({
       prompt: reviewPrompt,
       description: `${definition.name}: review (cycle ${cycle + 1})`,
       signal,
+      agentActivity,
     });
 
     const review = parseVerdict(reviewRecord.result ?? "");
@@ -150,6 +154,7 @@ export async function executeReviewLoop({
       prompt: fixPrompt,
       description: `${definition.name}: fix (cycle ${cycle + 1})`,
       signal,
+      agentActivity,
     });
 
     const fixDuration = (fixRecord.completedAt ?? Date.now()) - fixRecord.startedAt;

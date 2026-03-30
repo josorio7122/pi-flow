@@ -5,6 +5,7 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
+import type { AgentActivity } from "../ui/formatters.js";
 import {
   accumulateTokens,
   buildInterruptedContext,
@@ -32,6 +33,7 @@ export async function executeCurrentPhase({
   ctx,
   manager,
   signal,
+  agentActivity,
 }: {
   definition: WorkflowDefinition;
   state: WorkflowState;
@@ -41,6 +43,7 @@ export async function executeCurrentPhase({
   ctx: ExtensionContext;
   manager: AgentManager;
   signal?: AbortSignal | undefined;
+  agentActivity?: Map<string, AgentActivity> | undefined;
 }): Promise<PhaseOutcome> {
   if (signal?.aborted) return { type: "workflow-complete", exitReason: "user_abort" };
 
@@ -93,6 +96,7 @@ export async function executeCurrentPhase({
       manager,
       emitEvent,
       signal,
+      agentActivity,
     });
 
     if (outcome.type === "gate-waiting") {
@@ -106,7 +110,18 @@ export async function executeCurrentPhase({
     accumulateTokens({ state, phaseName: phase.name, manager });
     writeState({ cwd, workflowId, state });
 
-    return advanceToNextPhase({ definition, state, cwd, workflowId, pi, ctx, manager, emitEvent, signal });
+    return advanceToNextPhase({
+      definition,
+      state,
+      cwd,
+      workflowId,
+      pi,
+      ctx,
+      manager,
+      emitEvent,
+      signal,
+      agentActivity,
+    });
   } catch (err) {
     if (err instanceof WorkflowAbortError) {
       state.exitReason = "user_abort";
@@ -134,6 +149,7 @@ function advanceToNextPhase({
   manager,
   emitEvent,
   signal,
+  agentActivity,
 }: {
   definition: WorkflowDefinition;
   state: WorkflowState;
@@ -144,6 +160,7 @@ function advanceToNextPhase({
   manager: AgentManager;
   emitEvent: (event: WorkflowEvent) => void;
   signal?: AbortSignal | undefined;
+  agentActivity?: Map<string, AgentActivity> | undefined;
 }): PhaseOutcome | Promise<PhaseOutcome> {
   const currentIndex = definition.phases.findIndex((p) => p.name === state.currentPhase);
   const nextIndex = currentIndex + 1;
@@ -169,5 +186,5 @@ function advanceToNextPhase({
   writeState({ cwd, workflowId, state });
 
   // Recurse — execute the next phase immediately
-  return executeCurrentPhase({ definition, state, cwd, workflowId, pi, ctx, manager, signal });
+  return executeCurrentPhase({ definition, state, cwd, workflowId, pi, ctx, manager, signal, agentActivity });
 }

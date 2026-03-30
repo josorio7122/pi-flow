@@ -4,6 +4,7 @@
  */
 
 import type { AgentRecord } from "../types.js";
+import { type AgentActivity, describeActivity } from "../ui/formatters.js";
 import type { PhaseStatus, WorkflowDefinition, WorkflowState } from "./types.js";
 
 // ── Format Helpers ───────────────────────────────────────────────────
@@ -36,29 +37,36 @@ export function formatTokens(tokens: number) {
 
 // ── Widget Lines ─────────────────────────────────────────────────────
 
-function formatAgentLine(agent: AgentRecord) {
+function formatAgentLine(agent: AgentRecord, activity?: AgentActivity | undefined) {
   const elapsed = formatDuration(Date.now() - agent.startedAt);
   const parts: string[] = [];
-  if (agent.turnCount > 0) parts.push(`⟳${agent.turnCount}`);
-  if (agent.toolUses > 0) parts.push(`${agent.toolUses} tools`);
+  const turns = activity?.turnCount ?? agent.turnCount;
+  const tools = activity?.toolUses ?? agent.toolUses;
+  if (turns > 0) parts.push(`⟳${turns}`);
+  if (tools > 0) parts.push(`${tools} tools`);
   try {
-    const tokens = agent.session?.getSessionStats().tokens.total;
+    const session = activity?.session ?? agent.session;
+    const tokens = session?.getSessionStats().tokens.total;
     if (tokens) parts.push(formatTokens(tokens));
   } catch {
     /* */
   }
   parts.push(elapsed);
-  return `    ${agent.type} · ${parts.join(" · ")}`;
+  const activityText = activity ? describeActivity(activity.activeTools, activity.responseText) : undefined;
+  const activityLine = activityText ? `\n      ⎿ ${activityText}` : "";
+  return `    ${agent.type} · ${parts.join(" · ")}${activityLine}`;
 }
 
 export function buildProgressLines({
   state,
   definition,
   runningAgents,
+  agentActivity,
 }: {
   state: WorkflowState;
   definition: WorkflowDefinition;
   runningAgents?: readonly AgentRecord[] | undefined;
+  agentActivity?: Map<string, AgentActivity> | undefined;
 }) {
   const lines: string[] = [];
 
@@ -74,7 +82,7 @@ export function buildProgressLines({
     lines.push(`  ${icon} ${p.name}${duration}`);
 
     if (status === "running" && runningAgents) {
-      for (const agent of runningAgents) lines.push(formatAgentLine(agent));
+      for (const agent of runningAgents) lines.push(formatAgentLine(agent, agentActivity?.get(agent.id)));
     }
   }
 

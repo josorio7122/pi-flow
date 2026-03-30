@@ -160,7 +160,10 @@ export default function (pi: ExtensionAPI) {
   });
 
   // ---- Workflow engine (registered first — primary tool) ----
-  registerWorkflowExtension(pi, { builtinWorkflowsDir: join(extensionRoot, "workflows"), deps: { manager } });
+  registerWorkflowExtension(pi, {
+    builtinWorkflowsDir: join(extensionRoot, "workflows"),
+    deps: { manager, agentActivity },
+  });
 
   // ---- Agent tools (not registered — Workflow is the only LLM-facing tool) ----
   // Agent system still works internally: workflow engine, /agents command, RPC, widget.

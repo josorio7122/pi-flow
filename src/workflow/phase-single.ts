@@ -4,6 +4,7 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
+import type { AgentActivity } from "../ui/formatters.js";
 import { spawnWithAbort, trackAgentComplete, trackAgentStart } from "./executor-helpers.js";
 import { buildPhasePrompt } from "./prompt-builder.js";
 import { writeHandoff, writeState } from "./store.js";
@@ -22,6 +23,7 @@ export async function executeSinglePhase({
   manager,
   emitEvent,
   signal,
+  agentActivity,
 }: {
   phase: PhaseDefinition;
   definition: WorkflowDefinition;
@@ -35,6 +37,7 @@ export async function executeSinglePhase({
   manager: AgentManager;
   emitEvent: (event: WorkflowEvent) => void;
   signal?: AbortSignal | undefined;
+  agentActivity?: Map<string, AgentActivity> | undefined;
 }) {
   const role = phase.role ?? "general-purpose";
 
@@ -57,6 +60,7 @@ export async function executeSinglePhase({
     prompt,
     description: `${definition.name}: ${phase.name}`,
     signal,
+    agentActivity,
   });
 
   const duration = (record.completedAt ?? Date.now()) - record.startedAt;

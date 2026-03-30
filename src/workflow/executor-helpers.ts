@@ -4,7 +4,9 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
+import { createActivityTracker } from "../extension/activity-tracker.js";
 import type { AgentRecord } from "../types.js";
+import type { AgentActivity } from "../ui/formatters.js";
 import { buildContinuationPrompt } from "./recovery.js";
 import { listHandoffs } from "./store.js";
 import type { AgentHandoff, PhaseDefinition, WorkflowState } from "./types.js";
@@ -151,6 +153,7 @@ export async function spawnWithAbort({
   prompt,
   description,
   signal,
+  agentActivity,
 }: {
   manager: AgentManager;
   pi: ExtensionAPI;
@@ -159,16 +162,27 @@ export async function spawnWithAbort({
   prompt: string;
   description: string;
   signal?: AbortSignal | undefined;
+  agentActivity?: Map<string, AgentActivity> | undefined;
 }): Promise<AgentRecord> {
   if (signal?.aborted) throw new WorkflowAbortError();
+
+  const tracker = agentActivity ? createActivityTracker() : undefined;
 
   const id = manager.spawn({
     pi,
     ctx,
     type,
     prompt,
-    options: { description, isBackground: false },
+    options: {
+      description,
+      isBackground: false,
+      ...(tracker?.callbacks ?? {}),
+    },
   });
+
+  if (tracker && agentActivity) {
+    agentActivity.set(id, tracker.state);
+  }
 
   if (signal) {
     const onAbort = () => manager.abort(id);
@@ -179,10 +193,12 @@ export async function spawnWithAbort({
       return record;
     } finally {
       signal.removeEventListener("abort", onAbort);
+      agentActivity?.delete(id);
     }
   }
 
   const record = manager.getRecord(id)!;
   await record.promise;
+  agentActivity?.delete(id);
   return record;
 }

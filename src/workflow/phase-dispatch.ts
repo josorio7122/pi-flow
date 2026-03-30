@@ -4,6 +4,7 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
+import type { AgentActivity } from "../ui/formatters.js";
 import { executeGatePhase } from "./phase-gate.js";
 import { executeParallelPhase } from "./phase-parallel.js";
 import { executeReviewLoop } from "./phase-review.js";
@@ -23,6 +24,7 @@ export async function dispatchPhase({
   manager,
   emitEvent,
   signal,
+  agentActivity,
 }: {
   phase: PhaseDefinition;
   definition: WorkflowDefinition;
@@ -36,6 +38,7 @@ export async function dispatchPhase({
   manager: AgentManager;
   emitEvent: (event: WorkflowEvent) => void;
   signal?: AbortSignal | undefined;
+  agentActivity?: Map<string, AgentActivity> | undefined;
 }) {
   switch (phase.mode) {
     case "gate":
@@ -55,6 +58,7 @@ export async function dispatchPhase({
         manager,
         emitEvent,
         signal,
+        agentActivity,
       });
       return { type: result.type };
     }
@@ -83,6 +87,7 @@ export async function dispatchPhase({
         manager,
         emitEvent,
         signal,
+        agentActivity,
       });
     }
 
@@ -99,6 +104,7 @@ export async function dispatchPhase({
         manager,
         emitEvent,
         signal,
+        agentActivity,
       });
     }
   }
