@@ -68,8 +68,8 @@ export function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => 
       state.tokens = safeFormatTokens(state.session);
       onStreamUpdate?.();
     },
-    onTextDelta: (_: string, fullText: string) => {
-      state.responseText = fullText;
+    onTextDelta: (delta: string, _fullText: string) => {
+      state.responseText += delta;
       onStreamUpdate?.();
     },
     onTurnEnd: (turnCount: number) => {
