@@ -20,6 +20,7 @@ import type { WorkflowDefinition, WorkflowEvent, WorkflowState } from "./types.j
 export type PhaseOutcome =
   | { type: "complete" }
   | { type: "gate-waiting" }
+  | { type: "needs-planning"; phase: string; role: string; description: string }
   | { type: "stuck"; reason: string }
   | { type: "error"; error: string }
   | { type: "workflow-complete"; exitReason: string };
@@ -103,6 +104,11 @@ export async function executeCurrentPhase({
       updatePhaseStatus({ state, phase: phase.name, status: "gate-waiting", onEvent: emitEvent });
       writeState({ cwd, workflowId, state });
       return { type: "gate-waiting" };
+    }
+
+    if (outcome.type === "needs-planning") {
+      writeState({ cwd, workflowId, state });
+      return outcome as PhaseOutcome;
     }
 
     // Phase completed — update tokens and advance

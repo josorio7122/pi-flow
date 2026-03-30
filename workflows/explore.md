@@ -9,7 +9,7 @@ triggers:
 phases:
   - name: scout
     role: scout
-    mode: single
+    mode: auto
     description: Broadly explore the codebase to map structure and patterns
 
   - name: plan

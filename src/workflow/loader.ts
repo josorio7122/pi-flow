@@ -102,7 +102,7 @@ function parseStringArray(val: unknown): string[] {
   return val.filter((v): v is string => typeof v === "string");
 }
 
-const VALID_MODES = new Set<PhaseMode>(["single", "parallel", "gate", "review-loop"]);
+const VALID_MODES = new Set<PhaseMode>(["single", "parallel", "gate", "review-loop", "auto"]);
 
 function parsePhases(val: unknown) {
   if (!Array.isArray(val)) return [];

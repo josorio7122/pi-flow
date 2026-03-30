@@ -9,7 +9,7 @@ triggers:
 phases:
   - name: scout
     role: scout
-    mode: single
+    mode: auto
     description: Explore the codebase and gather findings about the topic
 
 config:

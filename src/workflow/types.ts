@@ -14,7 +14,7 @@ export interface WorkflowDefinition {
   source: "builtin" | "global" | "project";
 }
 
-export type PhaseMode = "single" | "parallel" | "gate" | "review-loop";
+export type PhaseMode = "single" | "parallel" | "gate" | "review-loop" | "auto";
 
 export interface PhaseDefinition {
   name: string;
@@ -83,6 +83,8 @@ export interface WorkflowState {
   completedAgents: CompletedAgent[];
   /** Agent IDs whose tokens have already been counted — prevents double-counting across phases. */
   countedAgentIds: string[];
+  /** Tasks planned by LLM for auto-mode phases. Keyed by phase name. */
+  plannedTasks?: Record<string, readonly string[]> | undefined;
   startedAt: number;
   completedAt?: number | undefined;
 }

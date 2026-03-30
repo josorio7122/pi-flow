@@ -114,6 +114,7 @@ export function registerWorkflowExtension(
     promptGuidelines: [
       'User asks to find/scout/explore something AND then fix/clean/refactor/remove it → always Workflow "fix". Build/implement a feature → "feature". Explore then plan/recommend/design → "explore". Just research/map/trace with no follow-up action → "research".',
       "Never scout via Agent then do the fix yourself. Workflow provides approval gates and code review that manual execution skips.",
+      "When a workflow phase returns asking for a plan, assess the task complexity and respond with Workflow plan_phase. Use 1 task for focused work, 2-4 tasks for complex multi-area exploration.",
     ],
     description: buildToolDescription(),
     // biome-ignore lint/complexity/useMaxParams: pi renderResult callback signature is fixed
@@ -132,14 +133,18 @@ export function registerWorkflowExtension(
       return new Text(rendered, 0, 0);
     },
     parameters: Type.Object({
-      action: Type.String({ description: '"start", "continue", or "status"' }),
+      action: Type.String({ description: '"start", "continue", "status", or "plan_phase"' }),
       workflow_type: Type.Optional(Type.String({ description: "Which workflow (required for start)" })),
       description: Type.Optional(Type.String({ description: "What the user wants done (required for start)" })),
+      tasks: Type.Optional(
+        Type.Array(Type.String(), { description: "Task descriptions for auto-mode phase (used with plan_phase)" }),
+      ),
     }),
     // biome-ignore lint/complexity/useMaxParams: pi tool execute callback signature is fixed
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       if (params.action === "status") return buildWorkflowStatusText({ ctx, activeWorkflowId });
       if (params.action === "continue") return continueWorkflow({ ctx, signal, onUpdate });
+      if (params.action === "plan_phase") return planPhase({ tasks: params.tasks, ctx, signal, onUpdate });
       return startWorkflow({
         typeName: params.workflow_type,
         desc: params.description ?? "",
@@ -262,6 +267,15 @@ export function registerWorkflowExtension(
         `Workflow paused at approval gate: "${activeState.currentPhase}".\n\n${findings}\n\nReview the findings above and use Workflow({ action: "continue" }) to proceed, or ask for changes.`,
       );
     }
+    if (outcome.type === "needs-planning") {
+      return textResult(
+        `Phase "${outcome.phase}" is ready. Decide the execution strategy based on task complexity:\n\n` +
+          `- Simple/focused task → 1 task\n` +
+          `- Complex/multi-area task → 2-4 parallel tasks with distinct focus areas\n\n` +
+          `Call: Workflow({ action: "plan_phase", tasks: ["task description", ...] })\n\n` +
+          `Task: ${activeState.description}\nRole: ${outcome.role}\nPhase: ${outcome.phase}`,
+      );
+    }
     if (outcome.type === "error") {
       const handoffs = listHandoffs({ cwd: ctx.cwd, workflowId: activeWorkflowId });
       const findings =
@@ -274,6 +288,31 @@ export function registerWorkflowExtension(
       return textResult(`Workflow stuck: ${outcome.reason}. Consider manual intervention.`, true);
     }
     return textResult("Phase completed.");
+  }
+
+  function planPhase({
+    tasks,
+    ctx,
+    signal,
+    onUpdate,
+  }: {
+    tasks: readonly string[] | undefined;
+    ctx: ExtensionContext;
+    signal?: AbortSignal | undefined;
+    onUpdate?: AgentToolUpdateCallback | undefined;
+  }) {
+    if (!activeWorkflowId || !activeDefinition || !activeState) {
+      return textResult("No active workflow.", true);
+    }
+    if (!tasks || tasks.length === 0) {
+      return textResult("Error: tasks array is required for plan_phase.", true);
+    }
+    // Store planned tasks on state
+    if (!activeState.plannedTasks) activeState.plannedTasks = {};
+    activeState.plannedTasks[activeState.currentPhase] = tasks;
+    writeState({ cwd: ctx.cwd, workflowId: activeWorkflowId, state: activeState });
+    // Resume execution — the auto phase will now find its tasks
+    return runPhaseAndReport({ ctx, signal, onUpdate });
   }
 
   async function continueWorkflow({
