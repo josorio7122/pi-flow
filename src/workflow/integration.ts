@@ -137,7 +137,7 @@ export function registerWorkflowExtension(
       if (!text) return new Text("", 0, 0);
       if (isPartial) return new Text(theme.fg("dim", text), 0, 0);
       const header = text.split("\n")[0] ?? "";
-      const isError = header.includes("error") || header.includes("Error");
+      const isError = header.includes("error") || header.includes("Error") || header.includes("No active");
       const isStarted = header.includes("started");
       const isPaused = header.includes("paused");
       const icon = isError
