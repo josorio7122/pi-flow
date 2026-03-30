@@ -245,7 +245,7 @@ export function registerWorkflowExtension(
       if (outcome.type === "workflow-complete") {
         const handoffs = listHandoffs({ cwd: ctx.cwd, workflowId: activeWorkflowId });
         const findings = formatFindings(handoffs);
-        const result = `${activeDefinition.name} completed.\n${findings}`;
+        const result = `Workflow "${activeDefinition.name}" finished. All phases complete. Present the findings below to the user.\n${findings}`;
         activeWorkflowId = undefined;
         activeDefinition = undefined;
         activeState = undefined;
@@ -270,7 +270,7 @@ export function registerWorkflowExtension(
         );
       }
 
-      return textResult(`${executedPhase} completed.\n${findings}\n${buildPhaseInfo()}`);
+      return textResult(`Phase "${executedPhase}" done. Next phase ready.\n${findings}\n${buildPhaseInfo()}`);
     } finally {
       stopProgress?.();
     }
