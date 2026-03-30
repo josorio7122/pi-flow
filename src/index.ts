@@ -156,7 +156,6 @@ export default function (pi: ExtensionAPI) {
   // Grab UI context from first tool execution + clear lingering widget on new turn
   pi.on("tool_execution_start", async (_, ctx) => {
     widget.setUICtx(ctx.ui);
-    widget.onTurnStart();
   });
 
   // ---- Tools ----

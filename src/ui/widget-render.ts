@@ -3,9 +3,9 @@
  * Build display lines from agent data — no side effects, no this.
  */
 
-import type { Theme, ThemeColor } from "@mariozechner/pi-coding-agent";
+import type { Theme } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth } from "@mariozechner/pi-tui";
-import type { AgentRecord, SubagentType } from "../types.js";
+import type { AgentRecord } from "../types.js";
 import {
   type AgentActivity,
   describeActivity,
@@ -16,57 +16,6 @@ import {
 } from "./formatters.js";
 
 const MAX_WIDGET_LINES = 12;
-
-const STATUS_DISPLAY: Record<string, { color: ThemeColor; char: string; label: string }> = {
-  completed: { color: "success", char: "✓", label: "" },
-  steered: { color: "warning", char: "✓", label: " (turn limit)" },
-  stopped: { color: "dim", char: "■", label: " stopped" },
-  error: { color: "error", char: "✗", label: " error" },
-  aborted: { color: "error", char: "✗", label: " aborted" },
-};
-
-export function renderFinishedLine({
-  agent,
-  theme,
-  activity,
-  config,
-}: {
-  agent: {
-    id: string;
-    type: SubagentType;
-    status: string;
-    description: string;
-    toolUses: number;
-    startedAt: number;
-    completedAt?: number | undefined;
-    error?: string | undefined;
-    isBackground?: boolean | undefined;
-  };
-  theme: Theme;
-  activity?: AgentActivity | undefined;
-  config?: { displayName: string } | undefined;
-}) {
-  const name = getDisplayName(agent.type, config?.displayName);
-  const bgTag = agent.isBackground ? ` ${theme.fg("dim", "bg")}` : "";
-  const duration = formatMs((agent.completedAt ?? Date.now()) - agent.startedAt);
-
-  const display = STATUS_DISPLAY[agent.status] ?? STATUS_DISPLAY.aborted!;
-  const icon = theme.fg(display.color, display.char);
-  const statusSuffix =
-    agent.status === "error" && agent.error
-      ? theme.fg(display.color, `${display.label}: ${agent.error.slice(0, 60)}`)
-      : display.label
-        ? theme.fg(display.color, display.label)
-        : "";
-
-  const parts = [
-    ...(activity ? [formatTurns(activity.turnCount, activity.maxTurns)] : []),
-    ...(agent.toolUses > 0 ? [`${agent.toolUses} tool use${agent.toolUses === 1 ? "" : "s"}`] : []),
-    duration,
-  ];
-
-  return `${icon} ${theme.fg("dim", name)}${bgTag}  ${theme.fg("dim", agent.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusSuffix}`;
-}
 
 export function renderRunningLine({
   agent,
@@ -109,17 +58,14 @@ export function renderRunningLine({
   };
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: layout logic with overflow budget allocation
 export function assembleWidgetLines({
   heading,
-  finishedLines,
   runningPairs,
   queuedLine,
   width,
   theme,
 }: {
   heading: string;
-  finishedLines: readonly string[];
   runningPairs: readonly { header: string; activity: string }[];
   queuedLine: string | undefined;
   width: number;
@@ -127,11 +73,10 @@ export function assembleWidgetLines({
 }) {
   const truncate = (line: string) => truncateToWidth(line, width);
   const maxBody = MAX_WIDGET_LINES - 1;
-  const totalBody = finishedLines.length + runningPairs.length * 2 + (queuedLine ? 1 : 0);
+  const totalBody = runningPairs.length * 2 + (queuedLine ? 1 : 0);
   const lines: string[] = [truncate(heading)];
 
   if (totalBody <= maxBody) {
-    lines.push(...finishedLines.map(truncate));
     for (const pair of runningPairs) {
       lines.push(truncate(pair.header));
       lines.push(truncate(pair.activity));
@@ -149,7 +94,6 @@ export function assembleWidgetLines({
   } else {
     let budget = maxBody - 1;
     let hiddenRunning = 0;
-    let hiddenFinished = 0;
 
     for (const pair of runningPairs) {
       if (budget >= 2) {
@@ -162,25 +106,11 @@ export function assembleWidgetLines({
     }
     if (queuedLine && budget >= 1) {
       lines.push(truncate(queuedLine));
-      budget--;
-    }
-    for (const fl of finishedLines) {
-      if (budget >= 1) {
-        lines.push(truncate(fl));
-        budget--;
-      } else {
-        hiddenFinished++;
-      }
     }
 
-    const overflowParts: string[] = [];
-    if (hiddenRunning > 0) overflowParts.push(`${hiddenRunning} running`);
-    if (hiddenFinished > 0) overflowParts.push(`${hiddenFinished} finished`);
-    lines.push(
-      truncate(
-        `${theme.fg("dim", "└─")} ${theme.fg("dim", `+${hiddenRunning + hiddenFinished} more (${overflowParts.join(", ")})`)}`,
-      ),
-    );
+    if (hiddenRunning > 0) {
+      lines.push(truncate(`${theme.fg("dim", "└─")} ${theme.fg("dim", `+${hiddenRunning} more running`)}`));
+    }
   }
 
   return lines;

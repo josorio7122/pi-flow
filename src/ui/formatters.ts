@@ -7,9 +7,6 @@ import type { SubagentType } from "../types.js";
 /** Braille spinner frames for animated running indicator. */
 export const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-/** Statuses that indicate an error/non-success outcome. */
-export const ERROR_STATUSES = new Set(["error", "aborted", "steered", "stopped"]);
-
 /** Tool name → human-readable action for activity descriptions. */
 const TOOL_DISPLAY: Record<string, string> = {
   read: "reading",

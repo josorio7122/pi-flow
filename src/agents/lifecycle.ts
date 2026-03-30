@@ -48,10 +48,8 @@ export function createGroupJoinCallback({
   getNotifications: () => NotificationSystem;
 }) {
   return (records: AgentRecord[], partial: boolean) => {
-    const w = getWidget();
     for (const r of records) {
       agentActivity.delete(r.id);
-      w.markFinished(r.id);
     }
 
     const groupKey = `group:${records.map((r) => r.id).join(",")}`;
@@ -84,7 +82,7 @@ export function createGroupJoinCallback({
         {
           customType: "subagent-notification",
           content: `Background agent group completed: ${label}\n\n${notificationText}\n\nUse get_subagent_result for full output.`,
-          display: true,
+          display: false,
           details,
         },
         { deliverAs: "followUp", triggerTurn: true },
@@ -129,7 +127,6 @@ export function createOnComplete({
 
     if (record.resultConsumed) {
       agentActivity.delete(record.id);
-      widget.markFinished(record.id);
       widget.update();
       return;
     }

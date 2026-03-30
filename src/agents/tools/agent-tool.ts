@@ -294,7 +294,6 @@ Usage:
 
       if (fgId) {
         agentActivity.delete(fgId);
-        widget.markFinished(fgId);
       }
 
       const tokenText = safeFormatTokens(fgState.session);
