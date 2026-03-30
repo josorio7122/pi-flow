@@ -49,6 +49,8 @@ function wordWrap(text: string, width: number) {
   return result;
 }
 
+const MAX_ACTIVITY_LINES = 15;
+
 function renderAgentInWorkflow({
   lines,
   agent,
@@ -64,17 +66,31 @@ function renderAgentInWorkflow({
   const config = renderRegistry?.getConfig(agent.type) ?? { displayName: agent.type };
   const pair = renderRunningLine({ agent, theme, activity, config, frame });
   lines.push(pair.header);
-  if (activity?.activeTools.size) {
+
+  if (!activity?.responseText) {
     lines.push(pair.activity);
-  } else if (activity?.responseText) {
-    const wrapped = wordWrap(activity.responseText.trim(), 90);
-    const tail = wrapped.slice(-5);
-    for (const l of tail) {
-      lines.push(`${theme.fg("dim", "│")}     ${theme.fg("dim", l)}`);
-    }
-  } else {
-    lines.push(pair.activity);
+    return;
   }
+
+  // Build formatted log from responseText
+  const rawLines = activity.responseText.split("\n").filter((l) => l.length > 0);
+  const formatted: string[] = [];
+  for (const raw of rawLines) {
+    if (raw.startsWith("→ ")) {
+      // Tool call header — highlighted
+      formatted.push(`${theme.fg("dim", "│")}  ${theme.fg("accent", raw)}`);
+    } else {
+      // Tool result or LLM text — dim, wrapped
+      const wrapped = wordWrap(raw, 85);
+      for (const w of wrapped) {
+        formatted.push(`${theme.fg("dim", "│")}    ${theme.fg("dim", w)}`);
+      }
+    }
+  }
+
+  // Show last N lines (scroll to bottom)
+  const visible = formatted.slice(-MAX_ACTIVITY_LINES);
+  for (const l of visible) lines.push(l);
 }
 
 function renderCompletedPhase({ p, status, theme }: { p: { name: string }; status: string; theme: Theme }) {
