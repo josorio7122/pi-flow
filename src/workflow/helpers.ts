@@ -62,10 +62,16 @@ function renderWorkflowWidget(tui: TUI) {
     const status = renderState.phases[p.name]?.status ?? "pending";
     if (status === "running" && running.length > 0) {
       for (const agent of running) {
+        const activity = renderActivity?.get(agent.id);
         const config = renderRegistry?.getConfig(agent.type) ?? { displayName: agent.type };
-        const pair = renderRunningLine({ agent, theme, activity: renderActivity?.get(agent.id), config, frame });
+        const pair = renderRunningLine({ agent, theme, activity, config, frame });
         lines.push(pair.header);
         lines.push(pair.activity);
+        // Stream last 3 lines of agent response text
+        if (activity?.responseText) {
+          const tail = activity.responseText.trim().split("\n").slice(-3);
+          for (const l of tail) lines.push(`${theme.fg("dim", "│")}     ${theme.fg("dim", l)}`);
+        }
       }
     } else {
       lines.push(renderCompletedPhase({ p, status, theme }));
