@@ -28,7 +28,7 @@ import { createWorkflowState, updatePhaseStatus } from "./pipeline.js";
 import { buildStatusText } from "./progress.js";
 import { findStalled, formatStalledMessage } from "./recovery.js";
 import { appendEvent, initWorkflowDir, listHandoffs, readState, writeState } from "./store.js";
-import type { AgentHandoff, WorkflowDefinition, WorkflowEvent } from "./types.js";
+import type { AgentHandoff, WorkflowDefinition, WorkflowEvent, WorkflowState } from "./types.js";
 
 const PROGRESS_INTERVAL_MS = 3000;
 
@@ -62,6 +62,7 @@ export function registerWorkflowExtension(
   let workflows = new Map<string, WorkflowDefinition>();
   let activeWorkflowId: string | undefined;
   let activeDefinition: WorkflowDefinition | undefined;
+  let activeState: WorkflowState | undefined;
 
   function emitEvent(cwd: string, event: WorkflowEvent) {
     if (activeWorkflowId) appendEvent({ cwd, workflowId: activeWorkflowId, event });
@@ -70,8 +71,8 @@ export function registerWorkflowExtension(
   function doRefreshWidget(ctx: ExtensionContext) {
     refreshWidget({
       ctx,
-      activeWorkflowId,
       activeDefinition,
+      activeState,
       manager: deps?.manager,
       agentActivity: deps?.agentActivity,
     });
@@ -169,6 +170,7 @@ export function registerWorkflowExtension(
 
     activeWorkflowId = workflowId;
     activeDefinition = definition;
+    activeState = state;
     pi.appendEntry(ENTRY_TYPE, {
       workflowId,
       workflowDir: `.pi/flow/${workflowId}`,
@@ -199,8 +201,10 @@ export function registerWorkflowExtension(
     if (!activeWorkflowId || !activeDefinition || !deps?.manager) {
       return textResult("No active workflow or manager not available.", true);
     }
-    const state = readState({ cwd: ctx.cwd, workflowId: activeWorkflowId });
-    if (!state) return textResult("Workflow state not found.", true);
+    if (!activeState) {
+      activeState = readState({ cwd: ctx.cwd, workflowId: activeWorkflowId }) ?? undefined;
+    }
+    if (!activeState) return textResult("Workflow state not found.", true);
 
     const stopProgress = onUpdate
       ? startProgressTimer({ cwd: ctx.cwd, workflowId: activeWorkflowId, onUpdate })
@@ -214,7 +218,7 @@ export function registerWorkflowExtension(
     try {
       outcome = await executeCurrentPhase({
         definition: activeDefinition,
-        state,
+        state: activeState,
         cwd: ctx.cwd,
         workflowId: activeWorkflowId,
         pi,
@@ -235,6 +239,7 @@ export function registerWorkflowExtension(
       const summary = buildCompletionSummary({ exitReason: outcome.exitReason, handoffs });
       activeWorkflowId = undefined;
       activeDefinition = undefined;
+      activeState = undefined;
       doRefreshWidget(ctx);
       return textResult(summary);
     }
@@ -242,7 +247,7 @@ export function registerWorkflowExtension(
       const handoffs = listHandoffs({ cwd: ctx.cwd, workflowId: activeWorkflowId });
       const findings = handoffs.map((h) => `## ${h.role} (${h.phase} phase)\n${h.findings}`).join("\n\n");
       return textResult(
-        `Workflow paused at approval gate: "${state.currentPhase}".\n\n${findings}\n\nReview the findings above and use Workflow({ action: "continue" }) to proceed, or ask for changes.`,
+        `Workflow paused at approval gate: "${activeState.currentPhase}".\n\n${findings}\n\nReview the findings above and use Workflow({ action: "continue" }) to proceed, or ask for changes.`,
       );
     }
     if (outcome.type === "error") {
@@ -293,6 +298,7 @@ export function registerWorkflowExtension(
         writeState({ cwd: ctx.cwd, workflowId: activeWorkflowId, state });
         activeWorkflowId = undefined;
         activeDefinition = undefined;
+        activeState = undefined;
         doRefreshWidget(ctx);
         return textResult("Workflow completed (no more phases after gate).");
       }
@@ -333,6 +339,7 @@ export function registerWorkflowExtension(
     if (!state || state.completedAt) return;
     activeWorkflowId = bookmark.workflowId;
     activeDefinition = workflows.get(state.definitionName);
+    activeState = state;
     const stalled = findStalled({ agents: state.activeAgents, timeoutMs: STALLED_TIMEOUT_MS });
     for (const agent of stalled) ctx.ui.notify(`\u26A0 ${formatStalledMessage(agent)}`, "warning");
     if (stalled.length > 0)

@@ -8,7 +8,7 @@ import type { AgentManager } from "../agents/manager.js";
 import type { AgentActivity } from "../ui/formatters.js";
 import { buildProgressLines, buildStatusText, formatDuration } from "./progress.js";
 import { readState } from "./store.js";
-import type { WorkflowDefinition } from "./types.js";
+import type { WorkflowDefinition, WorkflowState } from "./types.js";
 
 export const ENTRY_TYPE = "pi-flow:active";
 const WIDGET_KEY = "pi-flow";
@@ -35,18 +35,18 @@ export function textResult(text: string, isError = false) {
 
 export function refreshWidget({
   ctx,
-  activeWorkflowId,
   activeDefinition,
+  activeState,
   manager,
   agentActivity,
 }: {
   ctx: ExtensionContext;
-  activeWorkflowId: string | undefined;
   activeDefinition: WorkflowDefinition | undefined;
+  activeState: WorkflowState | undefined;
   manager?: AgentManager | undefined;
   agentActivity?: Map<string, AgentActivity> | undefined;
 }) {
-  if (!activeWorkflowId || !activeDefinition) {
+  if (!activeState || !activeDefinition) {
     if (widgetRegistered) {
       ctx.ui.setWidget(WIDGET_KEY, undefined);
       widgetRegistered = false;
@@ -61,13 +61,10 @@ export function refreshWidget({
     return;
   }
 
-  // Update cached data (called periodically, not on every render frame)
-  const state = readState({ cwd: ctx.cwd, workflowId: activeWorkflowId });
-  if (state) {
-    const runningAgents = manager?.listAgents().filter((a) => a.status === "running");
-    cachedLines = buildProgressLines({ state, definition: activeDefinition, runningAgents, agentActivity });
-    ctx.ui.setStatus(WIDGET_KEY, buildStatusText(state));
-  }
+  // Update cached data from in-memory state (no disk I/O)
+  const runningAgents = manager?.listAgents().filter((a) => a.status === "running");
+  cachedLines = buildProgressLines({ state: activeState, definition: activeDefinition, runningAgents, agentActivity });
+  ctx.ui.setStatus(WIDGET_KEY, buildStatusText(activeState));
 
   if (!widgetRegistered) {
     ctx.ui.setWidget(
