@@ -7,20 +7,20 @@ triggers:
   - find and fix
 
 phases:
-  - name: scout
+  - name: investigation
     role: scout
     mode: single
     description: Scan the codebase to locate the bug and understand its root cause
 
-  - name: approve
+  - name: approval
     mode: gate
-    description: Review the scout's findings before proceeding with the fix
+    description: Review the investigation findings before proceeding with the fix
 
-  - name: build
+  - name: implementation
     role: builder
     mode: single
     description: Fix the identified issue and run tests
-    contextFrom: scout
+    contextFrom: investigation
 
   - name: review
     role: reviewer
@@ -28,7 +28,7 @@ phases:
     description: Review the fix for correctness and completeness
     fixRole: builder
     maxCycles: 3
-    contextFrom: build
+    contextFrom: implementation
 
 config:
   tokenLimit: 150000

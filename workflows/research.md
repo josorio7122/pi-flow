@@ -7,7 +7,7 @@ triggers:
   - understand how something works
 
 phases:
-  - name: scout
+  - name: exploration
     role: scout
     mode: single
     description: Explore the codebase and gather findings about the topic

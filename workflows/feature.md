@@ -7,26 +7,26 @@ triggers:
   - plan and build
 
 phases:
-  - name: plan
+  - name: planning
     role: planner
     mode: single
     description: Analyze requirements and create a detailed implementation plan
 
-  - name: approve-plan
+  - name: approval
     mode: gate
     description: Review the plan before writing any code
 
-  - name: test
+  - name: testing
     role: test-writer
     mode: single
     description: Write failing tests that define the expected behavior
-    contextFrom: plan
+    contextFrom: planning
 
-  - name: build
+  - name: implementation
     role: builder
     mode: single
     description: Implement the code to make all tests pass
-    contextFrom: test
+    contextFrom: testing
 
   - name: review
     role: reviewer
@@ -34,7 +34,7 @@ phases:
     description: Review the implementation against the plan and tests
     fixRole: builder
     maxCycles: 3
-    contextFrom: build
+    contextFrom: implementation
 
 config:
   tokenLimit: 200000

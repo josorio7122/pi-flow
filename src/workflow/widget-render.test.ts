@@ -95,9 +95,10 @@ describe("workflow widget render with live activity", () => {
     callbacks.onToolActivity({ type: "start", toolName: "read", args: { path: "/foo.py" } });
     callbacks.onToolActivity({ type: "end", toolName: "read" });
 
-    // Between turns — responseText has text + tool log
+    // Between turns — responseText has text, toolLog has tool entries
     expect(state.responseText).toContain("Starting exploration");
-    expect(state.responseText).toContain("read:");
+    expect(state.toolLog).toHaveLength(1);
+    expect(state.toolLog[0]?.tool).toContain("read:");
     expect(state.activeTools.size).toBe(0);
 
     // Turn 2: more text

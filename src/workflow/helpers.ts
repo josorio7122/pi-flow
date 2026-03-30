@@ -6,9 +6,8 @@ import type { ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
 import { type TUI, truncateToWidth } from "@mariozechner/pi-tui";
 import type { AgentManager } from "../agents/manager.js";
 import type { Registry } from "../agents/registry.js";
-import type { AgentActivity } from "../ui/formatters.js";
-import { SPINNER } from "../ui/formatters.js";
-import { renderRunningLine } from "../ui/widget-render.js";
+import type { AgentRecord } from "../types.js";
+import { type AgentActivity, formatMs, formatTokens, formatTurns, getDisplayName, SPINNER } from "../ui/formatters.js";
 import { buildStatusText, formatDuration, getStatusIcon } from "./progress.js";
 import { readState } from "./store.js";
 import type { WorkflowDefinition, WorkflowState } from "./types.js";
@@ -21,7 +20,7 @@ let widgetTui: TUI | undefined;
 let widgetRegistered = false;
 let widgetTimer: ReturnType<typeof setInterval> | undefined;
 
-// Render deps — kept in module scope so render() reads live data without disk I/O
+// Render deps — module scope so render() reads live data without disk I/O
 let renderState: WorkflowState | undefined;
 let renderDefinition: WorkflowDefinition | undefined;
 let renderManager: AgentManager | undefined;
@@ -30,81 +29,87 @@ let renderRegistry: Registry | undefined;
 let renderTheme: Theme | undefined;
 let widgetFrame = 0;
 
-function wordWrap(text: string, width: number) {
-  const result: string[] = [];
-  for (const line of text.split("\n")) {
-    if (line.length <= width) {
-      result.push(line);
-    } else {
-      let remaining = line;
-      while (remaining.length > width) {
-        const breakAt = remaining.lastIndexOf(" ", width);
-        const splitAt = breakAt > 0 ? breakAt : width;
-        result.push(remaining.slice(0, splitAt));
-        remaining = remaining.slice(splitAt).trimStart();
-      }
-      if (remaining) result.push(remaining);
-    }
-  }
-  return result;
-}
+// ── Agent Rendering ──────────────────────────────────────────────────
 
-const MAX_ACTIVITY_LINES = 3;
+const ACTIVITY_LINES = 4;
 
-function renderAgentInWorkflow({
+function renderRunningAgent({
   lines,
   agent,
   theme,
   frame,
 }: {
   lines: string[];
-  agent: import("../types.js").AgentRecord;
+  agent: AgentRecord;
   theme: Theme;
   frame: string;
 }) {
   const activity = renderActivity?.get(agent.id);
   const config = renderRegistry?.getConfig(agent.type) ?? { displayName: agent.type };
-  const truncAgent =
-    agent.description.length > 60 ? { ...agent, description: `${agent.description.slice(0, 57)}...` } : agent;
-  const pair = renderRunningLine({ agent: truncAgent, theme, activity, config, frame });
-  lines.push(pair.header);
+  const name = getDisplayName(agent.type, config.displayName);
+  const truncDesc = agent.description.length > 50 ? `${agent.description.slice(0, 47)}...` : agent.description;
+  const elapsed = formatMs(Date.now() - agent.startedAt);
 
-  if (!activity?.responseText) {
-    lines.push(pair.activity);
-    return;
-  }
-
-  // Build formatted log from responseText
-  const rawLines = activity.responseText.split("\n").filter((l) => l.length > 0);
-  const formatted: string[] = [];
-  for (const raw of rawLines) {
-    if (raw.startsWith("→ ")) {
-      // Tool call header — highlighted
-      formatted.push(`${theme.fg("dim", "│")}  ${theme.fg("accent", raw)}`);
-    } else {
-      // Tool result or LLM text — dim, wrapped
-      const wrapped = wordWrap(raw, 85);
-      for (const w of wrapped) {
-        formatted.push(`${theme.fg("dim", "│")}    ${theme.fg("dim", w)}`);
-      }
+  const toolUses = activity?.toolUses ?? agent.toolUses;
+  let tokenText = "";
+  if (activity?.session) {
+    try {
+      tokenText = formatTokens(activity.session.getSessionStats().tokens.total);
+    } catch {
+      /* */
     }
   }
 
-  // Show last N lines (scroll to bottom)
-  const visible = formatted.slice(-MAX_ACTIVITY_LINES);
-  for (const l of visible) lines.push(l);
+  const parts: string[] = [];
+  if (activity) parts.push(formatTurns(activity.turnCount, activity.maxTurns));
+  if (toolUses > 0) parts.push(`${toolUses} tools`);
+  if (tokenText) parts.push(tokenText);
+  parts.push(elapsed);
+
+  lines.push(
+    `${theme.fg("dim", "├─")} ${theme.fg("accent", frame)} ${theme.bold(name)}  ${theme.fg("muted", truncDesc)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}`,
+  );
+
+  // Structured tool log — show last N lines with proper nesting
+  if (activity?.toolLog.length) {
+    const structured: string[] = [];
+    for (const entry of activity.toolLog) {
+      structured.push(`${theme.fg("dim", "│")}    ${theme.fg("accent", `→ ${entry.tool}`)}`);
+      for (const r of entry.results) {
+        const t = r.length > 80 ? `${r.slice(0, 77)}...` : r;
+        structured.push(`${theme.fg("dim", "│")}      ${theme.fg("dim", t)}`);
+      }
+    }
+    for (const l of structured.slice(-ACTIVITY_LINES)) lines.push(l);
+  } else {
+    const actText = activity?.activeTools.size ? "working..." : "thinking…";
+    lines.push(`${theme.fg("dim", "│")}    ${theme.fg("dim", actText)}`);
+  }
 }
 
-function renderCompletedPhase({ p, status, theme }: { p: { name: string }; status: string; theme: Theme }) {
+function renderCompletedAgent({ lines, agent, theme }: { lines: string[]; agent: AgentRecord; theme: Theme }) {
+  const config = renderRegistry?.getConfig(agent.type) ?? { displayName: agent.type };
+  const name = getDisplayName(agent.type, config.displayName);
+  const truncDesc = agent.description.length > 50 ? `${agent.description.slice(0, 47)}...` : agent.description;
+  const dur = formatMs((agent.completedAt ?? Date.now()) - agent.startedAt);
+  const tools = agent.toolUses > 0 ? `${agent.toolUses} tools · ` : "";
+  lines.push(
+    `${theme.fg("dim", "├─")} ${theme.fg("success", "✓")} ${theme.fg("dim", `${name}  ${truncDesc} · ${tools}${dur}`)}`,
+  );
+}
+
+function renderCompletedPhase({ name, status, theme }: { name: string; status: string; theme: Theme }) {
   if (!renderState) return "";
-  const result = renderState.phases[p.name];
+  const result = renderState.phases[name];
   const icon = getStatusIcon(status);
   const duration = result?.completedAt
     ? ` ${theme.fg("dim", `(${formatDuration(result.completedAt - (result.startedAt ?? renderState.startedAt))})`)}`
     : "";
   const color = status === "complete" ? "success" : status === "failed" ? "error" : "dim";
-  return `${theme.fg("dim", "├─")} ${theme.fg(color, icon)} ${theme.fg("dim", p.name)}${duration}`;
+  return `${theme.fg("dim", "├─")} ${theme.fg(color, icon)} ${theme.fg("dim", name)}${duration}`;
 }
+
+// ── Widget Render ────────────────────────────────────────────────────
 
 function renderWorkflowWidget(tui: TUI) {
   if (!renderState || !renderDefinition || !renderTheme) return [];
@@ -123,27 +128,26 @@ function renderWorkflowWidget(tui: TUI) {
   for (const p of renderDefinition.phases) {
     const status = renderState.phases[p.name]?.status ?? "pending";
     if (status === "running") {
-      // Show completed agents for this phase with ✓
-      for (const agent of completed) {
-        const truncDesc = agent.description.length > 60 ? `${agent.description.slice(0, 57)}...` : agent.description;
-        const dur = formatDuration((agent.completedAt ?? Date.now()) - agent.startedAt);
-        lines.push(
-          `${theme.fg("dim", "├─")} ${theme.fg("success", "✓")} ${theme.fg("dim", `${agent.type}  ${truncDesc} · ${dur}`)}`,
-        );
-      }
-      // Show running agents with live activity
-      for (const agent of running) renderAgentInWorkflow({ lines, agent, theme, frame });
+      // Phase header
+      lines.push(`  ${theme.fg("accent", "●")} ${theme.fg("accent", p.name)}`);
+      // Completed agents in this phase
+      for (const agent of completed) renderCompletedAgent({ lines, agent, theme });
+      // Running agents with live activity
+      for (const agent of running) renderRunningAgent({ lines, agent, theme, frame });
     } else {
-      lines.push(renderCompletedPhase({ p, status, theme }));
+      lines.push(renderCompletedPhase({ name: p.name, status, theme }));
     }
   }
 
+  // Fix last connector
   if (lines.length > 1) {
     const last = lines.length - 1;
     lines[last] = lines[last]!.replace("├─", "└─").replace("│  ", "   ");
   }
   return lines.map((l) => truncateToWidth(l, tui.terminal.columns));
 }
+
+// ── Widget Management ────────────────────────────────────────────────
 
 export interface ActiveWorkflowBookmark {
   workflowId: string;
@@ -188,35 +192,42 @@ export function refreshWidget({
     renderDefinition = undefined;
     renderManager = undefined;
     renderActivity = undefined;
+    renderRegistry = undefined;
     ctx.ui.setStatus(WIDGET_KEY, undefined);
     return;
   }
 
-  // Update render deps (all in-memory, no disk I/O)
+  // Update render deps
   renderState = activeState;
   renderDefinition = activeDefinition;
   renderManager = manager;
   renderActivity = agentActivity;
   renderRegistry = registry;
-  // Compute live tokens from running agents
+
+  // Compute live stats for status bar
   let liveTokens = activeState.tokens.total;
-  if (manager) {
-    for (const a of manager.listAgents()) {
-      if (a.status === "running" && a.session) {
-        try {
-          liveTokens += a.session.getSessionStats().tokens.total;
-        } catch {
-          /* */
-        }
+  const allAgents = manager?.listAgents() ?? [];
+  let runningCount = 0;
+  let totalCount = 0;
+  for (const a of allAgents) {
+    totalCount++;
+    if (a.status === "running") runningCount++;
+    if (a.session) {
+      try {
+        liveTokens += a.session.getSessionStats().tokens.total;
+      } catch {
+        /* */
       }
     }
   }
-  const runningCount = manager?.listAgents().filter((a) => a.status === "running").length ?? 0;
-  const doneCount =
-    manager?.listAgents().filter((a) => a.status !== "running" && a.status !== "queued" && a.completedAt).length ?? 0;
   ctx.ui.setStatus(
     WIDGET_KEY,
-    buildStatusText({ state: activeState, liveTokens, agentCount: runningCount + doneCount, doneCount }),
+    buildStatusText({
+      state: activeState,
+      liveTokens,
+      agentCount: totalCount,
+      doneCount: totalCount - runningCount,
+    }),
   );
 
   if (!widgetRegistered) {
@@ -244,6 +255,8 @@ export function refreshWidget({
     widgetTui?.requestRender();
   }
 }
+
+// ── Status/Bookmark Helpers ──────────────────────────────────────────
 
 export function buildWorkflowStatusText({
   ctx,

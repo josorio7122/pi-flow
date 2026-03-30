@@ -136,22 +136,21 @@ export function registerWorkflowExtension(
       const text = result.content[0]?.type === "text" ? result.content[0].text : "";
       if (!text) return new Text("", 0, 0);
       if (isPartial) return new Text(theme.fg("dim", text), 0, 0);
-      const lines = text.split("\n");
-      const header = lines[0] ?? "";
-      const lineCount = lines.length - 1;
+      const header = text.split("\n")[0] ?? "";
       const isError = header.includes("error") || header.includes("Error");
       const isStarted = header.includes("started");
-      const isPhaseComplete = header.includes("Phase completed");
-      const icon = isError ? theme.fg("error", "✗") : isStarted ? theme.fg("accent", "▸") : theme.fg("success", "✓");
+      const isPaused = header.includes("paused");
+      const icon = isError
+        ? theme.fg("error", "✗")
+        : isStarted
+          ? theme.fg("accent", "▸")
+          : isPaused
+            ? theme.fg("warning", "⏸")
+            : theme.fg("success", "✓");
       let rendered = `${icon} ${theme.fg("dim", header)}`;
       if (isStarted) {
-        // Show the phase info so user sees what's happening
-        const phaseLines = lines.filter((l) => l.startsWith("  ") || l.startsWith("Current"));
-        for (const l of phaseLines.slice(0, 4)) rendered += `\n  ${theme.fg("dim", l.trim())}`;
-      } else if (isPhaseComplete && lineCount > 1) {
-        rendered += `\n  ${theme.fg("dim", `${lineCount} lines of findings delivered`)}`;
-      } else if (!isStarted && lineCount > 1) {
-        rendered += `\n  ${theme.fg("dim", `${lineCount} lines delivered`)}`;
+        const phaseLine = text.split("\n").find((l) => l.includes("Current phase:"));
+        if (phaseLine) rendered += `\n  ${theme.fg("dim", phaseLine.trim())}`;
       }
       return new Text(rendered, 0, 0);
     },
@@ -226,6 +225,7 @@ export function registerWorkflowExtension(
       : undefined;
     doRefreshWidget(ctx);
 
+    const executedPhase = activeState.currentPhase;
     try {
       const outcome = await executeSinglePhase({
         definition: activeDefinition,
@@ -245,7 +245,7 @@ export function registerWorkflowExtension(
       if (outcome.type === "workflow-complete") {
         const handoffs = listHandoffs({ cwd: ctx.cwd, workflowId: activeWorkflowId });
         const findings = formatFindings(handoffs);
-        const result = `Workflow completed: ${outcome.exitReason}.\n${findings}`;
+        const result = `${activeDefinition.name} completed.\n${findings}`;
         activeWorkflowId = undefined;
         activeDefinition = undefined;
         activeState = undefined;
@@ -259,24 +259,18 @@ export function registerWorkflowExtension(
 
       // Phase complete — return findings + next phase info
       const handoffs = listHandoffs({ cwd: ctx.cwd, workflowId: activeWorkflowId });
-      const latestHandoffs = handoffs.filter(
-        (h) =>
-          h.phase ===
-            activeDefinition!.phases.find(
-              (p) => p.name !== activeState!.currentPhase && activeState!.phases[p.name]?.status === "complete",
-            )?.name || handoffs.indexOf(h) >= handoffs.length - (tasks?.length ?? 1),
-      );
-      const findings = formatFindings(latestHandoffs.length > 0 ? latestHandoffs : handoffs.slice(-1));
+      const phaseHandoffs = handoffs.filter((h) => h.phase === executedPhase);
+      const findings = formatFindings(phaseHandoffs.length > 0 ? phaseHandoffs : handoffs.slice(-1));
 
       // Check if next phase is a gate
       const nextPhase = activeDefinition.phases.find((p) => p.name === activeState!.currentPhase);
       if (nextPhase?.mode === "gate") {
         return textResult(
-          `Phase completed.\n${findings}\n\nNext: approval gate "${nextPhase.name}". ${nextPhase.description}\nReview the findings and call Workflow({ action: "continue" }) to proceed.`,
+          `${executedPhase} completed.\n${findings}\n\nNext: gate "${nextPhase.name}". ${nextPhase.description}\nReview the findings and call Workflow({ action: "continue" }) to proceed.`,
         );
       }
 
-      return textResult(`Phase completed.\n${findings}\n${buildPhaseInfo()}`);
+      return textResult(`${executedPhase} completed.\n${findings}\n${buildPhaseInfo()}`);
     } finally {
       stopProgress?.();
     }

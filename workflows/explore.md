@@ -7,16 +7,16 @@ triggers:
   - deep dive with recommendations
 
 phases:
-  - name: scout
+  - name: exploration
     role: scout
     mode: single
     description: Broadly explore the codebase to map structure and patterns
 
-  - name: plan
+  - name: planning
     role: planner
     mode: single
-    description: Based on scout findings, design an approach or recommendations
-    contextFrom: scout
+    description: Based on exploration findings, design an approach or recommendations
+    contextFrom: exploration
 
 config:
   tokenLimit: 80000

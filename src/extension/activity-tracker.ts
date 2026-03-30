@@ -59,6 +59,7 @@ export function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => 
     maxTurns,
     tokens: "",
     responseText: "",
+    toolLog: [],
     session: undefined,
   };
 
@@ -73,13 +74,17 @@ export function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => 
       if (activity.type === "start") {
         const arg = formatToolArg(activity.toolName, activity.args);
         const label = activity.toolName === "bash" ? "running" : activity.toolName;
-        state.responseText += `→ ${arg ? `${label}: ${arg}` : label}\n`;
+        const toolHeader = arg ? `${label}: ${arg}` : label;
+        state.toolLog.push({ tool: toolHeader, results: [] });
       } else if (activity.result) {
-        const resultLines = activity.result
-          .split("\n")
-          .filter((l: string) => l.trim())
-          .slice(0, 3);
-        if (resultLines.length > 0) state.responseText += `${resultLines.join("\n")}\n`;
+        const lastEntry = state.toolLog[state.toolLog.length - 1];
+        if (lastEntry) {
+          const resultLines = activity.result
+            .split("\n")
+            .filter((l: string) => l.trim())
+            .slice(0, 2);
+          lastEntry.results.push(...resultLines);
+        }
       }
       state.tokens = safeFormatTokens(state.session);
       onStreamUpdate?.();

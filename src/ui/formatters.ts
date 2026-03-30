@@ -18,6 +18,12 @@ const TOOL_LABELS: Record<string, string> = {
   ls: "listing",
 };
 
+/** A tool call + its result lines for structured display. */
+export interface ToolLogEntry {
+  tool: string;
+  results: string[];
+}
+
 /** Per-agent live activity state. */
 export interface AgentActivity {
   activeTools: Map<string, string>;
@@ -26,6 +32,8 @@ export interface AgentActivity {
   toolUses: number;
   tokens: string;
   responseText: string;
+  /** Structured tool log for widget display. */
+  toolLog: ToolLogEntry[];
   session?: { getSessionStats(): { tokens: { total: number } } } | undefined;
   turnCount: number;
   maxTurns?: number | undefined;
