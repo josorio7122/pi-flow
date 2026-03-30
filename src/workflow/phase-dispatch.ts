@@ -1,15 +1,15 @@
 /**
  * Phase dispatch — routes to the correct phase handler based on mode.
+ * The tasks parameter allows the orchestrator to control parallelism.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "../agents/manager.js";
 import type { AgentActivity } from "../ui/formatters.js";
-import { executeAutoPhase } from "./phase-auto.js";
-import { executeGatePhase } from "./phase-gate.js";
 import { executeParallelPhase } from "./phase-parallel.js";
 import { executeReviewLoop } from "./phase-review.js";
-import { executeSinglePhase } from "./phase-single.js";
+import { executeSinglePhase as executeSingleAgent } from "./phase-single.js";
+import { createTask, getTasks } from "./task-store.js";
 import type { AgentHandoff, PhaseDefinition, WorkflowDefinition, WorkflowEvent, WorkflowState } from "./types.js";
 
 export async function dispatchPhase({
@@ -26,6 +26,7 @@ export async function dispatchPhase({
   emitEvent,
   signal,
   agentActivity,
+  tasks,
 }: {
   phase: PhaseDefinition;
   definition: WorkflowDefinition;
@@ -40,14 +41,39 @@ export async function dispatchPhase({
   emitEvent: (event: WorkflowEvent) => void;
   signal?: AbortSignal | undefined;
   agentActivity?: Map<string, AgentActivity> | undefined;
+  tasks?: readonly string[] | undefined;
 }) {
-  switch (phase.mode) {
-    case "gate":
-      return executeGatePhase({ phase, emitEvent });
+  // If orchestrator provided multiple tasks, run as parallel regardless of mode
+  if (tasks && tasks.length > 1) {
+    const existing = getTasks({ cwd, workflowId });
+    if (existing.length === 0) {
+      for (const [i, title] of tasks.entries()) {
+        createTask({ cwd, workflowId, input: { id: `task-${i + 1}`, title, dependsOn: [] } });
+      }
+    }
+    return executeParallelPhase({
+      phase,
+      definition,
+      state,
+      previousHandoff,
+      cwd,
+      workflowId,
+      pi,
+      ctx,
+      manager,
+      emitEvent,
+      signal,
+      agentActivity,
+    });
+  }
 
-    case "single": {
-      const result = await executeSinglePhase({
-        phase,
+  // Single task provided — override phase description
+  const effectivePhase = tasks?.[0] ? { ...phase, description: tasks[0] } : phase;
+
+  switch (phase.mode) {
+    case "single":
+      return executeSingleAgent({
+        phase: effectivePhase,
         definition,
         state,
         previousHandoff,
@@ -61,8 +87,22 @@ export async function dispatchPhase({
         signal,
         agentActivity,
       });
-      return { type: result.type };
-    }
+
+    case "parallel":
+      return executeParallelPhase({
+        phase: effectivePhase,
+        definition,
+        state,
+        previousHandoff,
+        cwd,
+        workflowId,
+        pi,
+        ctx,
+        manager,
+        emitEvent,
+        signal,
+        agentActivity,
+      });
 
     case "review-loop": {
       const targetHandoff = previousHandoff ?? {
@@ -77,7 +117,7 @@ export async function dispatchPhase({
         timestamp: Date.now(),
       };
       return executeReviewLoop({
-        phase,
+        phase: effectivePhase,
         definition,
         state,
         targetHandoff,
@@ -92,75 +132,8 @@ export async function dispatchPhase({
       });
     }
 
-    case "auto": {
-      const planned = state.plannedTasks?.[phase.name];
-      const autoResult = executeAutoPhase({ tasks: planned });
-      if (autoResult.type === "needs-planning") {
-        return {
-          type: "needs-planning",
-          phase: phase.name,
-          role: phase.role ?? "general-purpose",
-          description: phase.description,
-        };
-      }
-      // Single task → run as single phase
-      if (autoResult.tasks.length === 1) {
-        return executeSinglePhase({
-          phase: { ...phase, description: autoResult.tasks[0]! },
-          definition,
-          state,
-          previousHandoff,
-          continuationContext,
-          cwd,
-          workflowId,
-          pi,
-          ctx,
-          manager,
-          emitEvent,
-          signal,
-          agentActivity,
-        }).then((r) => ({ type: r.type }));
-      }
-      // Multiple tasks → run as parallel
-      // Seed tasks into the task store, then delegate to parallel handler
-      const { createTask, getTasks } = await import("./task-store.js");
-      const existing = getTasks({ cwd, workflowId });
-      if (existing.length === 0) {
-        for (const [i, title] of autoResult.tasks.entries()) {
-          createTask({ cwd, workflowId, input: { id: `auto-${i + 1}`, title, dependsOn: [] } });
-        }
-      }
-      return executeParallelPhase({
-        phase,
-        definition,
-        state,
-        previousHandoff,
-        cwd,
-        workflowId,
-        pi,
-        ctx,
-        manager,
-        emitEvent,
-        signal,
-        agentActivity,
-      });
-    }
-
-    case "parallel": {
-      return executeParallelPhase({
-        phase,
-        definition,
-        state,
-        previousHandoff,
-        cwd,
-        workflowId,
-        pi,
-        ctx,
-        manager,
-        emitEvent,
-        signal,
-        agentActivity,
-      });
-    }
+    case "gate":
+      // Handled by executor before dispatch
+      return { type: "gate-waiting" };
   }
 }

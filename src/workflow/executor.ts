@@ -1,6 +1,6 @@
 /**
- * Generic workflow executor — reads phase mode and dispatches to handler.
- * The core orchestration loop that drives any workflow defined in .md files.
+ * Workflow executor — runs a single phase and returns the result.
+ * No auto-advancement. The orchestrator (LLM) drives phase progression.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
@@ -18,14 +18,12 @@ import { appendEvent, listHandoffs, writeState } from "./store.js";
 import type { WorkflowDefinition, WorkflowEvent, WorkflowState } from "./types.js";
 
 export type PhaseOutcome =
-  | { type: "complete" }
+  | { type: "phase-complete" }
   | { type: "gate-waiting" }
-  | { type: "needs-planning"; phase: string; role: string; description: string }
-  | { type: "stuck"; reason: string }
-  | { type: "error"; error: string }
-  | { type: "workflow-complete"; exitReason: string };
+  | { type: "workflow-complete"; exitReason: string }
+  | { type: "error"; error: string };
 
-export async function executeCurrentPhase({
+export async function executeSinglePhase({
   definition,
   state,
   cwd,
@@ -35,6 +33,7 @@ export async function executeCurrentPhase({
   manager,
   signal,
   agentActivity,
+  tasks,
 }: {
   definition: WorkflowDefinition;
   state: WorkflowState;
@@ -45,6 +44,7 @@ export async function executeCurrentPhase({
   manager: AgentManager;
   signal?: AbortSignal | undefined;
   agentActivity?: Map<string, AgentActivity> | undefined;
+  tasks?: readonly string[] | undefined;
 }): Promise<PhaseOutcome> {
   if (signal?.aborted) return { type: "workflow-complete", exitReason: "user_abort" };
 
@@ -53,22 +53,20 @@ export async function executeCurrentPhase({
 
   const emitEvent = (event: WorkflowEvent) => appendEvent({ cwd, workflowId, event });
 
-  // Token budget check
   if (checkTokenLimit(state.tokens)) {
     state.exitReason = "token_limit";
     state.completedAt = Date.now();
     writeState({ cwd, workflowId, state });
-    emitEvent({
-      type: "workflow_complete",
-      exitReason: "token_limit",
-      totalDuration: Date.now() - state.startedAt,
-      totalTokens: state.tokens.total,
-      ts: Date.now(),
-    });
     return { type: "workflow-complete", exitReason: "token_limit" };
   }
 
-  // Detect interrupted phase (crash recovery) before marking running
+  // Gate phases return immediately
+  if (phase.mode === "gate") {
+    updatePhaseStatus({ state, phase: phase.name, status: "gate-waiting", onEvent: emitEvent });
+    writeState({ cwd, workflowId, state });
+    return { type: "gate-waiting" };
+  }
+
   const continuationContext = buildInterruptedContext({
     state,
     phaseName: phase.name,
@@ -76,15 +74,13 @@ export async function executeCurrentPhase({
     handoffs: listHandoffs({ cwd, workflowId }),
   });
 
-  // Mark phase running
   updatePhaseStatus({ state, phase: phase.name, status: "running", onEvent: emitEvent });
   writeState({ cwd, workflowId, state });
 
-  // Resolve previous handoff (for contextFrom)
   const previousHandoff = resolveContextHandoff({ cwd, workflowId, phase });
 
   try {
-    const outcome = await dispatchPhase({
+    await dispatchPhase({
       phase,
       definition,
       state,
@@ -98,36 +94,24 @@ export async function executeCurrentPhase({
       emitEvent,
       signal,
       agentActivity,
+      tasks,
     });
 
-    if (outcome.type === "gate-waiting") {
-      updatePhaseStatus({ state, phase: phase.name, status: "gate-waiting", onEvent: emitEvent });
-      writeState({ cwd, workflowId, state });
-      return { type: "gate-waiting" };
-    }
-
-    if (outcome.type === "needs-planning") {
-      writeState({ cwd, workflowId, state });
-      return outcome as PhaseOutcome;
-    }
-
-    // Phase completed — update tokens and advance
     updatePhaseStatus({ state, phase: phase.name, status: "complete", onEvent: emitEvent });
     accumulateTokens({ state, phaseName: phase.name, manager });
+
+    // Advance to next phase (or complete workflow)
+    const currentIndex = definition.phases.findIndex((p) => p.name === state.currentPhase);
+    const nextPhase = definition.phases[currentIndex + 1];
+    if (nextPhase) {
+      state.currentPhase = nextPhase.name;
+    } else {
+      state.exitReason = "clean";
+      state.completedAt = Date.now();
+    }
     writeState({ cwd, workflowId, state });
 
-    return advanceToNextPhase({
-      definition,
-      state,
-      cwd,
-      workflowId,
-      pi,
-      ctx,
-      manager,
-      emitEvent,
-      signal,
-      agentActivity,
-    });
+    return nextPhase ? { type: "phase-complete" } : { type: "workflow-complete", exitReason: "clean" };
   } catch (err) {
     if (err instanceof WorkflowAbortError) {
       state.exitReason = "user_abort";
@@ -138,59 +122,6 @@ export async function executeCurrentPhase({
     const error = err instanceof Error ? err.message : String(err);
     updatePhaseStatus({ state, phase: phase.name, status: "failed", error, onEvent: emitEvent });
     writeState({ cwd, workflowId, state });
-    emitEvent({ type: "agent_error", role: phase.role ?? "unknown", agentId: "", error, ts: Date.now() });
     return { type: "error", error };
   }
-}
-
-// ── Advancement ──────────────────────────────────────────────────────
-
-function advanceToNextPhase({
-  definition,
-  state,
-  cwd,
-  workflowId,
-  pi,
-  ctx,
-  manager,
-  emitEvent,
-  signal,
-  agentActivity,
-}: {
-  definition: WorkflowDefinition;
-  state: WorkflowState;
-  cwd: string;
-  workflowId: string;
-  pi: ExtensionAPI;
-  ctx: ExtensionContext;
-  manager: AgentManager;
-  emitEvent: (event: WorkflowEvent) => void;
-  signal?: AbortSignal | undefined;
-  agentActivity?: Map<string, AgentActivity> | undefined;
-}): PhaseOutcome | Promise<PhaseOutcome> {
-  const currentIndex = definition.phases.findIndex((p) => p.name === state.currentPhase);
-  const nextIndex = currentIndex + 1;
-
-  if (nextIndex >= definition.phases.length) {
-    state.exitReason = "clean";
-    state.completedAt = Date.now();
-    writeState({ cwd, workflowId, state });
-    emitEvent({
-      type: "workflow_complete",
-      exitReason: "clean",
-      totalDuration: Date.now() - state.startedAt,
-      totalTokens: state.tokens.total,
-      ts: Date.now(),
-    });
-    return { type: "workflow-complete", exitReason: "clean" };
-  }
-
-  const nextPhase = definition.phases[nextIndex];
-  if (!nextPhase) return { type: "error", error: "Next phase not found." };
-
-  state.currentPhase = nextPhase.name;
-  writeState({ cwd, workflowId, state });
-
-  // Recurse — execute the next phase immediately
-  return executeCurrentPhase({ definition, state, cwd, workflowId, pi, ctx, manager, signal, agentActivity });
 }

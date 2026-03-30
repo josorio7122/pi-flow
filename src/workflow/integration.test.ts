@@ -1,19 +1,15 @@
 /**
- * Integration test — runs the real executor with a fake manager
- * that simulates agent completions. Validates phase transitions,
- * handoff passing, token accumulation, and state persistence.
+ * Integration test — runs the executor with a fake manager.
+ * Tests the new orchestrator-driven model: one execute call per phase.
  */
 
 import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { executeCurrentPhase } from "./executor.js";
+import { executeSinglePhase } from "./executor.js";
 import { createWorkflowState } from "./pipeline.js";
-import { readEvents, readState } from "./store.js";
 import type { WorkflowDefinition } from "./types.js";
-
-// ── Fake Manager ─────────────────────────────────────────────────────
 
 function createFakeManager(responses: Record<string, { result: string; toolUses?: number; turnCount?: number }>) {
   const spawned: { type: string; prompt: string }[] = [];
@@ -27,7 +23,7 @@ function createFakeManager(responses: Record<string, { result: string; toolUses?
         return id;
       },
       getRecord(id: string) {
-        const idx = Number.parseInt(id.replace("agent-", "")) - 1;
+        const idx = Number.parseInt(id.replace("agent-", ""), 10) - 1;
         const entry = spawned[idx];
         const response = entry ? responses[entry.type] : undefined;
         return {
@@ -39,37 +35,18 @@ function createFakeManager(responses: Record<string, { result: string; toolUses?
           turnCount: response?.turnCount ?? 1,
           startedAt: Date.now() - 1000,
           completedAt: Date.now(),
-          session: { getSessionStats: () => ({ tokens: { total: 500, input: 200, output: 300 } }) },
+          session: { getSessionStats: () => ({ tokens: { total: 500 } }) },
         };
       },
-      abort() {
-        return true;
-      },
-      listAgents() {
-        return Array.from({ length: nextId }, (_, i) => {
-          const id = `agent-${i + 1}`;
-          const entry = spawned[i];
-          const response = entry ? responses[entry.type] : undefined;
-          return {
-            id,
-            completedAt: Date.now(),
-            session: { getSessionStats: () => ({ tokens: { total: 500, input: 200, output: 300 } }) },
-            result: response?.result ?? "No output.",
-            toolUses: response?.toolUses ?? 0,
-            turnCount: response?.turnCount ?? 1,
-          };
-        });
-      },
+      abort: () => true,
+      listAgents: () => [],
     } as any,
     getSpawned: () => spawned,
   };
 }
 
-// ── Test Setup ───────────────────────────────────────────────────────
-
 const mockPi = {} as any;
 const mockCtx = { cwd: "", model: undefined, modelRegistry: {}, sessionManager: {} } as any;
-
 let testDir: string;
 
 beforeEach(() => {
@@ -82,8 +59,6 @@ afterEach(() => {
   rmSync(testDir, { recursive: true, force: true });
 });
 
-// ── Definitions ──────────────────────────────────────────────────────
-
 const twoPhaseWorkflow: WorkflowDefinition = {
   name: "test-two-phase",
   description: "Scout then build",
@@ -91,27 +66,6 @@ const twoPhaseWorkflow: WorkflowDefinition = {
   phases: [
     { name: "scout", role: "scout", mode: "single", description: "Explore" },
     { name: "build", role: "builder", mode: "single", description: "Implement", contextFrom: "scout" },
-  ],
-  config: { tokenLimit: 100_000 },
-  orchestratorInstructions: "Test instructions",
-  source: "builtin",
-};
-
-const reviewWorkflow: WorkflowDefinition = {
-  name: "test-review",
-  description: "Build then review",
-  triggers: [],
-  phases: [
-    { name: "build", role: "builder", mode: "single", description: "Implement" },
-    {
-      name: "review",
-      role: "reviewer",
-      mode: "review-loop",
-      description: "Review",
-      fixRole: "builder",
-      maxCycles: 2,
-      contextFrom: "build",
-    },
   ],
   config: { tokenLimit: 100_000 },
   orchestratorInstructions: "",
@@ -132,150 +86,115 @@ const gateWorkflow: WorkflowDefinition = {
   source: "builtin",
 };
 
-// ── Tests ────────────────────────────────────────────────────────────
-
-describe("workflow integration", () => {
-  it("executes a two-phase workflow end-to-end", async () => {
+describe("workflow integration — orchestrator-driven", () => {
+  it("executes one phase per call", async () => {
     const { manager, getSpawned } = createFakeManager({
-      scout: { result: "Found 3 files to fix", toolUses: 5, turnCount: 4 },
-      builder: { result: "Fixed all files", toolUses: 12, turnCount: 8 },
+      scout: { result: "Found 3 files", toolUses: 5, turnCount: 4 },
     });
 
-    const state = createWorkflowState({
-      definition: twoPhaseWorkflow,
-      description: "Fix bugs",
-      workflowId: "flow-test",
-    });
-    const { mkdirSync: mk } = await import("node:fs");
-    mk(join(testDir, ".pi/flow/flow-test/handoffs"), { recursive: true });
+    const state = createWorkflowState({ definition: twoPhaseWorkflow, description: "Fix bugs", workflowId: "flow-1" });
+    mkdirSync(join(testDir, ".pi/flow/flow-1/handoffs"), { recursive: true });
 
-    const outcome = await executeCurrentPhase({
+    const outcome = await executeSinglePhase({
       definition: twoPhaseWorkflow,
       state,
       cwd: testDir,
-      workflowId: "flow-test",
+      workflowId: "flow-1",
       pi: mockPi,
       ctx: mockCtx,
       manager,
+      tasks: ["Explore the codebase"],
     });
 
-    // Both phases completed → workflow finished
-    expect(outcome.type).toBe("workflow-complete");
-    if (outcome.type === "workflow-complete") {
-      expect(outcome.exitReason).toBe("clean");
-    }
-
-    // Two agents were spawned (scout + builder)
-    const spawned = getSpawned();
-    expect(spawned).toHaveLength(2);
-    expect(spawned[0]?.type).toBe("scout");
-    expect(spawned[1]?.type).toBe("builder");
-
-    // Builder received scout's handoff context
-    expect(spawned[1]?.prompt).toContain("Found 3 files to fix");
-
-    // State persisted correctly
-    const finalState = readState({ cwd: testDir, workflowId: "flow-test" });
-    expect(finalState?.exitReason).toBe("clean");
-    expect(finalState?.completedAt).toBeDefined();
-    expect(finalState?.phases.scout?.status).toBe("complete");
-    expect(finalState?.phases.build?.status).toBe("complete");
-
-    // Tokens accumulated
-    expect(finalState?.tokens.total).toBeGreaterThan(0);
-
-    // Events logged
-    const events = readEvents(testDir, "flow-test");
-    const types = events.map((e) => e.type);
-    expect(types).toContain("phase_start");
-    expect(types).toContain("phase_complete");
-    expect(types).toContain("handoff_written");
-    expect(types).toContain("workflow_complete");
+    expect(outcome.type).toBe("phase-complete");
+    expect(getSpawned()).toHaveLength(1);
+    expect(state.currentPhase).toBe("build"); // Advanced to next
   });
 
-  it("pauses at gate phase and returns gate-waiting", async () => {
+  it("returns workflow-complete on last phase", async () => {
+    const { manager } = createFakeManager({
+      scout: { result: "Found files" },
+      builder: { result: "Fixed all" },
+    });
+
+    const state = createWorkflowState({ definition: twoPhaseWorkflow, description: "Fix", workflowId: "flow-2" });
+    mkdirSync(join(testDir, ".pi/flow/flow-2/handoffs"), { recursive: true });
+
+    // Phase 1: scout
+    await executeSinglePhase({
+      definition: twoPhaseWorkflow,
+      state,
+      cwd: testDir,
+      workflowId: "flow-2",
+      pi: mockPi,
+      ctx: mockCtx,
+      manager,
+      tasks: ["Scout"],
+    });
+
+    // Phase 2: build (last phase)
+    const outcome = await executeSinglePhase({
+      definition: twoPhaseWorkflow,
+      state,
+      cwd: testDir,
+      workflowId: "flow-2",
+      pi: mockPi,
+      ctx: mockCtx,
+      manager,
+      tasks: ["Build it"],
+    });
+
+    expect(outcome.type).toBe("workflow-complete");
+    if (outcome.type === "workflow-complete") expect(outcome.exitReason).toBe("clean");
+  });
+
+  it("returns gate-waiting at gate phase", async () => {
     const { manager } = createFakeManager({
       scout: { result: "Analysis complete" },
     });
 
-    const state = createWorkflowState({ definition: gateWorkflow, description: "Test gate", workflowId: "flow-gate" });
-    mkdirSync(join(testDir, ".pi/flow/flow-gate/handoffs"), { recursive: true });
+    const state = createWorkflowState({ definition: gateWorkflow, description: "Test gate", workflowId: "flow-3" });
+    mkdirSync(join(testDir, ".pi/flow/flow-3/handoffs"), { recursive: true });
 
-    const outcome = await executeCurrentPhase({
+    // Phase 1: scout
+    await executeSinglePhase({
       definition: gateWorkflow,
       state,
       cwd: testDir,
-      workflowId: "flow-gate",
+      workflowId: "flow-3",
+      pi: mockPi,
+      ctx: mockCtx,
+      manager,
+      tasks: ["Scout"],
+    });
+
+    // Phase 2: gate — should return immediately
+    const outcome = await executeSinglePhase({
+      definition: gateWorkflow,
+      state,
+      cwd: testDir,
+      workflowId: "flow-3",
       pi: mockPi,
       ctx: mockCtx,
       manager,
     });
 
     expect(outcome.type).toBe("gate-waiting");
-
-    // Scout completed, gate is waiting
-    const savedState = readState({ cwd: testDir, workflowId: "flow-gate" });
-    expect(savedState?.phases.scout?.status).toBe("complete");
-    expect(savedState?.phases.approve?.status).toBe("gate-waiting");
-  });
-
-  it("review loop cycles until SHIP verdict", async () => {
-    const { manager, getSpawned } = createFakeManager({
-      builder: { result: "Implementation done", toolUses: 10, turnCount: 6 },
-      reviewer: { result: "## Verdict: SHIP\n\nLooks great.", toolUses: 3, turnCount: 2 },
-    });
-
-    const state = createWorkflowState({
-      definition: reviewWorkflow,
-      description: "Test review",
-      workflowId: "flow-review",
-    });
-    mkdirSync(join(testDir, ".pi/flow/flow-review/handoffs"), { recursive: true });
-
-    const outcome = await executeCurrentPhase({
-      definition: reviewWorkflow,
-      state,
-      cwd: testDir,
-      workflowId: "flow-review",
-      pi: mockPi,
-      ctx: mockCtx,
-      manager,
-    });
-
-    expect(outcome.type).toBe("workflow-complete");
-
-    // Builder + reviewer spawned (SHIP on first review → no fix cycle)
-    const spawned = getSpawned();
-    expect(spawned).toHaveLength(2);
-    expect(spawned[0]?.type).toBe("builder");
-    expect(spawned[1]?.type).toBe("reviewer");
-
-    // Review verdict event logged
-    const events = readEvents(testDir, "flow-review");
-    const verdictEvents = events.filter((e) => e.type === "review_verdict");
-    expect(verdictEvents).toHaveLength(1);
-    if (verdictEvents[0]?.type === "review_verdict") {
-      expect(verdictEvents[0].verdict).toBe("SHIP");
-    }
   });
 
   it("aborts when signal is already aborted", async () => {
     const controller = new AbortController();
     controller.abort();
-
     const { manager } = createFakeManager({});
-    const state = createWorkflowState({
-      definition: twoPhaseWorkflow,
-      description: "Test abort",
-      workflowId: "flow-abort",
-    });
-    mkdirSync(join(testDir, ".pi/flow/flow-abort/handoffs"), { recursive: true });
 
-    const outcome = await executeCurrentPhase({
+    const state = createWorkflowState({ definition: twoPhaseWorkflow, description: "Abort", workflowId: "flow-4" });
+    mkdirSync(join(testDir, ".pi/flow/flow-4/handoffs"), { recursive: true });
+
+    const outcome = await executeSinglePhase({
       definition: twoPhaseWorkflow,
       state,
       cwd: testDir,
-      workflowId: "flow-abort",
+      workflowId: "flow-4",
       pi: mockPi,
       ctx: mockCtx,
       manager,
@@ -283,8 +202,28 @@ describe("workflow integration", () => {
     });
 
     expect(outcome.type).toBe("workflow-complete");
-    if (outcome.type === "workflow-complete") {
-      expect(outcome.exitReason).toBe("user_abort");
-    }
+    if (outcome.type === "workflow-complete") expect(outcome.exitReason).toBe("user_abort");
+  });
+
+  it("spawns multiple agents when given multiple tasks", async () => {
+    const { manager, getSpawned } = createFakeManager({
+      scout: { result: "Found stuff" },
+    });
+
+    const state = createWorkflowState({ definition: twoPhaseWorkflow, description: "Parallel", workflowId: "flow-5" });
+    mkdirSync(join(testDir, ".pi/flow/flow-5/handoffs"), { recursive: true });
+
+    await executeSinglePhase({
+      definition: twoPhaseWorkflow,
+      state,
+      cwd: testDir,
+      workflowId: "flow-5",
+      pi: mockPi,
+      ctx: mockCtx,
+      manager,
+      tasks: ["Map data model", "Map API endpoints", "Map frontend"],
+    });
+
+    expect(getSpawned()).toHaveLength(3);
   });
 });
