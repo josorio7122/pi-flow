@@ -60,7 +60,7 @@ export function registerWorkflowExtension(
   }
 
   function doRefreshWidget(ctx: ExtensionContext) {
-    refreshWidget({ ctx, activeWorkflowId, activeDefinition });
+    refreshWidget({ ctx, activeWorkflowId, activeDefinition, manager: deps?.manager });
   }
 
   // ── Workflow Tool ────────────────────────────────────────────────
@@ -169,6 +169,9 @@ export function registerWorkflowExtension(
       ? startProgressTimer({ cwd: ctx.cwd, workflowId: activeWorkflowId, onUpdate })
       : undefined;
 
+    // Live-refresh the workflow widget every second while agents run
+    const widgetTimer = setInterval(() => doRefreshWidget(ctx), 1000);
+
     let outcome: Awaited<ReturnType<typeof executeCurrentPhase>>;
     try {
       outcome = await executeCurrentPhase({
@@ -182,6 +185,7 @@ export function registerWorkflowExtension(
         signal,
       });
     } finally {
+      clearInterval(widgetTimer);
       stopProgress?.();
     }
 

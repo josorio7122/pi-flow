@@ -3,6 +3,7 @@
  * Pure functions — no I/O, no side effects.
  */
 
+import type { AgentRecord } from "../types.js";
 import type { PhaseStatus, WorkflowDefinition, WorkflowState } from "./types.js";
 
 // ── Format Helpers ───────────────────────────────────────────────────
@@ -35,26 +36,45 @@ export function formatTokens(tokens: number) {
 
 // ── Widget Lines ─────────────────────────────────────────────────────
 
-export function buildProgressLines({ state, definition }: { state: WorkflowState; definition: WorkflowDefinition }) {
+function formatAgentLine(agent: AgentRecord) {
+  const elapsed = formatDuration(Date.now() - agent.startedAt);
+  const parts: string[] = [];
+  if (agent.turnCount > 0) parts.push(`⟳${agent.turnCount}`);
+  if (agent.toolUses > 0) parts.push(`${agent.toolUses} tools`);
+  try {
+    const tokens = agent.session?.getSessionStats().tokens.total;
+    if (tokens) parts.push(formatTokens(tokens));
+  } catch {
+    /* */
+  }
+  parts.push(elapsed);
+  return `    ${agent.type} · ${parts.join(" · ")}`;
+}
+
+export function buildProgressLines({
+  state,
+  definition,
+  runningAgents,
+}: {
+  state: WorkflowState;
+  definition: WorkflowDefinition;
+  runningAgents?: readonly AgentRecord[] | undefined;
+}) {
   const lines: string[] = [];
 
-  const header = `Flow: ${state.type} — ${truncate(state.description, 50)}`;
-  lines.push(header);
+  lines.push(`Flow: ${state.type} — ${truncate(state.description, 60)}`);
 
-  const phaseLine = definition.phases
-    .map((p) => {
-      const result = state.phases[p.name];
-      const status: PhaseStatus = result?.status ?? "pending";
-      const icon = getStatusIcon(status);
-      return `${icon} ${p.name}`;
-    })
-    .join("    ");
-  lines.push(`  ${phaseLine}`);
+  for (const p of definition.phases) {
+    const result = state.phases[p.name];
+    const status: PhaseStatus = result?.status ?? "pending";
+    const icon = getStatusIcon(status);
+    const duration = result?.completedAt
+      ? ` (${formatDuration(result.completedAt - (result.startedAt ?? state.startedAt))})`
+      : "";
+    lines.push(`  ${icon} ${p.name}${duration}`);
 
-  if (state.activeAgents.length > 0) {
-    for (const agent of state.activeAgents) {
-      const elapsed = formatDuration(Date.now() - agent.startedAt);
-      lines.push(`  ${agent.role} working... (${elapsed})`);
+    if (status === "running" && runningAgents) {
+      for (const agent of runningAgents) lines.push(formatAgentLine(agent));
     }
   }
 
@@ -64,9 +84,8 @@ export function buildProgressLines({ state, definition }: { state: WorkflowState
 // ── Status Bar Text ──────────────────────────────────────────────────
 
 export function buildStatusText(state: WorkflowState) {
-  const phaseNames = Object.keys(state.phases);
   const completed = Object.values(state.phases).filter((p) => p.status === "complete").length;
-  const total = phaseNames.length;
+  const total = Object.keys(state.phases).length;
   const tokens = formatTokens(state.tokens.total);
   const elapsed = formatDuration(Date.now() - state.startedAt);
   return `[flow] ${state.currentPhase} ● ${completed}/${total} | ${tokens} tokens | ${elapsed}`;

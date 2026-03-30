@@ -3,6 +3,7 @@
  */
 
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { AgentManager } from "../agents/manager.js";
 import { buildProgressLines, buildStatusText, formatDuration } from "./progress.js";
 import { readState } from "./store.js";
 import type { WorkflowDefinition } from "./types.js";
@@ -29,10 +30,12 @@ export function refreshWidget({
   ctx,
   activeWorkflowId,
   activeDefinition,
+  manager,
 }: {
   ctx: ExtensionContext;
   activeWorkflowId: string | undefined;
   activeDefinition: WorkflowDefinition | undefined;
+  manager?: AgentManager | undefined;
 }) {
   if (!activeWorkflowId || !activeDefinition) {
     ctx.ui.setWidget(WIDGET_KEY, undefined);
@@ -45,7 +48,8 @@ export function refreshWidget({
     ctx.ui.setStatus(WIDGET_KEY, undefined);
     return;
   }
-  const lines = buildProgressLines({ state, definition: activeDefinition });
+  const runningAgents = manager?.listAgents().filter((a) => a.status === "running");
+  const lines = buildProgressLines({ state, definition: activeDefinition, runningAgents });
   ctx.ui.setWidget(WIDGET_KEY, lines);
   ctx.ui.setStatus(WIDGET_KEY, buildStatusText(state));
 }
