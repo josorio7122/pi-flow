@@ -8,6 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { AgentToolUpdateCallback } from "@mariozechner/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import type { AgentManager } from "../agents/manager.js";
 import type { AgentActivity } from "../ui/formatters.js";
@@ -99,6 +100,18 @@ export function registerWorkflowExtension(
       "Never scout via Agent then do the fix yourself. Workflow provides approval gates and code review that manual execution skips.",
     ],
     description: buildToolDescription(),
+    // biome-ignore lint/complexity/useMaxParams: pi renderResult callback signature is fixed
+    renderResult: (result, _, theme) => {
+      const text = result.content[0]?.type === "text" ? result.content[0].text : "";
+      if (!text) return new Text("", 0, 0);
+      const lines = text.split("\n");
+      const header = lines[0] ?? "";
+      const lineCount = lines.length - 1;
+      const icon = header.includes("error") ? theme.fg("error", "✗") : theme.fg("success", "✓");
+      let rendered = `${icon} ${theme.fg("dim", header)}`;
+      if (lineCount > 1) rendered += `\n  ${theme.fg("dim", `${lineCount} lines of findings delivered to agent`)}`;
+      return new Text(rendered, 0, 0);
+    },
     parameters: Type.Object({
       action: Type.String({ description: '"start", "continue", or "status"' }),
       workflow_type: Type.Optional(Type.String({ description: "Which workflow (required for start)" })),
