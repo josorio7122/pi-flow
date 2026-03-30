@@ -139,10 +139,11 @@ export function registerWorkflowExtension(
       const lines = text.split("\n");
       const header = lines[0] ?? "";
       const lineCount = lines.length - 1;
-      const icon =
-        header.includes("error") || header.includes("Error") ? theme.fg("error", "✗") : theme.fg("success", "✓");
+      const isError = header.includes("error") || header.includes("Error");
+      const isStarted = header.includes("started");
+      const icon = isError ? theme.fg("error", "✗") : isStarted ? theme.fg("accent", "▸") : theme.fg("success", "✓");
       let rendered = `${icon} ${theme.fg("dim", header)}`;
-      if (lineCount > 1) rendered += `\n  ${theme.fg("dim", `${lineCount} lines delivered to agent`)}`;
+      if (lineCount > 1 && !isStarted) rendered += `\n  ${theme.fg("dim", `${lineCount} lines delivered to agent`)}`;
       return new Text(rendered, 0, 0);
     },
     parameters: Type.Object({
