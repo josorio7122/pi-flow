@@ -49,7 +49,7 @@ function wordWrap(text: string, width: number) {
   return result;
 }
 
-const MAX_ACTIVITY_LINES = 15;
+const MAX_ACTIVITY_LINES = 8;
 
 function renderAgentInWorkflow({
   lines,
