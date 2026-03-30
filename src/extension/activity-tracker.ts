@@ -69,6 +69,11 @@ export function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => 
       args?: Record<string, unknown> | undefined;
     }) => {
       applyToolActivity(state, activity);
+      if (activity.type === "start") {
+        const arg = formatToolArg(activity.toolName, activity.args);
+        const label = activity.toolName === "bash" ? "running" : activity.toolName;
+        state.responseText += `${arg ? `${label}: ${arg}` : label}\n`;
+      }
       state.tokens = safeFormatTokens(state.session);
       onStreamUpdate?.();
     },

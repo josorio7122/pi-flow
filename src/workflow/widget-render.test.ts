@@ -95,14 +95,15 @@ describe("workflow widget render with live activity", () => {
     callbacks.onToolActivity({ type: "start", toolName: "read", args: { path: "/foo.py" } });
     callbacks.onToolActivity({ type: "end", toolName: "read" });
 
-    // Between turns — responseText should still have content
-    expect(state.responseText).toBe("Starting exploration\n");
+    // Between turns — responseText has text + tool log
+    expect(state.responseText).toContain("Starting exploration");
+    expect(state.responseText).toContain("read:");
     expect(state.activeTools.size).toBe(0);
 
     // Turn 2: more text
     callbacks.onTextDelta("Found payment models\n", "Found payment models\n");
 
-    // responseText accumulates
+    // responseText accumulates everything
     expect(state.responseText).toContain("Starting exploration");
     expect(state.responseText).toContain("Found payment models");
   });

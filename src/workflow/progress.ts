@@ -35,10 +35,11 @@ export function formatTokens(tokens: number) {
 
 // ── Status Bar Text ──────────────────────────────────────────────────
 
-export function buildStatusText(state: WorkflowState) {
+export function buildStatusText(state: WorkflowState, liveTokens?: number | undefined) {
   const completed = Object.values(state.phases).filter((p) => p.status === "complete").length;
   const total = Object.keys(state.phases).length;
-  const tokens = formatTokens(state.tokens.total);
+  const tokenCount = liveTokens ?? state.tokens.total;
+  const tokens = formatTokens(tokenCount);
   const elapsed = formatDuration(Date.now() - state.startedAt);
   return `[flow] ${state.currentPhase} ● ${completed}/${total} | ${tokens} tokens | ${elapsed}`;
 }

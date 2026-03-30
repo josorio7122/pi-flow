@@ -34,18 +34,31 @@ import type { AgentHandoff, WorkflowDefinition, WorkflowEvent, WorkflowState } f
 const PROGRESS_INTERVAL_MS = 3000;
 
 function startProgressTimer({
-  cwd,
-  workflowId,
+  getState,
+  getManager,
   onUpdate,
 }: {
-  cwd: string;
-  workflowId: string;
+  getState: () => WorkflowState | undefined;
+  getManager: () => AgentManager | undefined;
   onUpdate: AgentToolUpdateCallback;
 }) {
   const timer = setInterval(() => {
-    const state = readState({ cwd, workflowId });
+    const state = getState();
     if (!state) return;
-    onUpdate({ content: [{ type: "text", text: buildStatusText(state) }], details: {} });
+    let liveTokens = state.tokens.total;
+    const mgr = getManager();
+    if (mgr) {
+      for (const a of mgr.listAgents()) {
+        if (a.status === "running" && a.session) {
+          try {
+            liveTokens += a.session.getSessionStats().tokens.total;
+          } catch {
+            /* */
+          }
+        }
+      }
+    }
+    onUpdate({ content: [{ type: "text", text: buildStatusText(state, liveTokens) }], details: {} });
   }, PROGRESS_INTERVAL_MS);
   return () => clearInterval(timer);
 }
@@ -209,7 +222,7 @@ export function registerWorkflowExtension(
     if (!activeState) return textResult("Workflow state not found.", true);
 
     const stopProgress = onUpdate
-      ? startProgressTimer({ cwd: ctx.cwd, workflowId: activeWorkflowId, onUpdate })
+      ? startProgressTimer({ getState: () => activeState, getManager: () => deps?.manager, onUpdate })
       : undefined;
 
     doRefreshWidget(ctx);

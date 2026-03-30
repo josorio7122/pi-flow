@@ -174,7 +174,20 @@ export function refreshWidget({
   renderManager = manager;
   renderActivity = agentActivity;
   renderRegistry = registry;
-  ctx.ui.setStatus(WIDGET_KEY, buildStatusText(activeState));
+  // Compute live tokens from running agents
+  let liveTokens = activeState.tokens.total;
+  if (manager) {
+    for (const a of manager.listAgents()) {
+      if (a.status === "running" && a.session) {
+        try {
+          liveTokens += a.session.getSessionStats().tokens.total;
+        } catch {
+          /* */
+        }
+      }
+    }
+  }
+  ctx.ui.setStatus(WIDGET_KEY, buildStatusText(activeState, liveTokens));
 
   if (!widgetRegistered) {
     ctx.ui.setWidget(
