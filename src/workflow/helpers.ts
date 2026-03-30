@@ -16,6 +16,7 @@ export const STALLED_TIMEOUT_MS = 5 * 60 * 1000;
 
 let widgetTui: TUI | undefined;
 let widgetRegistered = false;
+let widgetTimer: ReturnType<typeof setInterval> | undefined;
 
 // Render deps — kept in module scope so render() reads live data without disk I/O
 let renderState: WorkflowState | undefined;
@@ -61,6 +62,10 @@ export function refreshWidget({
       widgetRegistered = false;
       widgetTui = undefined;
     }
+    if (widgetTimer) {
+      clearInterval(widgetTimer);
+      widgetTimer = undefined;
+    }
     renderState = undefined;
     renderDefinition = undefined;
     renderManager = undefined;
@@ -101,6 +106,9 @@ export function refreshWidget({
       { placement: "aboveEditor" },
     );
     widgetRegistered = true;
+    if (!widgetTimer) {
+      widgetTimer = setInterval(() => widgetTui?.requestRender(), 80);
+    }
   } else {
     widgetTui?.requestRender();
   }
