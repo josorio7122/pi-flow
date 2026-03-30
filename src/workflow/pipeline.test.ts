@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  checkTokenLimit,
-  createTokenState,
-  createWorkflowState,
-  detectStuckIssues,
-  updatePhaseStatus,
-} from "./pipeline.js";
+import { createTokenState, createWorkflowState, detectStuckIssues, updatePhaseStatus } from "./pipeline.js";
 import type { PhaseDefinition, ReviewIssue, WorkflowDefinition } from "./types.js";
 
 const fixPhases: PhaseDefinition[] = [
@@ -20,7 +14,7 @@ const fixDef: WorkflowDefinition = {
   description: "fix workflow",
   triggers: [],
   phases: fixPhases,
-  config: { tokenLimit: 100_000 },
+  config: {},
   orchestratorInstructions: "",
   source: "builtin",
 };
@@ -47,11 +41,9 @@ describe("createWorkflowState", () => {
 });
 
 describe("createTokenState", () => {
-  it("initializes with zero totals and given limit", () => {
-    const tokens = createTokenState(50_000);
+  it("initializes with zero totals", () => {
+    const tokens = createTokenState();
     expect(tokens.total).toBe(0);
-    expect(tokens.limit).toBe(50_000);
-    expect(tokens.limitReached).toBe(false);
     expect(tokens.byPhase).toEqual({});
   });
 });
@@ -87,33 +79,6 @@ describe("updatePhaseStatus", () => {
     updatePhaseStatus({ state, phase: "scout", status: "failed", error: "crashed", onEvent: () => {} });
     expect(phase(state, "scout").status).toBe("failed");
     expect(phase(state, "scout").error).toBe("crashed");
-  });
-});
-
-describe("checkTokenLimit", () => {
-  it("returns false when under limit", () => {
-    const tokens = createTokenState(100_000);
-    tokens.total = 50_000;
-    expect(checkTokenLimit(tokens)).toBe(false);
-  });
-
-  it("returns true when at limit", () => {
-    const tokens = createTokenState(100_000);
-    tokens.total = 100_000;
-    expect(checkTokenLimit(tokens)).toBe(true);
-    expect(tokens.limitReached).toBe(true);
-  });
-
-  it("returns true when over limit", () => {
-    const tokens = createTokenState(100_000);
-    tokens.total = 150_000;
-    expect(checkTokenLimit(tokens)).toBe(true);
-  });
-
-  it("returns false when limit is 0 (unlimited)", () => {
-    const tokens = createTokenState(0);
-    tokens.total = 999_999;
-    expect(checkTokenLimit(tokens)).toBe(false);
   });
 });
 

@@ -11,7 +11,7 @@ function makeState(phaseStatus: string, attempt = 1): WorkflowState {
     currentPhase: "build",
     phases: { build: { phase: "build", status: phaseStatus as WorkflowState["phases"][string]["status"], attempt } },
     reviewCycle: 0,
-    tokens: { total: 0, byPhase: {}, limit: 100000, limitReached: false },
+    tokens: { total: 0, byPhase: {} },
     activeAgents: [],
     completedAgents: [],
     countedAgentIds: [],

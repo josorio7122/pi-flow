@@ -36,8 +36,6 @@ phases:
     maxCycles: 3
     contextFrom: implementation
 
-config:
-  tokenLimit: 200000
 ---
 
 Follow TDD strictly: tests must fail before implementation, pass after. The planner should identify all files that need to change. The builder should implement in small increments and run tests frequently.

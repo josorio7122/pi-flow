@@ -26,9 +26,7 @@ export interface PhaseDefinition {
   maxCycles?: number | undefined;
 }
 
-export interface WorkflowConfig {
-  tokenLimit: number;
-}
+export interface WorkflowConfig {}
 
 // ── Workflow Runtime State (persisted to state.json) ─────────────────
 
@@ -43,13 +41,11 @@ export interface PhaseResult {
   attempt: number;
 }
 
-export type ExitReason = "clean" | "stuck" | "max_cycles" | "token_limit" | "user_abort";
+export type ExitReason = "clean" | "stuck" | "max_cycles" | "user_abort";
 
 export interface TokenState {
   total: number;
   byPhase: Record<string, number>;
-  limit: number;
-  limitReached: boolean;
 }
 
 export interface ActiveAgent {

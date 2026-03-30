@@ -67,7 +67,7 @@ const twoPhaseWorkflow: WorkflowDefinition = {
     { name: "scout", role: "scout", mode: "single", description: "Explore" },
     { name: "build", role: "builder", mode: "single", description: "Implement", contextFrom: "scout" },
   ],
-  config: { tokenLimit: 100_000 },
+  config: {},
   orchestratorInstructions: "",
   source: "builtin",
 };
@@ -81,7 +81,7 @@ const gateWorkflow: WorkflowDefinition = {
     { name: "approve", mode: "gate", description: "Approve" },
     { name: "build", role: "builder", mode: "single", description: "Implement" },
   ],
-  config: { tokenLimit: 100_000 },
+  config: {},
   orchestratorInstructions: "",
   source: "builtin",
 };

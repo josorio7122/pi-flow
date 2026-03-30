@@ -31,11 +31,6 @@ export function buildPhasePrompt({
     sections.push(formatHandoffContext(previousHandoff));
   }
 
-  const remaining = state.tokens.limit - state.tokens.total;
-  if (remaining < state.tokens.limit * 0.2) {
-    sections.push(`## Budget Warning\nToken budget is low: ${remaining} tokens remaining of ${state.tokens.limit}.`);
-  }
-
   return sections.join("\n\n");
 }
 

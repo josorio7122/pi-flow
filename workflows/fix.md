@@ -30,8 +30,6 @@ phases:
     maxCycles: 3
     contextFrom: implementation
 
-config:
-  tokenLimit: 150000
 ---
 
 The scout phase should identify the root cause, not just symptoms. The builder should run tests after every change.

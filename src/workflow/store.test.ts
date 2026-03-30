@@ -50,7 +50,7 @@ describe("state operations", () => {
       currentPhase: "scout",
       phases: { scout: { phase: "scout", status: "pending", attempt: 0 } },
       reviewCycle: 0,
-      tokens: { total: 0, byPhase: {}, limit: 100000, limitReached: false },
+      tokens: { total: 0, byPhase: {} },
       activeAgents: [],
       completedAgents: [],
       countedAgentIds: [],

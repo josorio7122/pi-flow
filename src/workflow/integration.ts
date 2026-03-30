@@ -37,6 +37,14 @@ import type { AgentHandoff, WorkflowDefinition, WorkflowEvent, WorkflowState } f
 
 const PROGRESS_INTERVAL_MS = 3000;
 
+function resultIcon(header: string): [color: "error" | "warning" | "accent" | "success", icon: string] {
+  if (header.includes("error") || header.includes("Error") || header.includes("No active")) return ["error", "✗"];
+  if (header.includes("stopped:")) return ["warning", "⚠"];
+  if (header.includes("started")) return ["accent", "▸"];
+  if (header.includes("paused")) return ["warning", "⏸"];
+  return ["success", "✓"];
+}
+
 export function registerWorkflowExtension(
   pi: ExtensionAPI,
   {
@@ -137,18 +145,9 @@ export function registerWorkflowExtension(
       if (!text) return new Text("", 0, 0);
       if (isPartial) return new Text(theme.fg("dim", text), 0, 0);
       const header = text.split("\n")[0] ?? "";
-      const isError = header.includes("error") || header.includes("Error") || header.includes("No active");
-      const isStarted = header.includes("started");
-      const isPaused = header.includes("paused");
-      const icon = isError
-        ? theme.fg("error", "✗")
-        : isStarted
-          ? theme.fg("accent", "▸")
-          : isPaused
-            ? theme.fg("warning", "⏸")
-            : theme.fg("success", "✓");
+      const icon = theme.fg(...resultIcon(header));
       let rendered = `${icon} ${theme.fg("dim", header)}`;
-      if (isStarted) {
+      if (header.includes("started")) {
         const phaseLine = text.split("\n").find((l) => l.includes("Current phase:"));
         if (phaseLine) rendered += `\n  ${theme.fg("dim", phaseLine.trim())}`;
       }
@@ -245,12 +244,16 @@ export function registerWorkflowExtension(
       if (outcome.type === "workflow-complete") {
         const handoffs = listHandoffs({ cwd: ctx.cwd, workflowId: activeWorkflowId });
         const findings = formatFindings(handoffs);
-        const result = `Workflow "${activeDefinition.name}" finished. All phases complete. Present the findings below to the user.\n${findings}`;
+        const stoppedPhase = executedPhase;
+        const isClean = outcome.exitReason === "clean";
+        const header = isClean
+          ? `Workflow "${activeDefinition.name}" finished. All phases complete. Present the findings below to the user.`
+          : `Workflow "${activeDefinition.name}" stopped: ${outcome.exitReason}. Stopped at phase "${stoppedPhase}".`;
         activeWorkflowId = undefined;
         activeDefinition = undefined;
         activeState = undefined;
         doRefreshWidget(ctx);
-        return textResult(result);
+        return textResult(`${header}\n${findings}`, !isClean);
       }
       if (outcome.type === "error") {
         const handoffs = listHandoffs({ cwd: ctx.cwd, workflowId: activeWorkflowId });

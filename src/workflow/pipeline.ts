@@ -10,7 +10,6 @@ import type {
   PhaseResult,
   PhaseStatus,
   ReviewIssue,
-  TokenState,
   WorkflowDefinition,
   WorkflowEvent,
   WorkflowState,
@@ -46,7 +45,7 @@ export function createWorkflowState({
     currentPhase: firstPhase ? firstPhase.name : "",
     phases,
     reviewCycle: 0,
-    tokens: createTokenState(definition.config.tokenLimit),
+    tokens: createTokenState(),
     activeAgents: [],
     completedAgents: [],
     countedAgentIds: [],
@@ -56,12 +55,10 @@ export function createWorkflowState({
   return state;
 }
 
-export function createTokenState(limit: number) {
+export function createTokenState() {
   return {
     total: 0,
     byPhase: {},
-    limit,
-    limitReached: false,
   };
 }
 
@@ -102,17 +99,6 @@ export function updatePhaseStatus({
   if (error !== undefined) {
     result.error = error;
   }
-}
-
-// ── Token Limit ──────────────────────────────────────────────────────
-
-export function checkTokenLimit(tokens: TokenState) {
-  if (tokens.limit <= 0) return false;
-  if (tokens.total >= tokens.limit && !tokens.limitReached) {
-    tokens.limitReached = true;
-    return true;
-  }
-  return tokens.total >= tokens.limit;
 }
 
 // ── Stuck Detection ──────────────────────────────────────────────────

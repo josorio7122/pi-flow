@@ -13,7 +13,7 @@ import {
   WorkflowAbortError,
 } from "./executor-helpers.js";
 import { dispatchPhase } from "./phase-dispatch.js";
-import { checkTokenLimit, updatePhaseStatus } from "./pipeline.js";
+import { updatePhaseStatus } from "./pipeline.js";
 import { appendEvent, listHandoffs, writeState } from "./store.js";
 import type { WorkflowDefinition, WorkflowEvent, WorkflowState } from "./types.js";
 
@@ -52,13 +52,6 @@ export async function executeSinglePhase({
   if (!phase) return { type: "error", error: `Phase "${state.currentPhase}" not found in definition.` };
 
   const emitEvent = (event: WorkflowEvent) => appendEvent({ cwd, workflowId, event });
-
-  if (checkTokenLimit(state.tokens)) {
-    state.exitReason = "token_limit";
-    state.completedAt = Date.now();
-    writeState({ cwd, workflowId, state });
-    return { type: "workflow-complete", exitReason: "token_limit" };
-  }
 
   // Gate phases return immediately
   if (phase.mode === "gate") {

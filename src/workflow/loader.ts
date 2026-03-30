@@ -134,11 +134,6 @@ function parsePhases(val: unknown) {
 }
 
 function parseConfig(val: unknown) {
-  const defaults = { tokenLimit: 100_000 };
-  if (typeof val !== "object" || val === null) return defaults;
-  const raw = val as Record<string, unknown>;
-
-  return {
-    tokenLimit: typeof raw.tokenLimit === "number" ? raw.tokenLimit : defaults.tokenLimit,
-  };
+  if (typeof val !== "object" || val === null) return {};
+  return {};
 }

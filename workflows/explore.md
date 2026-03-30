@@ -18,8 +18,6 @@ phases:
     description: Based on exploration findings, design an approach or recommendations
     contextFrom: exploration
 
-config:
-  tokenLimit: 80000
 ---
 
 The scout should cast a wide net. The planner should synthesize findings into actionable recommendations.

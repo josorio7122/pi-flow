@@ -12,8 +12,6 @@ phases:
     mode: single
     description: Explore the codebase and gather findings about the topic
 
-config:
-  tokenLimit: 50000
 ---
 
 Focus on producing a thorough, well-structured report. Include file paths for every claim.

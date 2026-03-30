@@ -41,7 +41,7 @@ const testDef: WorkflowDefinition = {
     { name: "build", role: "builder", mode: "single", description: "build" },
     { name: "review", role: "reviewer", mode: "review-loop", description: "review" },
   ],
-  config: { tokenLimit: 100_000 },
+  config: {},
   orchestratorInstructions: "",
   source: "builtin",
 };

@@ -25,8 +25,6 @@ phases:
     role: probe
     mode: single
     description: Research the question
-config:
-  tokenLimit: 50000
 ---
 
 Extra orchestrator instructions here.
@@ -56,8 +54,6 @@ phases:
     description: Check changes
     fixRole: builder
     maxCycles: 3
-config:
-  tokenLimit: 100000
 ---
 `;
 
@@ -72,7 +68,6 @@ describe("loadWorkflowsFromDir", () => {
     expect(w?.triggers).toEqual(["research, look up information", "query databases"]);
     expect(w?.phases).toHaveLength(1);
     expect(w?.phases[0]?.mode).toBe("single");
-    expect(w?.config.tokenLimit).toBe(50000);
     expect(w?.orchestratorInstructions).toBe("Extra orchestrator instructions here.");
     expect(w?.source).toBe("builtin");
   });

@@ -7,7 +7,7 @@ const DEF: WorkflowDefinition = {
   description: "Test workflow",
   triggers: [],
   phases: [{ name: "scout", role: "scout", mode: "single", description: "Scan codebase" }],
-  config: { tokenLimit: 100000 },
+  config: {},
   orchestratorInstructions: "Be thorough.",
   source: "builtin",
 };
@@ -20,7 +20,7 @@ const STATE: WorkflowState = {
   currentPhase: "scout",
   phases: { scout: { phase: "scout", status: "running", attempt: 1 } },
   reviewCycle: 0,
-  tokens: { total: 5000, byPhase: {}, limit: 100000, limitReached: false },
+  tokens: { total: 5000, byPhase: {} },
   activeAgents: [],
   completedAgents: [],
   countedAgentIds: [],
@@ -54,13 +54,6 @@ describe("buildPhasePrompt", () => {
     const prompt = buildPhasePrompt({ phase, definition: DEF, state: STATE, previousHandoff: HANDOFF });
     expect(prompt).toContain("Found 3 files");
     expect(prompt).toContain("src/foo.ts");
-  });
-
-  it("warns when token budget is low", () => {
-    const lowState = { ...STATE, tokens: { ...STATE.tokens, total: 90000 } };
-    const phase: PhaseDefinition = { name: "scout", role: "scout", mode: "single", description: "" };
-    const prompt = buildPhasePrompt({ phase, definition: DEF, state: lowState });
-    expect(prompt).toContain("Budget Warning");
   });
 });
 
